@@ -2,7 +2,14 @@
 
 module Main where
 
-import Reflex.Dom
+import Language.Javascript.JSaddle.Warp
+import Reflex.Dom.Core (mainWidget)
+import Reflex.Dom hiding (mainWidget, run)
+
+-- import Reflex.Dom
+
+-- main :: IO ()
+-- main = mainWidget $ text "hi"
 
 main :: IO ()
-main = mainWidget $ text "hi"
+main = run 3911 $ mainWidget $ text "hi"
