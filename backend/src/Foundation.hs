@@ -17,7 +17,9 @@ import Text.Jasmine         (minifym)
 -- Used only when in "auth-dummy-login" setting is enabled.
 import Yesod.Auth.Dummy
 
-import Yesod.Auth.OpenId    (authOpenId, IdentifierType (Claimed))
+import Yesod.Auth
+import Yesod.Auth.OAuth2.Github
+
 import Yesod.Default.Util   (addStaticContentExternal)
 import Yesod.Core.Types     (Logger)
 import qualified Yesod.Core.Unsafe as Unsafe
@@ -211,20 +213,20 @@ instance YesodAuth App where
     redirectToReferer _ = True
 
     authenticate creds = runDB $ do
-        x <- getBy $ UniqueUser $ credsIdent creds
+        -- Try to use the user login name, else fallback to the github' user id number
+        let userId = maybe (credsIdent creds) snd (headMay $ filter ((== "login") . fst) $ credsExtra creds)
+        x <- getBy $ UniqueUser $ userId
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
             Nothing -> Authenticated <$> insert User
-                { userIdent = credsIdent creds
+                { userIdent = userId
                 , userPassword = Nothing
                 }
 
     -- You can add other plugins like Google Email, email or OAuth here
-    authPlugins app = [authOpenId Claimed []] ++ extraAuthPlugins
-        -- Enable authDummy login if enabled.
-        where extraAuthPlugins = [authDummy | appAuthDummyLogin $ appSettings app]
+    authPlugins _ = [oauth2Github clientId clientSecret]
+    authHttpManager = appHttpManager
 
-    authHttpManager = getHttpManager
 
 -- | Access function to determine if a user is logged in.
 isAuthenticated :: Handler AuthResult
