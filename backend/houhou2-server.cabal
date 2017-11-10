@@ -60,6 +60,8 @@ library
     , wai
     , foreign-store
     , yesod-auth-oauth2
+    , reflex-websocket-interface-server
+    , reflex-websocket-interface-shared
   if (flag(dev)) || (flag(library-only))
     ghc-options: -Wall -fwarn-tabs -O0
     cpp-options: -DDEVELOPMENT
@@ -127,6 +129,8 @@ executable houhou2-server
     , houhou2-server
     , foreign-store
     , yesod-auth-oauth2
+    , reflex-websocket-interface-server
+    , reflex-websocket-interface-shared
   if flag(library-only)
     buildable: False
   other-modules:
@@ -183,6 +187,8 @@ test-suite test
     , microlens
     , foreign-store
     , yesod-auth-oauth2
+    , reflex-websocket-interface-server
+    , reflex-websocket-interface-shared
   other-modules:
       Handler.CommentSpec
       Handler.CommonSpec
