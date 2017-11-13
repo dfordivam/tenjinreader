@@ -9,3 +9,5 @@
 /comments CommentR POST
 
 /profile ProfileR GET
+
+/websocket WebSocketHandlerR GET

@@ -21,6 +21,15 @@ executable frontend
   build-depends:       base >=4.9 && <4.11
                      , common
                      , reflex-dom
-                     , jsaddle-warp
+                     , reflex-websocket-interface
+                     , reflex-websocket-interface-shared
+                     , protolude
+                     , text
+  -- Fix this
+  -- if impl(ghcjs)
+  --   build-depends: ghcjs-base
+  -- else
+  --   build-depends: jsaddle-warp
+
   hs-source-dirs:      src
   default-language:    Haskell2010

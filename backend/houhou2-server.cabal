@@ -62,6 +62,8 @@ library
     , yesod-auth-oauth2
     , reflex-websocket-interface-server
     , reflex-websocket-interface-shared
+    , yesod-websockets
+    , common
   if (flag(dev)) || (flag(library-only))
     ghc-options: -Wall -fwarn-tabs -O0
     cpp-options: -DDEVELOPMENT
@@ -74,6 +76,7 @@ library
       Handler.Common
       Handler.Home
       Handler.Profile
+      Handler.WebSocketHandler
       Import
       Import.NoFoundation
       Model
@@ -128,9 +131,6 @@ executable houhou2-server
     , wai
     , houhou2-server
     , foreign-store
-    , yesod-auth-oauth2
-    , reflex-websocket-interface-server
-    , reflex-websocket-interface-shared
   if flag(library-only)
     buildable: False
   other-modules:
