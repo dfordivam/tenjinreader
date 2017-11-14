@@ -7,8 +7,8 @@ version:             0.1.0.0
 -- description:
 license:             BSD3
 license-file:        LICENSE
-author:              Will Fancher
-maintainer:          elvishjerricco@gmail.com
+author:              Divam
+maintainer:          dfordivam@gmail.com
 -- copyright:
 category:            Web
 build-type:          Simple
@@ -17,6 +17,11 @@ cabal-version:       >=1.10
 executable frontend
   main-is:             Main.hs
   ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
+  other-modules:
+                       KanjiBrowser
+                       SrsWidget
+                       SpeechRecog
+                       FrontendCommon
   -- other-extensions:
   build-depends:       base >=4.9 && <4.11
                      , common
@@ -25,6 +30,18 @@ executable frontend
                      , reflex-websocket-interface-shared
                      , protolude
                      , text
+                     , file-embed
+                     , lens
+                     , time
+                     , containers
+                     , reflex
+                     , jsaddle
+                     , jsaddle-dom
+                     , romkan
+                     , bytestring
+
+                     , jsaddle-warp
+
   -- Fix this
   -- if impl(ghcjs)
   --   build-depends: ghcjs-base

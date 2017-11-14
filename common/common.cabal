@@ -7,8 +7,8 @@ version:             0.1.0.0
 -- description:
 license:             BSD3
 license-file:        LICENSE
-author:              Will Fancher
-maintainer:          elvishjerricco@gmail.com
+author:              Divam
+maintainer:          dfordivam@gmail.com
 -- copyright:
 category:            Web
 build-type:          Simple
@@ -17,10 +17,17 @@ cabal-version:       >=1.10
 library
   ghc-options:         -Wall -O2
   exposed-modules:     Message
+                       Common
+                       Radicals
   -- other-extensions:
   build-depends:       base >=4.9 && <4.11
                      , reflex-websocket-interface-shared
                      , protolude
                      , aeson
+                     , time
+                     , data-default
+                     , lens
+                     , containers
+
   hs-source-dirs:      src
   default-language:    Haskell2010
