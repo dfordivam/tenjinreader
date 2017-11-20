@@ -153,4 +153,4 @@ instance Default SrsReviewStats where
 
 data ReviewType =
   MeaningReview | ReadingReview
-  deriving (Eq, Enum, Bounded, Generic, Show, ToJSON, FromJSON)
+  deriving (Eq, Ord, Enum, Bounded, Generic, Show, ToJSON, FromJSON)

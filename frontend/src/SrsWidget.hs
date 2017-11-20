@@ -410,16 +410,73 @@ data ReviewStateEvent
 
 type DoReview = (SrsItemId, ReviewType, Bool)
 
+-- Just True -> No Mistake
+-- Just False -> Did Mistake
+-- Nothing -> Not Complete
+isComplete :: ReviewState -> Maybe Bool
+isComplete rSt =
+  if all done reviews
+    then Just $ not (any wrong reviews)
+    else Nothing
+  where done AnsweredWithMistake = True
+        done AnsweredWithoutMistake = True
+        done _ = False
+        wrong AnsweredWithMistake = True
+        wrong _ = False
+        reviews = map snd $ Map.toList rSt
+
+
 widgetStateFun :: SrsWidgetState -> ReviewStateEvent -> SrsWidgetState
-widgetStateFun st (AddItemsEv ri) = st -- Map.merge const reviewQueue (Map.fromList ri)
+widgetStateFun st (AddItemsEv ri) =
+  st { reviewQueue = Map.union (reviewQueue st)
+         (Map.fromList $ map (\r@(ReviewItem i _ _ _) -> (i,(r, defState))) ri)
+      , resultQueue = Nothing
+      }
+  where defState = Map.fromList [(ReadingReview, NotAnswered), (MeaningReview, NotAnswered)]
+
 widgetStateFun st (DoReviewEv (i,rt,b)) = if b
-  then st
-  else st
+  then
+    let
+      stNew = (Map.adjust fun rt) <$> stOld
+      done = join $ isComplete <$> stNew
+      fun NotAnswered = AnsweredWithoutMistake
+      fun AnsweredWrong = AnsweredWithMistake
+      fun _ = error "Already answered"
+      upFun (r,_) = case done of
+        (Just _) -> Nothing
+        Nothing -> (,) <$> pure r <*> stNew
+    in st
+      { reviewQueue = Map.update upFun i (reviewQueue st)
+      , resultQueue = (,) <$> pure i <*> done
+      }
+
+  else
+    let
+      stNew = (Map.adjust fun rt) <$> stOld
+      fun NotAnswered = AnsweredWrong
+      fun AnsweredWrong = AnsweredWrong
+      fun _ = error "Already answered"
+    in st
+      { reviewQueue = Map.update (\(r,_) -> (,) <$> pure r <*> stNew) i (reviewQueue st)
+      , resultQueue = Nothing
+      }
+
+  where
+    stOld = snd <$> Map.lookup i (reviewQueue st)
+
 widgetStateFun st (UndoReview) = st
 
-getReviewFun :: SrsWidgetState -> () -> Maybe (ReviewItem, SrsReviewStats)
-getReviewFun st _ = (,) <$> Map.minView (reviewQueue st) ^? _Just . _1 . _1
-  <*> pure (reviewStats st)
+
+getReviewFun :: SrsWidgetState -> () -> Maybe (ReviewItem, SrsReviewStats, ReviewType)
+getReviewFun st _ = (\a b c -> (a,b,c)) <$> rItem ^? _Just . _1
+  <*> pure (reviewStats st) <*> revPending
+  where
+    rItem = Map.minView (reviewQueue st) ^? _Just . _1
+    revPending = fst <$> (join $ headMay <$> ((\m -> filter (f . snd) (Map.assocs m)) <$>
+      rItem ^? _Just . _2))
+    f NotAnswered = True
+    f AnsweredWrong = True
+    f _ = False
 
 -- Result Synchronise with server
 -- TODO implement feature to re-send result if no response recieved
@@ -477,6 +534,8 @@ reviewWidget = do
       (align addResEv (() <$ sendResResp))
     sendResResp <- getWebSocketResponse sendResultEv
 
+  -- toss <- liftIO $ randomIO
+  --   rt = if toss then ReadingReview else MeaningReview
     (closeEv, reviewResultEv) <- elAttr "div" attr $ divClass "" $ do
       closeEv <- divClass "" $
         button "Close Review"
@@ -499,12 +558,10 @@ reviewWidget = do
 
 reviewWidgetView
   :: AppMonad t m
-  => (ReviewItem, SrsReviewStats)
+  => (ReviewItem, SrsReviewStats, ReviewType)
   -> AppMonadT t m (Event t ReviewStateEvent)
-reviewWidgetView (ri@(ReviewItem i k m r), s) = do
-  toss <- liftIO $ randomIO
+reviewWidgetView (ri@(ReviewItem i k m r), s, rt) = do
   let
-    rt = if toss then ReadingReview else MeaningReview
     statsRowAttr = ("class" =: "")
               <> ("style" =: "height: 15rem;")
     statsTextAttr = ("style" =: "font-size: large;")
@@ -563,6 +620,7 @@ reviewWidgetView (ri@(ReviewItem i k m r), s) = do
     openEditSrsItemWidget (i <$ ev3)
     return $ leftmost
       [UndoReview <$ ev1]
+    -- TODO AddAnswer support
       -- , AddAnswer i rt <$> tagDyn inpTextValue ev2]
   return $ leftmost [evB,DoReviewEv <$> dr, drSpeech]
 
@@ -620,6 +678,7 @@ reviewInputFieldHandler ti rt (ReviewItem i k m r) = do
 
     hiragana = case rt of
       MeaningReview -> never
+      -- TODO Implement proper kana writing support
       ReadingReview -> toHiragana <$> (ti ^. textInput_input)
     correctEv = tagDyn correct enterPress
   -- the dr event will fire after the correctEv (on second enter press)
@@ -631,8 +690,7 @@ reviewInputFieldHandler ti rt (ReviewItem i k m r) = do
         ReadingReview -> unReading $ fst r
   return (dr, hiragana, resEv <$> correctEv)
 
--- TODO
--- For meaning reviews allow minor mistakes
+-- TODO For meaning reviews allow minor mistakes
 checkAnswer :: (Either (Meaning, MeaningNotes) (Reading, ReadingNotes))
             -> Text
             -> Bool
