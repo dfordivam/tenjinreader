@@ -183,44 +183,45 @@ kanjiDetailsWidget ev = do
   void $ widgetHold (return ()) (f <$> ev)
 
 kanjiDetailWindow :: (DomBuilder t m) => KanjiDetails -> m ()
-kanjiDetailWindow (KanjiDetails k r m g j w re) = do
+kanjiDetailWindow k = do
   divClass "" $ do
     divClass "" $ do
       divClass "" $ do
         elClass "i" "" $
-          text (unKanji k)
+          text (unKanji $ k ^. kanjiCharacter)
       divClass "" $ do
         text "Radicals here"
 
     divClass "" $ do
       divClass "" $ do
-        text $ T.intercalate "," $ map unMeaning m
+        text $ T.intercalate "," $ map unMeaning $
+          k ^. kanjiMeanings
 
       divClass "" $ do
-        textMay (tshow <$> (unRank <$> r))
+        textMay (tshow <$> (unRank <$> k ^. kanjiMostUsedRank))
 
       -- divClass "" $ do
       --   textMay (unOnYomiT <$> on)
       --   textMay (unKunYomiT <$> ku)
 
-vocabListWindow :: DomBuilder t m => [VocabDispItem] -> m ()
+vocabListWindow :: DomBuilder t m => [VocabDetails] -> m ()
 vocabListWindow vs = do
   let
-    dispVocab
-      (VocabDispItem v r m j w wi) = divClass "row" $ do
+    dispVocab v = divClass "row" $ do
       divClass "" $ do
-        displayVocabT v
+        displayVocabT $ v ^. vocab
 
       divClass "" $ do
         divClass "" $ do
-          text $ T.intercalate "," $ map unMeaning m
+          text $ T.intercalate "," $ map unMeaning
+            $ v ^. vocabMeanings
 
         divClass "" $ do
-          textMay (tshow <$> (unRank <$> r))
+          textMay (tshow <$> (unRank <$> v ^. vocabFreqRank))
 
         divClass "" $ do
-          textMay (tshow <$> (unWikiRank <$> wi))
-          textMay (tshow <$> (unWkLevel <$> w))
+          textMay (tshow <$> (unWikiRank <$> v ^. vocabWikiRank))
+          textMay (tshow <$> (unWkLevel <$> v ^. vocabWkLevel))
 
   divClass "" $ do
     forM_ vs dispVocab

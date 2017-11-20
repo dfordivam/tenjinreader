@@ -39,6 +39,8 @@ executable frontend
                      , jsaddle-dom
                      , romkan
                      , bytestring
+                     , these
+                     , random
 
                      , jsaddle-warp
 

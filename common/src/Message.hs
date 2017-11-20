@@ -33,9 +33,8 @@ type AppRequest
   :<|> GetSrsStats
 
   -- Doing Review
-  :<|> GetNextReviewItem
+  :<|> GetNextReviewItems
   :<|> CheckAnswer
-  :<|> DoReview
 
   -- Browsing Srs Items
   :<|> BrowseSrsItems
@@ -75,7 +74,7 @@ instance WebSocketMessage AppRequest GetKanjiDetails where
 
 data KanjiSelectionDetails =
   KanjiSelectionDetails KanjiDetails
-  [VocabDispItem]
+  [VocabDetails]
   deriving (Generic, Show, ToJSON, FromJSON)
 
 ----------------------------------------------------------------
@@ -90,16 +89,7 @@ data VocabSearch = VocabSearch AdditionalFilter
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest VocabSearch where
-  type ResponseT AppRequest VocabSearch = [VocabDispItem]
-
-data VocabDispItem =
-  VocabDispItem Vocab
-                (Maybe Rank)
-                ([Meaning])
-                (Maybe JlptLevel)
-                (Maybe WkLevel)
-                (Maybe WikiRank)
-  deriving (Generic, Show, ToJSON, FromJSON)
+  type ResponseT AppRequest VocabSearch = [VocabDetails]
 
 ----------------------------------------------------------------
 
@@ -132,12 +122,21 @@ instance WebSocketMessage AppRequest BrowseSrsItems where
   type ResponseT AppRequest BrowseSrsItems = [SrsItem]
 
 ----------------------------------------------------------------
-data GetNextReviewItem = GetNextReviewItem
+data GetNextReviewItems =
+  GetNextReviewItems
+  | AlsoDoReview [(SrsItemId, Bool)]
   deriving (Generic, Show, ToJSON, FromJSON)
 
-instance WebSocketMessage AppRequest GetNextReviewItem where
-  type ResponseT AppRequest GetNextReviewItem
-    = Maybe ReviewItem
+instance WebSocketMessage AppRequest GetNextReviewItems where
+  type ResponseT AppRequest GetNextReviewItems
+    = Maybe [ReviewItem]
+
+data ReviewItem = ReviewItem
+  SrsItemId
+  (Either Vocab Kanji)
+  (Meaning, MeaningNotes)
+  (Reading, ReadingNotes)
+  deriving (Generic, Show, ToJSON, FromJSON)
 
 ----------------------------------------------------------------
 data CheckAnswer =
@@ -152,27 +151,6 @@ data CheckAnswerResult
 instance WebSocketMessage AppRequest CheckAnswer where
   type ResponseT AppRequest CheckAnswer = CheckAnswerResult
 
-----------------------------------------------------------------
-
-data DoReview
-  = DoReview SrsItemId ReviewType Bool
-  | UndoReview
-  | AddAnswer SrsItemId ReviewType Text
-  deriving (Generic, Show, ToJSON, FromJSON)
-
-data ReviewType =
-  MeaningReview | ReadingReview
-  deriving (Eq, Generic, Show, ToJSON, FromJSON)
-
-instance WebSocketMessage AppRequest DoReview where
-  type ResponseT AppRequest DoReview = Maybe ReviewItem
-
-data ReviewItem = ReviewItem
-  SrsItemId
-  (Either Vocab Kanji)
-  (Either (Meaning, MeaningNotes) (Reading, ReadingNotes))
-  SrsReviewStats
-  deriving (Generic, Show, ToJSON, FromJSON)
 ----------------------------------------------------------------
 data GetSrsItem = GetSrsItem SrsItemId
   deriving (Generic, Show, ToJSON, FromJSON)

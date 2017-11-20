@@ -26,6 +26,9 @@ import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 
+import KanjiDB
+import Text.MeCab
+
 -- | The foundation datatype for your application. This can be a good place to
 -- keep settings and values requiring initialization before your application
 -- starts running, such as database connections. Every handler will have
@@ -36,6 +39,15 @@ data App = App
     , appConnPool    :: ConnectionPool -- ^ Database connection pool.
     , appHttpManager :: Manager
     , appLogger      :: Logger
+
+    -- HH app specific data
+    , appKanjiDb     :: KanjiDb
+    , appVocabDb     :: VocabDb
+    , appRadicalDb   :: RadicalDb
+    , appMecabPtr    :: MeCab
+    , appSrsReviewData :: TVar (Map UserId (TVar SrsReviewData))
+    , appKanjiSearchEng :: KanjiSearchEngine
+    , appVocabSearchEng :: VocabSearchEngine
     }
 
 data MenuItem = MenuItem
@@ -157,7 +169,8 @@ instance Yesod App where
     isAuthorized (StaticR _) _ = return Authorized
 
     isAuthorized ProfileR _ = isAuthenticated
-    isAuthorized WebSocketHandlerR _ = isAuthenticated
+    isAuthorized WebSocketHandlerR _ = return Authorized
+      --isAuthenticated
 
     -- This function creates static content files in the static folder
     -- and names them based on a hash of their content. This allows
@@ -228,6 +241,8 @@ instance YesodAuth App where
     authPlugins _ = [oauth2Github clientId clientSecret]
     authHttpManager = appHttpManager
 
+clientId = "3baf50c151f3b8811d2f"
+clientSecret = "82261542f05abf393cb079ca44ec0e83f70d28be"
 
 -- | Access function to determine if a user is logged in.
 isAuthenticated :: Handler AuthResult

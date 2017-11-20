@@ -35,6 +35,7 @@
           sha256 = "0ai4axdh5x87qrkzn6a9i0a2srs6gkjbbiywihrv7ydmh2caqjya";
         }) {});
 
+        mecab = pkgs.haskell.lib.doJailbreak super.mecab;
         reflex-websocket-interface = r-all.reflex-websocket-interface;
 
         reflex-websocket-interface-shared = r-all.reflex-websocket-interface-shared;

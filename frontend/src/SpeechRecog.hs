@@ -3,10 +3,12 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
-module SpeechRecog where
+module SpeechRecog
+  (speechRecogWidget)
+  where
 
 import Protolude hiding (on)
-
+import Control.Lens
 import FrontendCommon
 import qualified Data.Text as T
 

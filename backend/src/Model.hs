@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 module Model where
 
 import ClassyPrelude.Yesod

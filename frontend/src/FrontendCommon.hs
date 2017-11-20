@@ -13,7 +13,7 @@ import Common as X
 import Radicals as X
 
 import Protolude as X hiding (link, (&), list, Alt)
-import Control.Lens as X ((.~), (^.), (?~) )
+import Control.Lens as X ((.~), (^.), (?~), (^?), _1, _2, _Just)
 import Control.Monad.Fix as X
 
 import Reflex.Dom as X
@@ -24,6 +24,8 @@ import Data.Time.Clock as X
 import Data.Time.Calendar as X
 import qualified Data.Map as Map
 import qualified Data.Text as T
+import Data.These as X
+import Data.Align as X
 
 --
 type AppMonadT t m = WithWebSocketT AppRequest t m

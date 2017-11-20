@@ -63,6 +63,15 @@ library
     , reflex-websocket-interface-server
     , reflex-websocket-interface-shared
     , yesod-websockets
+    , protolude
+    , lens
+    , binary
+    , mecab
+    , random
+    , romkan
+    , pretty-simple
+    , full-text-search
+    , snowball
     , common
   if (flag(dev)) || (flag(library-only))
     ghc-options: -Wall -fwarn-tabs -O0
