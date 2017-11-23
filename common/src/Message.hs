@@ -123,7 +123,7 @@ data GetNextReviewItems =
 
 instance WebSocketMessage AppRequest GetNextReviewItems where
   type ResponseT AppRequest GetNextReviewItems
-    = Maybe [ReviewItem]
+    = [ReviewItem]
 
 data ReviewItem = ReviewItem
   SrsEntryId

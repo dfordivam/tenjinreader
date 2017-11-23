@@ -10,6 +10,7 @@ module Handler.WebSocketHandler
 
 import Import
 import Yesod.WebSockets
+import Handler.WebSocketHandler.Utils
 
 import Handler.WebSocketHandler.KanjiBrowser
 import Handler.WebSocketHandler.SrsReview
@@ -20,30 +21,39 @@ import Reflex.Dom.WebSocket.Server hiding (Handler)
 import qualified Reflex.Dom.WebSocket.Server (Handler)
 import qualified Data.Map as Map
 import qualified Data.Conduit.List
+import Database.Persist.Sql
 
 getWebSocketHandlerR :: Handler Html
 getWebSocketHandlerR = do
-    -- (_, user) <- requireAuthPair
-    userSessionData <- newMVar (Map.empty)
-    webSockets $ handleWebSocketConn userSessionData
+    uId <- requireAuthId
+    webSockets $ handleWebSocketConn uId
     redirect $ ("static/websocket/index.html" :: Text)
 
-handleWebSocketConn userSessionData =
-  let runF bs = runReaderT (handleRequest wsHandler bs) (userSessionData)
-  in sourceWS $$ ((Data.Conduit.List.mapM runF) =$= sinkWSBinary)
+handleWebSocketConn uId = do
+  iref <- liftIO $ newIORef []
+  let runF bs = lift $ runReaderT
+        (handleRequest wsHandler bs) (userSessionData)
+      userSessionData =
+        WsHandlerEnv iref (fromSqlKey uId)
+
+  sourceWS $$ ((Data.Conduit.List.mapM runF)
+                  =$= sinkWSBinary)
 
 wsHandler :: HandlerWrapper WsHandlerM Message.AppRequest
 wsHandler = HandlerWrapper $
+
   h getKanjiFilterResult
   :<&> h getLoadMoreKanjiResults
   :<&> h getKanjiDetails
   :<&> h getVocabSearch
+
   :<&> h getSrsStats
-  :<&> h getBrowseSrsItems
+
   :<&> h getGetNextReviewItem
   :<&> h getDoReview
   :<&> h getCheckAnswer
-  :<&> h getDoReview
+
+  :<&> h getBrowseSrsItems
   :<&> h getSrsItem
   :<&> h getEditSrsItem
   :<&> h getBulkEditSrsItems

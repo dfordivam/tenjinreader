@@ -140,13 +140,15 @@ getEditSrsItem :: EditSrsItem
 getEditSrsItem (EditSrsItem sItm)= return ()
 
 getGetNextReviewItem   :: GetNextReviewItems
-  -> WsHandlerM (Maybe ReviewItem)
+  -> WsHandlerM [ReviewItem]
 getGetNextReviewItem (GetNextReviewItems alreadyPresent) = do
   uId <- asks currentUserId
   today <- liftIO $ utctDay <$> getCurrentTime
 
-  return $ Nothing
+  return $ []
 
+getDoReview :: DoReview
+  -> WsHandlerM Bool
 getDoReview (DoReview results) = do
   today <- liftIO $ utctDay <$> getCurrentTime
   master <- lift $ getYesod
