@@ -26,7 +26,16 @@ import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 
+import Database.Haskey.Alloc.Concurrent (ConcurrentDb,
+                                         Transaction,
+                                         transact,
+                                         transactReadOnly,
+                                         commit)
+import Database.Haskey.Store.File (FileStoreT, runFileStoreT, defFileStoreConfig)
+import Data.BTree.Alloc (AllocM, AllocReaderM)
+
 import KanjiDB
+import SrsDB
 import Text.MeCab
 
 -- | The foundation datatype for your application. This can be a good place to
@@ -45,9 +54,9 @@ data App = App
     , appVocabDb     :: VocabDb
     , appRadicalDb   :: RadicalDb
     , appMecabPtr    :: MeCab
-    , appSrsReviewData :: TVar (Map UserId (TVar SrsReviewData))
     , appKanjiSearchEng :: KanjiSearchEngine
     , appVocabSearchEng :: VocabSearchEngine
+    , appSrsReviewState :: ConcurrentDb AppSrsReviewState
     }
 
 data MenuItem = MenuItem
@@ -216,6 +225,27 @@ instance YesodPersist App where
 instance YesodPersistRunner App where
     getDBRunner = defaultGetDBRunner appConnPool
 
+transactSrsDB ::
+  (forall n. (AllocM n, MonadMask n) =>
+   AppSrsReviewState -> n (Transaction AppSrsReviewState a))
+  -> Handler a
+transactSrsDB action = do
+  master <- getYesod
+  runFileStoreT (transact action (appSrsReviewState master))
+    defFileStoreConfig
+
+transactReadOnlySrsDB ::
+  (forall n. (AllocReaderM n, MonadMask n) =>
+   AppSrsReviewState -> n a)
+  -> Handler a
+transactReadOnlySrsDB action = do
+  master <- getYesod
+  runFileStoreT (transactReadOnly action (appSrsReviewState master))
+    defFileStoreConfig
+
+clientId = ""
+clientSecret = ""
+
 instance YesodAuth App where
     type AuthId App = UserId
 
@@ -240,9 +270,6 @@ instance YesodAuth App where
     -- You can add other plugins like Google Email, email or OAuth here
     authPlugins _ = [oauth2Github clientId clientSecret]
     authHttpManager = appHttpManager
-
-clientId = "3baf50c151f3b8811d2f"
-clientSecret = "82261542f05abf393cb079ca44ec0e83f70d28be"
 
 -- | Access function to determine if a user is logged in.
 isAuthenticated :: Handler AuthResult

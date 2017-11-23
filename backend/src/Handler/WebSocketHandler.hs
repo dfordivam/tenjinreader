@@ -41,6 +41,7 @@ wsHandler = HandlerWrapper $
   :<&> h getSrsStats
   :<&> h getBrowseSrsItems
   :<&> h getGetNextReviewItem
+  :<&> h getDoReview
   :<&> h getCheckAnswer
   :<&> h getDoReview
   :<&> h getSrsItem

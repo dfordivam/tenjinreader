@@ -12,66 +12,70 @@ module Common
 import Protolude
 -- import GHC.Generics
 import Control.Lens.TH
-import Data.Aeson
+import Data.Aeson hiding (Value)
 import Data.Default
 import Data.Time (UTCTime)
 import Data.Binary
+import Data.BTree.Primitives (Value)
+
+instance Value Int
+instance Value a => Value (Maybe a)
 
 newtype Kanji = Kanji { unKanji :: Text }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype Rank = Rank { unRank :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype Meaning = Meaning { unMeaning :: Text }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype MeaningNotes = MeaningNotes { unMeaningNotes :: Text }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype Reading = Reading { unReading :: Text }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype ReadingNotes = ReadingNotes { unReadingNotes :: Text }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype Grade = Grade { unGrade :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype StrokeCount = StrokeCount { unStrokeCount :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype JlptLevel = JlptLevel { unJlptLevel :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype WikiRank = WikiRank { unWikiRank :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype WkLevel = WkLevel { unWkLevel :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype RadicalId = RadicalId { unRadicalId :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype KanjiId = KanjiId { unKanjiId :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype VocabId = VocabId { unVocabId :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
-newtype SrsItemId = SrsItemId { unSrsItemId :: Int64 }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
+newtype SrsEntryId = SrsEntryId { unSrsEntryId :: Int64 }
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype SrsLevel = SrsLevel { unSrsLevel :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype Vocab = Vocab { unVocab :: [KanjiOrKana] }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 data KanjiOrKana
   = KanjiWithReading Kanji Text
   | Kana Text
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 data KanjiDetails = KanjiDetails
   { _kanjiId             :: KanjiId
@@ -85,7 +89,7 @@ data KanjiDetails = KanjiDetails
   , _kanjiWkLevel        :: Maybe WkLevel
   , _kanjiMeanings       :: [Meaning]
   }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 makeLenses ''KanjiDetails
 
@@ -99,7 +103,7 @@ data VocabDetails = VocabDetails
   , _vocabWikiRank       :: Maybe WikiRank
   , _vocabMeanings       :: [Meaning]
   }
-  deriving (Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 makeLenses ''VocabDetails
 
@@ -114,12 +118,12 @@ instance Default AdditionalFilter where
   def = AdditionalFilter "" KunYomi ""
 
 data ReadingType = OnYomi | KunYomi | Nanori
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 -- Used in Srs browse widget to show list of items
 data SrsItem = SrsItem
  {
-   srsItemId :: SrsItemId
+   srsItemId :: SrsEntryId
  , srsVocabOrKanji :: Either Vocab Kanji
  , srsItemSuspended :: Bool
  , srsItemPendingReview :: Bool
@@ -127,7 +131,7 @@ data SrsItem = SrsItem
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data SrsItemFull = SrsItemFull
-  { srsItemFullId :: SrsItemId
+  { srsItemFullId :: SrsEntryId
   , srsItemFullVocabOrKanji :: Either Vocab Kanji
   , srsReviewDate :: (Maybe UTCTime)
   , srsMeanings :: (Text)

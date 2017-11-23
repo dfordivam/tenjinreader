@@ -8,8 +8,9 @@
 module Handler.WebSocketHandler.SrsReview where
 
 import Import
-import Control.Lens
+import Control.Lens hiding (reviews)
 import Model
+import SrsDB
 import Message
 import Common
 import Handler.WebSocketHandler.Utils
@@ -21,6 +22,9 @@ import Data.Time.Calendar
 import Text.Pretty.Simple
 import System.Random
 import Data.Aeson
+
+import qualified Data.BTree.Impure as Tree
+import Database.Haskey.Alloc.Transaction
 
 getSrsStats :: GetSrsStats -> WsHandlerM SrsStats
 getSrsStats _ = do
@@ -102,7 +106,7 @@ getBulkEditSrsItems (BulkEditSrsItems ss op filt) = do
   case op of
     SuspendSrsItems -> do
       let
-        f :: Map SrsEntryId SrsEntry -> SrsItemId -> WsHandlerM (Map SrsEntryId SrsEntry)
+        f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
         f sMap sId = do
           let
             sIdK = (makeKey $ Just sId)
@@ -117,7 +121,7 @@ getBulkEditSrsItems (BulkEditSrsItems ss op filt) = do
 
     ResumeSrsItems -> do
       let
-        f :: Map SrsEntryId SrsEntry -> SrsItemId -> WsHandlerM (Map SrsEntryId SrsEntry)
+        f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
         f sMap sId = do
           let
             sIdK = (makeKey $ Just sId)
@@ -142,7 +146,7 @@ getBulkEditSrsItems (BulkEditSrsItems ss op filt) = do
 
     ChangeSrsLevel l -> do
       let
-        f :: Map SrsEntryId SrsEntry -> SrsItemId -> WsHandlerM (Map SrsEntryId SrsEntry)
+        f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
         f sMap sId = do
           let
             sIdK = (makeKey $ Just sId)
@@ -157,7 +161,7 @@ getBulkEditSrsItems (BulkEditSrsItems ss op filt) = do
 
     ChangeSrsReviewData d -> do
       let
-        f :: Map SrsEntryId SrsEntry -> SrsItemId -> WsHandlerM (Map SrsEntryId SrsEntry)
+        f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
         f sMap sId = do
           let
             sIdK = (makeKey $ Just sId)
@@ -172,7 +176,7 @@ getBulkEditSrsItems (BulkEditSrsItems ss op filt) = do
 
     DeleteSrsItems -> do
       let
-        f :: Map SrsEntryId SrsEntry -> SrsItemId -> WsHandlerM (Map SrsEntryId SrsEntry)
+        f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
         f sMap sId = do
           let
             sIdK = (makeKey $ Just sId)
@@ -230,261 +234,48 @@ getEditSrsItem (EditSrsItem sItm)= do
   mapM runSrsDB (updateSrsEntry <$> sNew)
   void $ modify (set srsEntries sMap')
 
--- When a new review session is started (via "start review" button)
--- A snapshot of pending reviews is fetched and appended to the existing
--- appSrsReviewData ie it wont overwrite the value of ReviewState for
--- items previously in the queue
-getGetNextReviewItem   :: GetNextReviewItem
+getGetNextReviewItem   :: GetNextReviewItems
   -> WsHandlerM (Maybe ReviewItem)
-getGetNextReviewItem _ = do
-  fetchNewReviewItem
+getGetNextReviewItem (GetNextReviewItems alreadyPresent) = do
+  uId <- asks currentUserId
+  curTime <- liftIO $ getCurrentTime
 
--- Assumption - A review item which fails while reviewing
--- will be present in the reviewQueue
--- Therefore its DB entry is not modified till it is
--- succesfully reviewed
+  entries <- transactReadOnlySrsDB $ \ db -> do
+    rd <- Tree.lookupTree uId (db ^. userReviews)
+    e <- Tree.toList <$> rd
+    return $ maybe [] identity e
 
--- This will not update the reviewQueue from the DB
--- ie a review session will not see more reviews added to it
--- the user need to close the review and start again
-getDoReview
-  :: DoReview
-  -> WsHandlerM (Maybe ReviewItem)
+  return $ map getReviewItem entries
 
-getDoReview = \case
-  (DoReview k r b) -> do
-    let i = getSrsEntryId k
-    mapM (doReview r b) i
-  (AddAnswer k r b) -> return Nothing
-  (Undo) -> undoLastReview
+getDoReview (DoReview results) = do
+  curTime <- liftIO $ getCurrentTime
+  uId <- asks currentUserId
+  let doUp t (rId,b) =
+        updateTreeM rId (\r -> return r) t
+  lift $ transactSrsDB $ commit =<<
+    userReviews %%~ updateTreeM uId
+      (reviews %%~ (\rt -> foldlM doUp rt results))
+  return True
 
--- Correct Answer
-doReview r True i = do
-  reviewDataRef <- lift $ getReviewDataTVar
-  curTime <- liftIO getCurrentTime
-
-  let
-
-    getNewReviewData :: SrsReviewData -> ReviewState
-      -> (SrsReviewData, ReviewState)
-    getNewReviewData oldReviewData old
-      = (SrsReviewData newReviewQ newUndoQ newStats, new)
-      where
-        new :: ReviewState
-        new = Map.adjust f r old
-
-        f :: ReviewStatus -> ReviewStatus
-        f NotAnswered = AnsweredWithoutMistake
-        f AnsweredWrong = AnsweredWithMistake
-        f _ = AnsweredWithMistake -- error?
-
-        oldStats = _reviewStats oldReviewData
-        oldReviewQ = _reviewQueue oldReviewData
-
-        reviewDone = isJust (isComplete new)
-        newReviewQ = if reviewDone
-          then Map.delete i oldReviewQ
-          else Map.insert i new oldReviewQ
-
-        newStats = case (isComplete new) of
-          (Just True) -> oldStats
-            & srsReviewStats_correctCount +~ 1
-            & srsReviewStats_pendingReviewItems -~ 1
-          (Just False) -> oldStats
-            & srsReviewStats_pendingReviewItems -~ 1
-          _ -> oldStats
-
-        newUndoQ = take undoQueueLength $
-                  (sOld <$ (isComplete new), i, old, r)
-                  : (_undoQueue oldReviewData)
-
-    getNewSrsEntry :: Bool -> SrsEntry
-    getNewSrsEntry = \case
-      True -> sOld
-        & srsEntrySuccessCount +~ 1
-        & srsEntryCurrentGrade +~ 1
-        & srsEntryNextAnswerDate ?~ g True
-      False -> sOld
-        & srsEntryFailureCount +~ 1
-        & srsEntryCurrentGrade -~ 1
-        & srsEntryNextAnswerDate ?~ g False
-      where
-        g b = getNextReviewDate b curTime
-            (sOld ^. srsEntryNextAnswerDate)
-            (sOld ^. srsEntryCurrentGrade)
-
-
-    updateReviewData oldReviewData =
-      (getNewReviewData oldReviewData) <$> oldReviewState
-      where
-        -- Getting Nothing here is an error and should be logged
-        oldReviewState :: Maybe ReviewState
-        oldReviewState = Map.lookup i (_reviewQueue oldReviewData)
-
-  newReviewState <- liftIO $ atomically $ do
-    o <- readTVar reviewDataRef
-    let n = updateReviewData o
-    mapM (writeTVar reviewDataRef) (fst <$> n)
-    return (snd <$> n)
-
-  let
-    newSrsEntry :: Maybe SrsEntry
-    newSrsEntry = getNewSrsEntry oldSrsEntry curTime
-      <$> (join $ isComplete <$> newReviewState)
-
-  -- If the answer is complete then update db
-  mapM writeSrsEntry newSrsEntry
-
-  fetchNewReviewItem
-
-  -- Wrong Answer
-doReview r False i = do
-  reviewDataRef <- lift $ getReviewDataTVar
-  -- ReviewState mark AnsweredWrong
-  -- Undo Q add
-  -- Stats modify if NotAnswered -> AnsweredWrong
-  let
-    getNewReviewData :: SrsReviewData -> ReviewState
-      -> (SrsReviewData, ReviewState)
-    getNewReviewData oldReviewData old
-      = (SrsReviewData newReviewQ newUndoQ newStats, new)
-      where
-        new :: ReviewState
-        new = Map.adjust f r old
-
-        f :: ReviewStatus -> ReviewStatus
-        f _ = AnsweredWrong
-
-        oldStats = _reviewStats oldReviewData
-        oldReviewQ = _reviewQueue oldReviewData
-
-        newReviewQ = Map.insert i new oldReviewQ
-
-        newStats = if (all (== NotAnswered) $ Map.elems old)
-          then oldStats
-            & srsReviewStats_incorrectCount +~ 1
-          else oldStats
-
-        newUndoQ = take undoQueueLength $
-                  (Nothing, i, old, r)
-                  : (_undoQueue oldReviewData)
-
-    updateReviewData oldReviewData =
-      (getNewReviewData oldReviewData) <$> oldReviewState
-      where
-        -- Getting Nothing here is an error and should be logged
-        oldReviewState :: Maybe ReviewState
-        oldReviewState = Map.lookup i (_reviewQueue oldReviewData)
-
-  newReviewState <- liftIO $ atomically $ do
-    o <- readTVar reviewDataRef
-    let n = updateReviewData o
-    mapM (writeTVar reviewDataRef) (fst <$> n)
-    return (snd <$> n)
-
-  fetchNewReviewItem
-
--- Notes on undoQueue working
---
-undoLastReview = do
-  return Nothing
-
-getReviewDataTVar :: Handler (TVar SrsReviewData)
-getReviewDataTVar = do
-  uId <- requireAuthId
-  appRDRef <- asks appSrsReviewData
-  appRD <- liftIO $ readTVarIO appRDRef
-  case Map.lookup uId appRD of
-    Just r -> return r
-    Nothing -> do -- Should not happen ideally
-      liftIO $ atomically $ do
-        r <- newTVar def
-        modifyTVar (Map.insert uId r) appRDRef
-        return r
-
--- Just True -> No Mistake
--- Just False -> Did Mistake
--- Nothing -> Not Complete
-isComplete :: ReviewState -> Maybe Bool
-isComplete rSt =
-  if all done reviews
-    then Just not (any wrong reviews)
-    else Nothing
-  where done AnsweredWithMistake = True
-        done AnsweredWithoutMistake = True
-        done _ = False
-        wrong AnsweredWithMistake = True
-        wrong _ = False
-        reviews = map snd $ Map.toList rSt
-
--- The reviewQueue contains the active reviews
--- and it is randomly chosen from pending reviews (from DB)
--- It provides a window of reviews which have to be completed
--- When the length of this drops below minReviewQLength, then
--- more pending reviews from the DB are fetched and added to it
-minReviewQLength = 7
-maxReviewQLength = 15
-
-fetchNewReviewItem :: WsHandlerM (Maybe ReviewItem)
-fetchNewReviewItem = do
-  reviewDataRef <- lift $ getReviewDataTVar
-  reviewData <- liftIO $ readTVarIO reviewDataRef
-  let reviewQ = _reviewQueue reviewData
-  if Map.null reviewQ
-    then return Nothing
-    else fetchNewReviewItemInt reviewQ
-
-fetchNewReviewItemInt reviewQ = do
-  srsEsMap <- gets (_srsEntries)
-  reviewStats <- gets (_reviewStats)
-  (rId:_) <- liftIO $ getRandomItems (Map.keys reviewQ) 1
-  rtToss <- liftIO $ randomIO
-  let
-    rtDone :: Maybe ReviewType
-    rtDone = (Map.lookup rId reviewQ) ^? _Just . _1 . _Just
-
-    rt :: ReviewType
-    rt = case rtDone of
-      Nothing -> if rtToss
-        then ReadingReview
-        else MeaningReview
-      (Just ReadingReview) -> MeaningReview
-      (Just MeaningReview) -> ReadingReview
-
-  return $ getReviewItem srsEsMap reviewStats rId rt
+-- updateTreeM :: _
+--   => k -> Tree.Tree k v -> (v -> m v) -> m (Tree.Tree k v)
+updateTreeM k fun tree = do
+  Tree.lookupTree k tree
+  >>= mapM fun
+  >>= mapM (\v -> Tree.insertTree k v tree)
+  >>= (\t -> return $ maybe tree id t)
 
 getReviewItem
-  :: Map SrsEntryId SrsEntry
-  -> SrsReviewStats
-  -> SrsEntryId
-  -> ReviewType
-  -> Maybe ReviewItem
-getReviewItem srsEsMap reviewStats rId rt =
-  let
-    s :: Maybe SrsEntry
-    s = Map.lookup rId srsEsMap
-
-    i :: Maybe SrsItemId
-    i = join $ (getKey <$> (primaryKey <$> s))
-
-    k :: Maybe (Either Vocab Kanji)
-    k = join $ getVocabOrKanji <$> s
-
-    m :: Maybe (Either (Meaning, MeaningNotes)
-                (Reading, ReadingNotes))
-    m = getM <$> s
-    getM s = case rt of
-      MeaningReview -> Left
-        (Meaning $ s ^. srsEntryMeanings
-        , maybe "" identity $ s ^.srsEntryMeaningNote)
-
-      ReadingReview -> Right
-        (s ^. srsEntryReadings
-        , maybe "" identity $ s ^. srsEntryReadingNote)
-
-    ret = ReviewItem <$> i <*> k <*> m <*> pure reviewStats
-  in ret
-
+  :: SrsEntryId
+  -> SrsEntry
+  -> ReviewItem
+getReviewItem i s =
+  ReviewItem i (Right $ Kanji (s ^. field)) (m,mn) (r,rn)
+  where
+    m = (s ^. meaning)
+    mn = (s ^. meaningNotes)
+    r = (s ^. readings)
+    rn = (s ^. readingNotes)
 
 getRandomItems :: [a] -> Int -> IO [a]
 getRandomItems inp s = do
@@ -503,40 +294,57 @@ getRandomItems inp s = do
     fmap (\k -> Map.lookup k idMap) $ Set.toList set
 
 getNextReviewDate
-  :: Bool
-  -> UTCTime
-  -> Maybe UTCTime
-  -> Int
-  -> UTCTime
+  :: SrsEntryStats
+  -> Day
+  -> Day
+  -> SrsInterval
+  -> Bool
+  -> (Day, SrsInterval)
 getNextReviewDate
-  success curTime revDate oldGrade =
-  let
-    addHour h = addUTCTime (h*60*60) curTime
-    addDay d = addUTCTime (d*24*60*60) curTime
-  in case (oldGrade, success) of
-    (0,_) -> addHour 4
-    (1,False) -> addHour 4
+  stats today dueDate (SrsInterval lastInterval) success =
+  (addDays nextInterval today, SrsInterval fullInterval)
+  where extraDays = diffDays today dueDate
+        fullInterval = lastInterval + extraDays
+        fi = fromIntegral fullInterval
+        nextInterval = ceiling $ if success
+          then fi * 2.5
+          else fi * 0.25
 
-    (2,False) -> addHour 8
-    (1,True) -> addHour 8
+-- getNextReviewDate
+--   :: Bool
+--   -> UTCTime
+--   -> Maybe UTCTime
+--   -> Int
+--   -> UTCTime
+-- getNextReviewDate
+--   success curTime revDate oldGrade =
+--   let
+--     addHour h = addUTCTime (h*60*60) curTime
+--     addDay d = addUTCTime (d*24*60*60) curTime
+--   in case (oldGrade, success) of
+--     (0,_) -> addHour 4
+--     (1,False) -> addHour 4
 
-    (2,True) -> addDay 1
-    (3,False) -> addDay 1
+--     (2,False) -> addHour 8
+--     (1,True) -> addHour 8
 
-    (3,True) -> addDay 3
-    (4,False) -> addDay 3
+--     (2,True) -> addDay 1
+--     (3,False) -> addDay 1
 
-    (4,True) -> addDay 7
-    (5,False) -> addDay 7
+--     (3,True) -> addDay 3
+--     (4,False) -> addDay 3
 
-    (5,True) -> addDay 14
-    (6,False) -> addDay 14
+--     (4,True) -> addDay 7
+--     (5,False) -> addDay 7
 
-    (6,True) -> addDay 30
-    (7,False) -> addDay 30
+--     (5,True) -> addDay 14
+--     (6,False) -> addDay 14
 
-    (7,True) -> addDay 120
-    _ -> curTime -- error
+--     (6,True) -> addDay 30
+--     (7,False) -> addDay 30
+
+--     (7,True) -> addDay 120
+--     _ -> curTime -- error
 
 getCheckAnswer :: CheckAnswer -> WsHandlerM CheckAnswerResult
 getCheckAnswer (CheckAnswer reading alt) = do
@@ -553,9 +361,3 @@ checkAnswerInt (Reading reading) kanaAlts =
     False -> AnswerIncorrect "T"
   where
     kanas = mconcat $ map (map snd) kanaAlts
-
-getSrsItemId :: SrsEntryId -> SrsItemId
-getSrsItemId = SrsItemId . fromSqlKey
-
-getSrsEntryId :: SrsItemId -> SrsEntryId
-getSrsEntryId (SrsItemId v) = toSqlKey v

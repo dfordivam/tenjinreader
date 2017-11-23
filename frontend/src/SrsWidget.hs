@@ -404,11 +404,9 @@ data SrsWidgetState = SrsWidgetState
   }
 
 data ReviewStateEvent
-  = DoReviewEv DoReview
+  = DoReviewEv (SrsItemId, ReviewType, Bool)
   | AddItemsEv [ReviewItem]
   | UndoReview
-
-type DoReview = (SrsItemId, ReviewType, Bool)
 
 -- Just True -> No Mistake
 -- Just False -> Did Mistake
@@ -485,7 +483,7 @@ data ResultsSyncState =
   | WaitingForResp [Result] [Result]
 
 sendResultEvFun (ReadyToSend) = Nothing
-sendResultEvFun (WaitingForResp r _) = Just (AlsoDoReview r)
+sendResultEvFun (WaitingForResp r _) = Just (DoReview r)
 
 handlerSendResultEv :: ResultsSyncState -> (These Result ()) -> ResultsSyncState
 handlerSendResultEv ReadyToSend (This r) = WaitingForResp [r] []
@@ -508,7 +506,7 @@ reviewWidget = do
              <> ("style" =: "height: 50rem;")
 
   ev <- getPostBuild
-  initEv <- getWebSocketResponse $ GetNextReviewItems <$ ev
+  initEv <- getWebSocketResponse $ GetNextReviewItems [] <$ ev
 
   rec
     -- Input Events
@@ -517,7 +515,7 @@ reviewWidget = do
     -- 3. Fetch new items from server
     -- 4. Undo event
     -- 5. refresh (if initEv was Nothing)
-    let itemsEv = leftmost [initEv, sendResResp]
+    let itemsEv = leftmost [initEv, fetchMoreReviewsResp]
         addItemEv = fmapMaybe (fmap AddItemsEv) itemsEv
 
     -- Output Events
@@ -530,6 +528,10 @@ reviewWidget = do
 
     let sendResultEv = fmapMaybe sendResultEvFun (updated sendResultDyn)
         addResEv = fmapMaybe (resultQueue) (updated widgetStateDyn)
+        fetchMoreReviews = GetNextReviewItems <$> ffilter ((< 5) . length)
+          ((Map.keys . reviewQueue) <$> (updated widgetStateDyn))
+
+    fetchMoreReviewsResp <- getWebSocketResponse fetchMoreReviews
     sendResultDyn <- foldDyn (flip handlerSendResultEv) ReadyToSend
       (align addResEv (() <$ sendResResp))
     sendResResp <- getWebSocketResponse sendResultEv
@@ -622,13 +624,13 @@ reviewWidgetView (ri@(ReviewItem i k m r), s, rt) = do
       [UndoReview <$ ev1]
     -- TODO AddAnswer support
       -- , AddAnswer i rt <$> tagDyn inpTextValue ev2]
-  return $ leftmost [evB,DoReviewEv <$> dr, drSpeech]
+  return $ leftmost [evB, dr, drSpeech]
 
 inputFieldWidget
   :: _
   => ReviewItem
   -> ReviewType
-  -> m (Event t DoReview, Dynamic t Text)
+  -> m (Event t ReviewStateEvent, Dynamic t Text)
 inputFieldWidget ri rt = do
   let
     style = "text-align: center;" <> color
@@ -661,7 +663,7 @@ reviewInputFieldHandler
  => TextInput t
  -> ReviewType
  -> ReviewItem
- -> m (Event t DoReview, Event t Text, Event t Text)
+ -> m (Event t ReviewStateEvent, Event t Text, Event t Text)
 reviewInputFieldHandler ti rt (ReviewItem i k m r) = do
   let enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
       correct = checkAnswer n <$> value ti
@@ -674,7 +676,7 @@ reviewInputFieldHandler ti rt (ReviewItem i k m r) = do
   dyn <- foldDyn h NewReview enterPress
   let
     sendResult = ffilter (== NextReview) (tagDyn dyn enterPress)
-    dr = (\b -> (i, rt, b)) <$> tagDyn correct sendResult
+    dr = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
 
     hiragana = case rt of
       MeaningReview -> never

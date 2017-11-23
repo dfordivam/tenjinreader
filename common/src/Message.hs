@@ -34,6 +34,7 @@ type AppRequest
 
   -- Doing Review
   :<|> GetNextReviewItems
+  :<|> DoReview
   :<|> CheckAnswer
 
   -- Browsing Srs Items
@@ -123,8 +124,7 @@ instance WebSocketMessage AppRequest BrowseSrsItems where
 
 ----------------------------------------------------------------
 data GetNextReviewItems =
-  GetNextReviewItems
-  | AlsoDoReview [(SrsItemId, Bool)]
+  GetNextReviewItems [SrsEntryId]
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest GetNextReviewItems where
@@ -132,11 +132,18 @@ instance WebSocketMessage AppRequest GetNextReviewItems where
     = Maybe [ReviewItem]
 
 data ReviewItem = ReviewItem
-  SrsItemId
+  SrsEntryId
   (Either Vocab Kanji)
-  (Meaning, MeaningNotes)
-  (Reading, ReadingNotes)
+  ([Meaning], Maybe MeaningNotes)
+  ([Reading], Maybe ReadingNotes)
   deriving (Generic, Show, ToJSON, FromJSON)
+
+data DoReview = DoReview [(SrsEntryId, Bool)]
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest DoReview where
+  type ResponseT AppRequest DoReview
+    = Bool
 
 ----------------------------------------------------------------
 data CheckAnswer =
@@ -152,7 +159,7 @@ instance WebSocketMessage AppRequest CheckAnswer where
   type ResponseT AppRequest CheckAnswer = CheckAnswerResult
 
 ----------------------------------------------------------------
-data GetSrsItem = GetSrsItem SrsItemId
+data GetSrsItem = GetSrsItem SrsEntryId
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest GetSrsItem where
@@ -166,7 +173,7 @@ instance WebSocketMessage AppRequest EditSrsItem where
   type ResponseT AppRequest EditSrsItem = ()
 
 ----------------------------------------------------------------
-data BulkEditSrsItems = BulkEditSrsItems [SrsItemId] BulkEditOperation BrowseSrsItems
+data BulkEditSrsItems = BulkEditSrsItems [SrsEntryId] BulkEditOperation BrowseSrsItems
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data BulkEditOperation

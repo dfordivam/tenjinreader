@@ -8,6 +8,7 @@ import Control.Lens
 import qualified Data.Text as T
 import Data.Char
 import Common
+import Model
 import Text.Pretty.Simple
 import Yesod.WebSockets
 import Text.MeCab
@@ -19,6 +20,7 @@ type WsHandlerM = ReaderT WsHandlerEnv Handler
 
 data WsHandlerEnv = WsHandlerEnv
   { kanjiSearchResult :: IORef [(KanjiId, KanjiDetails)]
+  , currentUserId :: Int64
   }
 
 -- Hiragana ( 3040 - 309f)
