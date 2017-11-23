@@ -25,6 +25,7 @@ import Data.Aeson
 
 import qualified Data.BTree.Impure as Tree
 import Control.Monad.Haskey
+import Data.BTree.Alloc (AllocM, AllocReaderM)
 
 getSrsStats :: GetSrsStats -> WsHandlerM SrsStats
 getSrsStats _ = do
@@ -150,24 +151,17 @@ getDoReview (DoReview results) = do
   curTime <- liftIO $ getCurrentTime
   master <- lift $ getYesod
   uId <- asks currentUserId
-  -- let doUp t (rId,b) =
-  --       updateTreeM rId (\r -> return r) t
-  let tx = transact (\tree -> do
-             Tree.lookupTree uId (tree ^. userReviews)
-             commit_ tree
-             )
-  lift $ transactSrsDB tx
-  -- liftIO $ runHaskeyT tx
-    -- runFileStoreT (transact
-    --   (\tree -> do
-    --     Tree.lookupTree uId (tree ^. userReviews)
-    --     commit_ tree
-    --       )
-    -- (appSrsReviewState master)
-    -- defFileStoreConfig
-    -- userReviews %%~ (updateTreeM uId
-    --   (reviews %%~ (updateTreeM (SrsEntryId 0) pure))))
-      -- (reviews %%~ (\rt -> foldlM doUp rt results))
+  let doUp t (rId,b) =
+        updateTreeM rId (\r -> return r) t
+  let
+    up :: (AllocM m) =>
+      AppSrsReviewState -> m AppSrsReviewState
+    up = userReviews %%~ (updateTreeM uId
+          (reviews %%~ (\rt -> foldlM doUp rt results)))
+  lift $ transactSrsDB $ \tree -> do
+    Tree.lookupTree uId (tree ^. userReviews)
+    up tree
+    return (tree, ())
   return True
 
 updateTreeM :: _

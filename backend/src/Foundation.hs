@@ -221,16 +221,25 @@ instance YesodPersist App where
 instance YesodPersistRunner App where
     getDBRunner = defaultGetDBRunner appConnPool
 
-type DBM = HaskeyT AppSrsReviewState Handler
+type SrsDB = HaskeyT AppSrsReviewState Handler
 
-transactSrsDB
-  :: DBM a
+runSrsDB
+  :: SrsDB a
   -> Handler a
-transactSrsDB action = do
+runSrsDB action = do
   master <- getYesod
   runHaskeyT action (appSrsReviewState master)
     defFileStoreConfig
 
+transactSrsDB ::
+  (forall m . (AllocM m)
+    => AppSrsReviewState
+    -> m (AppSrsReviewState, a))
+  -> Handler a
+transactSrsDB action = do
+  runSrsDB $ transact $ \tree -> do
+    (newTree, a) <- action tree
+    commit a newTree
 -- transactReadOnlySrsDB ::
 --   (forall n. (AllocReaderM n, MonadMask n) =>
 --    AppSrsReviewState -> n a)
