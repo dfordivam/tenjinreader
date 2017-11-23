@@ -139,13 +139,24 @@ getEditSrsItem :: EditSrsItem
   -> WsHandlerM ()
 getEditSrsItem (EditSrsItem sItm)= return ()
 
-getGetNextReviewItem   :: GetNextReviewItems
+getGetNextReviewItem :: GetNextReviewItems
   -> WsHandlerM [ReviewItem]
 getGetNextReviewItem (GetNextReviewItems alreadyPresent) = do
   uId <- asks currentUserId
   today <- liftIO $ utctDay <$> getCurrentTime
 
-  return $ []
+  rs <- lift $ transactReadOnlySrsDB $ \db -> do
+    rd <- Tree.lookupTree uId $ db ^. userReviews
+    rs <- mapM Tree.toList (_reviews <$> rd)
+    let
+      f (k,r) = join $ g
+        <$> (r ^? reviewState . _NextReviewDate)
+        where g (d,_) = if d <= today
+                then Just (k,r)
+                else Nothing
+
+    return $ maybe [] (mapMaybe f) rs
+  return $ getReviewItem <$> rs
 
 getDoReview :: DoReview
   -> WsHandlerM Bool
@@ -188,10 +199,9 @@ updateTreeM k fun tree = do
   >>= (\t -> return $ maybe tree id t)
 
 getReviewItem
-  :: SrsEntryId
-  -> SrsEntry
+  :: (SrsEntryId, SrsEntry)
   -> ReviewItem
-getReviewItem i s =
+getReviewItem (i,s) =
   ReviewItem i (Right $ Kanji (s ^. field)) (m,mn) (r,rn)
   where
     m = (s ^. meaning)

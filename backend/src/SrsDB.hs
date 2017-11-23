@@ -47,6 +47,7 @@ data SrsEntryState =
   Suspended SrsInterval | NextReviewDate Day SrsInterval
   deriving (Generic, Show, Typeable, Binary, Value)
 
+makePrisms ''SrsEntryState
 -- SRS algo
 -- Correct Answer ->
 --   (answer date - due date + last interval) * ease factor
