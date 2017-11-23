@@ -143,26 +143,39 @@ getGetNextReviewItem   :: GetNextReviewItems
   -> WsHandlerM (Maybe ReviewItem)
 getGetNextReviewItem (GetNextReviewItems alreadyPresent) = do
   uId <- asks currentUserId
-  curTime <- liftIO $ getCurrentTime
+  today <- liftIO $ utctDay <$> getCurrentTime
 
   return $ Nothing
 
 getDoReview (DoReview results) = do
-  curTime <- liftIO $ getCurrentTime
+  today <- liftIO $ utctDay <$> getCurrentTime
   master <- lift $ getYesod
   uId <- asks currentUserId
-  let doUp t (rId,b) =
-        updateTreeM rId (\r -> return r) t
+
   let
-    up :: (AllocM m) =>
-      AppSrsReviewState -> m AppSrsReviewState
-    up = userReviews %%~ (updateTreeM uId
-          (reviews %%~ (\rt -> foldlM doUp rt results)))
-  lift $ transactSrsDB $ \tree -> do
-    Tree.lookupTree uId (tree ^. userReviews)
-    up tree
-    return (tree, ())
+    doUp :: (AllocM m) => Tree.Tree SrsEntryId SrsEntry
+      -> (SrsEntryId, Bool)
+      -> m (Tree.Tree SrsEntryId SrsEntry)
+    doUp t (rId,b) = updateTreeM rId
+        (\r -> return $ updateSrsEntry b today r) t
+
+  lift $ transactSrsDB_ $
+    userReviews %%~ updateTreeM uId
+      (reviews %%~ (\rt -> foldlM doUp rt results))
   return True
+
+updateSrsEntry b today r = r
+  & reviewState %~ modifyState
+  & stats %~ modifyStats
+
+  where
+    modifyState (NextReviewDate d i) =
+      getNextReviewDate (r ^. stats) today d i b
+    modifyState s = s -- error
+
+    modifyStats s = if b
+      then s & successCount +~ 1
+      else s & failureCount +~ 1
 
 updateTreeM :: _
   => k -> (v -> m v) -> Tree.Tree k v -> m (Tree.Tree k v)
@@ -206,10 +219,10 @@ getNextReviewDate
   -> Day
   -> SrsInterval
   -> Bool
-  -> (Day, SrsInterval)
+  -> SrsEntryState
 getNextReviewDate
   stats today dueDate (SrsInterval lastInterval) success =
-  (addDays nextInterval today, SrsInterval fullInterval)
+  NextReviewDate (addDays nextInterval today) (SrsInterval fullInterval)
   where extraDays = diffDays today dueDate
         fullInterval = lastInterval + extraDays
         fi = fromIntegral fullInterval

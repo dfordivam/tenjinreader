@@ -60,6 +60,8 @@ data SrsEntryStats = SrsEntryStats
   , _successCount :: Int
   } deriving (Generic, Show, Typeable, Binary, Value)
 
+makeLenses ''SrsEntryStats
+
 data SrsEntry = SrsEntry
   {  _reviewState :: SrsEntryState
    , _stats :: SrsEntryStats

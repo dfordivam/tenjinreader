@@ -231,6 +231,14 @@ runSrsDB action = do
   runHaskeyT action (appSrsReviewState master)
     defFileStoreConfig
 
+transactSrsDB_ ::
+  (forall m . (AllocM m)
+    => AppSrsReviewState
+    -> m (AppSrsReviewState))
+  -> Handler ()
+transactSrsDB_ action = transactSrsDB
+  (\t -> action t >>= (\nt -> return (nt,())))
+
 transactSrsDB ::
   (forall m . (AllocM m)
     => AppSrsReviewState
@@ -240,14 +248,13 @@ transactSrsDB action = do
   runSrsDB $ transact $ \tree -> do
     (newTree, a) <- action tree
     commit a newTree
--- transactReadOnlySrsDB ::
---   (forall n. (AllocReaderM n, MonadMask n) =>
---    AppSrsReviewState -> n a)
---   -> Handler a
--- transactReadOnlySrsDB action = do
---   master <- getYesod
---   runFileStoreT (transactReadOnly action (appSrsReviewState master))
---     defFileStoreConfig
+
+transactReadOnlySrsDB ::
+  (forall m . (AllocReaderM m)
+    => AppSrsReviewState -> m a)
+  -> Handler a
+transactReadOnlySrsDB action = do
+  runSrsDB $ transactReadOnly action
 
 clientId = ""
 clientSecret = ""
