@@ -26,12 +26,8 @@ import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 
-import Database.Haskey.Alloc.Concurrent (ConcurrentDb,
-                                         Transaction,
-                                         transact,
-                                         transactReadOnly,
-                                         commit)
-import Database.Haskey.Store.File (FileStoreT, runFileStoreT, defFileStoreConfig)
+import Control.Monad.Haskey
+import Database.Haskey.Store.File (defFileStoreConfig)
 import Data.BTree.Alloc (AllocM, AllocReaderM)
 
 import KanjiDB
@@ -225,23 +221,24 @@ instance YesodPersist App where
 instance YesodPersistRunner App where
     getDBRunner = defaultGetDBRunner appConnPool
 
-transactSrsDB ::
-  (forall n. (AllocM n, MonadMask n) =>
-   AppSrsReviewState -> n (Transaction AppSrsReviewState a))
+type DBM = HaskeyT AppSrsReviewState Handler
+
+transactSrsDB
+  :: DBM a
   -> Handler a
 transactSrsDB action = do
   master <- getYesod
-  runFileStoreT (transact action (appSrsReviewState master))
+  runHaskeyT action (appSrsReviewState master)
     defFileStoreConfig
 
-transactReadOnlySrsDB ::
-  (forall n. (AllocReaderM n, MonadMask n) =>
-   AppSrsReviewState -> n a)
-  -> Handler a
-transactReadOnlySrsDB action = do
-  master <- getYesod
-  runFileStoreT (transactReadOnly action (appSrsReviewState master))
-    defFileStoreConfig
+-- transactReadOnlySrsDB ::
+--   (forall n. (AllocReaderM n, MonadMask n) =>
+--    AppSrsReviewState -> n a)
+--   -> Handler a
+-- transactReadOnlySrsDB action = do
+--   master <- getYesod
+--   runFileStoreT (transactReadOnly action (appSrsReviewState master))
+--     defFileStoreConfig
 
 clientId = ""
 clientSecret = ""

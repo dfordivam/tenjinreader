@@ -101,16 +101,10 @@ instance WebSocketMessage AppRequest GetSrsStats where
   type ResponseT AppRequest GetSrsStats = SrsStats
 
 data SrsStats = SrsStats
-  { pendingReviewCount :: Int
-  , reviewsToday :: Int
+  { reviewsToday :: Int
   , totalItems :: Int
   , totalReviews :: Int
   , averageSuccess :: Int
-  , discoveringCount :: (Int, Int)
-  , committingCount :: (Int, Int)
-  , bolsteringCount :: (Int, Int)
-  , assimilatingCount :: (Int, Int)
-  , setInStone :: Int
   }
   deriving (Generic, Show, ToJSON, FromJSON)
 

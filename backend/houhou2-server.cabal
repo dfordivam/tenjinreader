@@ -74,6 +74,7 @@ library
     , snowball
     , haskey
     , haskey-btree
+    , haskey-mtl
     , binary-orphans
     , common
   if (flag(dev)) || (flag(library-only))

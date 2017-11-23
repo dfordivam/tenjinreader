@@ -72,6 +72,8 @@ data SrsEntry = SrsEntry
 
 makeLenses ''SrsEntry
 
+instance Key SrsEntryId
+
 data SrsReviewData = SrsReviewData
   { _reviews :: Tree SrsEntryId SrsEntry
   } deriving (Generic, Show, Typeable, Binary, Value)
