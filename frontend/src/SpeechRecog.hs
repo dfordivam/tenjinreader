@@ -18,12 +18,14 @@ import qualified Data.Text as T
 -- import GHCJS.DOM.EventM
 import Data.JSString.Text
 
-speechRecogWidget reading = do
+speechRecogWidget readings = do
   text "Speech Recog Widget"
   recordEv <- button ("Record")
-  resEv <- speechRecogSetup recordEv
+  -- TODO Move the setup top of srs widget
+  recogEv <- speechRecogSetup recordEv
 
-  respEv <- getWebSocketResponse $ CheckAnswer reading <$> resEv
+  -- TODO Do check on recogEv before this
+  respEv <- getWebSocketResponse $ CheckAnswer readings <$> recogEv
   widgetHold (text "Waiting for Resp") $
     (\t -> text $ T.pack $ show t) <$> respEv
   ansDyn <- holdDyn (AnswerIncorrect "3") respEv

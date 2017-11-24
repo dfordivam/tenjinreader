@@ -279,16 +279,16 @@ getNextReviewDate
 --     _ -> curTime -- error
 
 getCheckAnswer :: CheckAnswer -> WsHandlerM CheckAnswerResult
-getCheckAnswer (CheckAnswer reading alt) = do
+getCheckAnswer (CheckAnswer readings alt) = do
   liftIO $ pPrint alt
   let  f (c,t) = (,) <$> pure c <*> getKana t
   kanaAlts <- lift $ mapM (mapM f) alt
   liftIO $ pPrint kanaAlts
-  return $ checkAnswerInt reading kanaAlts
+  return $ checkAnswerInt readings kanaAlts
 
-checkAnswerInt :: Reading -> [[(Double, Text)]] -> CheckAnswerResult
-checkAnswerInt (Reading reading) kanaAlts =
-  case elem reading kanas of
+checkAnswerInt :: [Reading] -> [[(Double, Text)]] -> CheckAnswerResult
+checkAnswerInt readings kanaAlts =
+  case any (\r -> elem r kanas) (unReading <$> readings) of
     True -> AnswerCorrect
     False -> AnswerIncorrect "T"
   where

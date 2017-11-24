@@ -141,7 +141,7 @@ instance WebSocketMessage AppRequest DoReview where
 
 ----------------------------------------------------------------
 data CheckAnswer =
-  CheckAnswer Reading [[(Double, Text)]]
+  CheckAnswer [Reading] [[(Double, Text)]]
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data CheckAnswerResult

@@ -55,10 +55,10 @@ showStatsWidget
   => SrsStats -> m (Event t SrsWidgetView)
 showStatsWidget s = do
   startReviewEv <- divClass "" $ do
-    ev <- divClass "" $ do
+    divClass "" $ do
       divClass "" $
         divClass "" $
-          text $ tshow (pendingReviewCount s)
+          text $ ""
       divClass "" $ do
         divClass "" $
           divClass "" $
@@ -67,28 +67,28 @@ showStatsWidget s = do
         divClass "" $
           button "Start reviewing"
 
-    statsCard "Reviews Today" (reviewsToday s)
-    statsCard "Total Items" (totalItems s)
-    statsCard "Total Reviews" (totalReviews s)
-    statsCard "Average Success" (averageSuccess s)
-    return ev
+  --   statsCard "Reviews Today" (reviewsToday s)
+  --   statsCard "Total Items" (totalItems s)
+  --   statsCard "Total Reviews" (totalReviews s)
+  --   statsCard "Average Success" (averageSuccess s)
+  --   return ev
 
-  divClass "" $ do
-    progressStatsCard "Discovering" "D1" "D2"
-      (discoveringCount s)
-    progressStatsCard "Committing" "C1" "C2"
-      (committingCount s)
-    progressStatsCard "Bolstering" "B1" "B2"
-      (bolsteringCount s)
-    progressStatsCard "Assimilating" "A1" "A2"
-      (assimilatingCount s)
-    divClass "" $ do
-      divClass "" $
-        divClass "" $
-          text $ tshow (setInStone s)
-      divClass "" $
-        divClass "" $
-          text "Set in Stone"
+  -- divClass "" $ do
+  --   progressStatsCard "Discovering" "D1" "D2"
+  --     (discoveringCount s)
+  --   progressStatsCard "Committing" "C1" "C2"
+  --     (committingCount s)
+  --   progressStatsCard "Bolstering" "B1" "B2"
+  --     (bolsteringCount s)
+  --   progressStatsCard "Assimilating" "A1" "A2"
+  --     (assimilatingCount s)
+  --   divClass "" $ do
+  --     divClass "" $
+  --       divClass "" $
+  --         text $ tshow (setInStone s)
+  --     divClass "" $
+  --       divClass "" $
+  --         text "Set in Stone"
 
   browseEv <- button "Browse Srs Items"
   return $ leftmost [ShowReviewWindow <$ startReviewEv
@@ -169,7 +169,7 @@ browseSrsItemsWidget = do
         return $ Set.toList <$> selList
 
     checkBoxListEl :: Event t Bool -> SrsItem
-      -> AppMonadT t m (Event t (SrsItemId, Bool))
+      -> AppMonadT t m (Event t (SrsEntryId, Bool))
     checkBoxListEl selAllEv (SrsItem i v sus pend) = divClass "" $ do
       let
         f (Left (Vocab ((Kana k):_))) = k
@@ -219,7 +219,7 @@ browseSrsItemsWidget = do
 bulkEditWidgetActionButtons
   :: AppMonad t m
   => Dynamic t BrowseSrsItems
-  -> Dynamic t [SrsItemId]
+  -> Dynamic t [SrsEntryId]
   -> AppMonadT t m (Event t [SrsItem])
 bulkEditWidgetActionButtons filtOptsDyn selList = divClass "" $ do
   currentTime <- liftIO getCurrentTime
@@ -270,7 +270,7 @@ datePicker defTime = divClass "" $ do
 
 openEditSrsItemWidget
   :: (AppMonad t m)
-  => Event t (SrsItemId)
+  => Event t (SrsEntryId)
   -> AppMonadT t m ()
 openEditSrsItemWidget ev = do
   srsItEv <- getWebSocketResponse $ GetSrsItem <$> ev
@@ -395,16 +395,16 @@ data ReviewStatus =
   deriving (Eq)
 
 type ReviewState = Map ReviewType ReviewStatus
-type Result = (SrsItemId,Bool)
+type Result = (SrsEntryId,Bool)
 
 data SrsWidgetState = SrsWidgetState
-  { reviewQueue :: Map SrsItemId (ReviewItem, ReviewState)
+  { reviewQueue :: Map SrsEntryId (ReviewItem, ReviewState)
   , resultQueue :: Maybe Result
   , reviewStats :: SrsReviewStats
   }
 
 data ReviewStateEvent
-  = DoReviewEv (SrsItemId, ReviewType, Bool)
+  = DoReviewEv (SrsEntryId, ReviewType, Bool)
   | AddItemsEv [ReviewItem]
   | UndoReview
 
@@ -515,8 +515,9 @@ reviewWidget = do
     -- 3. Fetch new items from server
     -- 4. Undo event
     -- 5. refresh (if initEv was Nothing)
-    let itemsEv = leftmost [initEv, fetchMoreReviewsResp]
-        addItemEv = fmapMaybe (fmap AddItemsEv) itemsEv
+
+    let
+      addItemEv = AddItemsEv <$> leftmost [initEv, fetchMoreReviewsResp]
 
     -- Output Events
     -- 1. Show review item
@@ -668,8 +669,8 @@ reviewInputFieldHandler ti rt (ReviewItem i k m r) = do
   let enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
       correct = checkAnswer n <$> value ti
       n = case rt of
-        MeaningReview -> Left m
-        ReadingReview -> Right r
+        MeaningReview -> Left $ fst m
+        ReadingReview -> Right $ fst r
       h _ NewReview = ShowAnswer
       h _ ShowAnswer = NextReview
       h _ _ = NewReview
@@ -687,19 +688,19 @@ reviewInputFieldHandler ti rt (ReviewItem i k m r) = do
   let resEv b = (if b
         then "Correct : "
         else "Incorrect : ") <> ans
-      ans = case rt of
-        MeaningReview -> unMeaning $ fst m
-        ReadingReview -> unReading $ fst r
+      ans = mconcat $ intersperse ", "  $ case rt of
+        MeaningReview -> map unMeaning $ fst m
+        ReadingReview -> map unReading $ fst r
   return (dr, hiragana, resEv <$> correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
-checkAnswer :: (Either (Meaning, MeaningNotes) (Reading, ReadingNotes))
+checkAnswer :: (Either [Meaning] [Reading])
             -> Text
             -> Bool
-checkAnswer (Left (Meaning m,_)) t = elem t answers
-  where answers = T.splitOn "," m
-checkAnswer (Right (Reading r,_)) t = elem t answers
-  where answers = T.splitOn "," r
+checkAnswer (Left m) t = elem t answers
+  where answers = map unMeaning m
+checkAnswer (Right r) t = elem t answers
+  where answers = map unReading r
 
 data AnswerBoxState = NewReview | ShowAnswer | NextReview
   deriving (Eq)
