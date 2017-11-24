@@ -76,6 +76,7 @@ library
     , haskey-btree
     , haskey-mtl
     , binary-orphans
+    , kanjidbreader
     , common
   if (flag(dev)) || (flag(library-only))
     ghc-options: -Wall -fwarn-tabs -O0
