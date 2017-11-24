@@ -60,6 +60,53 @@ makeVocabDetails v i ms = VocabDetails
   (WikiRank <$> v ^. DB.vocabWikiRank)
   (Meaning <$> (DB._vocabMeaningMeaning <$> ms))
 
+getKanjis :: DBMonad [(KanjiId, KanjiDetails)]
+getKanjis = do
+  let query = (all_ (DB._jmdictKanji DB.jmdictDb))
+  ks <- selectListQuery $ query
+  let fun k = case (DB.getKey $ primaryKey k) of
+                (Just i) -> Just (i,k)
+                Nothing -> Nothing
+      kis :: [(Int, DB.Kanji)]
+      kis = mapMaybe fun ks
+
+      query2 kId = filter_ (\k ->
+          (k ^. DB.kanjiMeaningKanji) ==. val_ kId) $
+        (all_ (DB._jmdictKanjiMeaning DB.jmdictDb))
+
+      fun2 (i,k) = do
+        ms <- selectListQuery $ query2 (primaryKey k)
+        return $ (KanjiId i, makeKanjiDetails k i ms)
+
+  mapM fun2 kis
+
+getVocabs :: DBMonad [(VocabId, VocabDetails)]
+getVocabs = do
+  let query = (all_ (DB._jmdictVocab DB.jmdictDb))
+  vs <- selectListQuery $ query
+  let fun k = case (DB.getKey $ primaryKey k) of
+                (Just i) -> Just (i,k)
+                Nothing -> Nothing
+      vis :: [(Int, DB.Vocab)]
+      vis = mapMaybe fun vs
+
+      query2 vId = map DB._vocabVocabMeaningMeaning $
+        filter_ (\v ->
+          (v ^. DB.vocabVocabMeaningVocab) ==. val_ vId) $
+        (all_ (DB._jmdictVocabVocabMeaning DB.jmdictDb))
+
+      fun2 (i,v) = do
+        msIds <- selectListQuery $ query2 (primaryKey v)
+        ms <- catMaybes <$> mapM fun3 msIds
+        return $ (VocabId i, makeVocabDetails v i ms)
+
+      fun3 mId = do
+        conn <- ask
+        liftIO $ withDatabase conn (runSelectReturningOne $
+          lookup (DB._jmdictVocabMeaning DB.jmdictDb) mId)
+
+  mapM fun2 vis
+
 getKanjiVocabs
   :: KanjiId
   -> DBMonad [VocabId]
