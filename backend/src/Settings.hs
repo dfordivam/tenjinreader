@@ -61,6 +61,9 @@ data AppSettings = AppSettings
 
     , appAuthDummyLogin         :: Bool
     -- ^ Indicate if auth dummy login should be enabled.
+
+    , appMecabFilesDir          :: Text
+    , appSrsDatabaseDir         :: Text
     }
 
 instance FromJSON AppSettings where
@@ -89,6 +92,8 @@ instance FromJSON AppSettings where
 
         appAuthDummyLogin         <- o .:? "auth-dummy-login"      .!= defaultDev
 
+        appMecabFilesDir          <- o .:  "mecab-files-dir"
+        appSrsDatabaseDir         <- o .:  "srs-database-dir"
         return AppSettings {..}
 
 -- | Settings for 'widgetFile', such as which template languages to support and

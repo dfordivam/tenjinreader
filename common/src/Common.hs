@@ -77,6 +77,12 @@ data KanjiOrKana
   | Kana Text
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
+vocabToKana :: Vocab -> Text
+vocabToKana (Vocab ks) = mconcat $ map getFur ks
+  where
+    getFur (KanjiWithReading _ t) = t
+    getFur (Kana t) = t
+
 data KanjiDetails = KanjiDetails
   { _kanjiId             :: KanjiId
   , _kanjiCharacter      :: Kanji

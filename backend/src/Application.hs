@@ -44,6 +44,9 @@ import Handler.Comment
 import Handler.Profile
 import Handler.WebSocketHandler
 
+import Text.MeCab (new)
+import SrsDB
+
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
 -- comments there for more details.
@@ -62,6 +65,18 @@ makeFoundation appSettings = do
     appStatic <-
         (if appMutableStatic appSettings then staticDevel else static)
         (appStaticDir appSettings)
+
+    -- HH Specific initialization
+    appMecabPtr <- new ["mecab", "-d"
+      , unpack $ appMecabFilesDir appSettings]
+
+    (appKanjiDb, appVocabDb, appRadicalDb) <-
+      createDBs appMecabPtr
+
+    let appKanjiSearchEng = getKanjiSE appKanjiDb
+        appVocabSearchEng = getVocabSE appVocabDb
+
+    appSrsReviewState <- openSrsDB (unpack $ appSrsDatabaseDir appSettings)
 
     -- We need a log function to create a connection pool. We need a connection
     -- pool to create our foundation. And we need our foundation to get a
@@ -82,6 +97,7 @@ makeFoundation appSettings = do
 
     -- Perform database migration using our application's logging settings.
     runLoggingT (runSqlPool (runMigration migrateAll) pool) logFunc
+
 
     -- Return the foundation
     return $ mkFoundation pool

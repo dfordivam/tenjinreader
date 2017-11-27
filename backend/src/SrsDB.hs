@@ -28,6 +28,7 @@ import Data.Int (Int64)
 import Data.Typeable (Typeable)
 import qualified Data.BTree.Impure as Tree
 
+import Control.Monad.Haskey
 import Database.Haskey.Alloc.Concurrent (Root)
 import Data.Binary.Orphans
 import GHC.Generics (Generic)
@@ -89,3 +90,12 @@ data AppSrsReviewState = AppSrsReviewState
   } deriving (Generic, Show, Typeable, Binary, Value, Root)
 
 makeLenses ''AppSrsReviewState
+
+openSrsDB :: FilePath -> IO (ConcurrentDb AppSrsReviewState)
+openSrsDB fp =
+  flip runFileStoreT defFileStoreConfig $
+    openConcurrentDb hnds >>= \case
+      Nothing -> createConcurrentDb hnds (AppSrsReviewState Tree.empty)
+      Just db -> return db
+  where
+    hnds = concurrentHandles fp
