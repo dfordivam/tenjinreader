@@ -26,6 +26,8 @@ import qualified Data.Map as Map
 import Text.MeCab
 import NLP.Romkan
 import NLP.Snowball
+import System.Directory
+import qualified Data.ByteString.Lazy
 
 type KanjiDb = Map KanjiId KanjiData
 
@@ -55,35 +57,55 @@ createDBs ::
   MeCab
   -> IO (KanjiDb, VocabDb, RadicalDb)
 createDBs mecab = do
-  conn <- openKanjiDB
-  let
-    getKanjiData (kId,k) = do
-      vs <- getKanjiVocabs kId
-      rs <- getKanjiRadicals kId
-      return $ (kId
-               , KanjiData k (Set.fromList vs)
-                 (Set.fromList rs))
+  let kanjibin = "kanjidb.bin"
+  ex <- doesFileExist kanjibin
+  if ex
+    then do
+      bs <- Data.ByteString.Lazy.readFile kanjibin
+      return $ Data.Binary.decode bs
+    else do
+      conn <- openKanjiDB
+      let
+        getKanjiData (kId,k) = do
+          vs <- getKanjiVocabs kId
+          rs <- getKanjiRadicals kId
+          return $ (kId
+                   , KanjiData k (Set.fromList vs)
+                     (Set.fromList rs))
 
-    getVocabData (vId,v) = do
-      ks <- getVocabKanjis vId
-      return $ (vId
-               , VocabData v (Set.empty)
-                 (Set.fromList ks))
-    f = do
-      ks <- KanjiDB.Interface.getKanjis
-      kDb <- Map.fromList <$> mapM getKanjiData ks
+        getVocabData (vId,v) = do
+          ks <- getVocabKanjis vId
+          return $ (vId
+                   , VocabData v (Set.empty)
+                     (Set.fromList ks))
+        f = do
+          ks <- KanjiDB.Interface.getKanjis
+          liftIO $ putStrLn $ "Got Kanjis: " <> (T.pack $ show (length ks))
+          liftIO $ putStrLn $ "Encode Size: " <> (T.pack $ show (Data.ByteString.Lazy.length $ Data.Binary.encode ks))
+          kDb <- Map.fromList <$> mapM getKanjiData ks
 
-      vs <- getVocabs
-      vDb <- Map.fromList <$> mapM getVocabData vs
+          liftIO $ putStrLn $ "Got KanjiDB: " <> (T.pack $ show (Map.size kDb))
+          liftIO $ putStrLn $ "Encode Size: " <> (T.pack $ show (Data.ByteString.Lazy.length $ Data.Binary.encode kDb))
 
-      rDb <- Map.fromList <$> mapM
-        (\r -> do
-            ks <- getRadicalKanjis r
-            return (r, Set.fromList ks))
-        (Map.keys radicalTable)
+          vs <- getVocabs
+          liftIO $ putStrLn $ "Got Vocab: " <> (T.pack $ show (length vs))
+          liftIO $ putStrLn $ "Encode Size: " <> (T.pack $ show (Data.ByteString.Lazy.length $ Data.Binary.encode vs))
 
-      return (kDb, vDb, rDb)
-  runReaderT f conn
+          vDb <- Map.fromList <$> mapM getVocabData vs
+
+          liftIO $ putStrLn $ "Got VocabDB: " <> (T.pack $ show (Map.size vDb))
+          liftIO $ putStrLn $ "Encode Size: " <> (T.pack $ show (Data.ByteString.Lazy.length $ Data.Binary.encode vDb))
+
+          rDb <- Map.fromList <$> mapM
+            (\r -> do
+                ks <- getRadicalKanjis r
+                return (r, Set.fromList ks))
+            (Map.keys radicalTable)
+
+          return (kDb, vDb, rDb)
+      ret <- runReaderT f conn
+      Data.ByteString.Lazy.writeFile kanjibin (Data.Binary.encode ret)
+      return ret
 
 type KanjiSearchEngine = SearchEngine KanjiDetails KanjiId KanjiSearchFields NoFeatures
 

@@ -25,7 +25,8 @@ import Database.Persist.Sql
 
 getWebSocketHandlerR :: Handler Html
 getWebSocketHandlerR = do
-    uId <- requireAuthId
+    -- uId <- requireAuthId
+    let uId = toSqlKey 1 :: Key User
     webSockets $ handleWebSocketConn uId
     redirect $ ("static/websocket/index.html" :: Text)
 

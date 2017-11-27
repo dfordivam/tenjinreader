@@ -17,7 +17,7 @@ data VisibleWidget = KanjiFilterVis | KanjiDetailPageVis
 kanjiBrowseWidget
   :: AppMonad t m
   => AppMonadT t m ()
-kanjiBrowseWidget = divClass "" $ divClass "" $ do
+kanjiBrowseWidget = divClass "row" $ do
 
   ev <- getPostBuild
 
@@ -40,31 +40,36 @@ kanjiBrowseWidget = divClass "" $ divClass "" $ do
 
     filterDyn <- holdDyn def filterEv
 
-    filterEv <- divClass "" $ do
+    -- NW 1.1
+    filterEv <- divClass "col-sm-8" $ do
       rec
         let visEv = leftmost [KanjiFilterVis <$ closeEv
                              , KanjiDetailPageVis <$ kanjiDetailsEv]
         vis <- holdDyn KanjiFilterVis visEv
 
         -- Show either the filter options or the kanji details page
+        -- NW 1.1.1
         filterEv <- handleVisibility KanjiFilterVis vis $
           kanjiFilterWidget validRadicals
 
         maybeKanjiDetailsEv <- getWebSocketResponse
           ((flip GetKanjiDetails) def <$> kanjiSelectionEv)
 
+        -- NW 1.1.2
         closeEv <- handleVisibility KanjiDetailPageVis vis $ do
           l <- linkClass "Close Details Page" ""
           return (_link_clicked l)
 
         let kanjiDetailsEv = fmapMaybe identity maybeKanjiDetailsEv
+        -- NW 1.1.3
         handleVisibility KanjiDetailPageVis vis $
           kanjiDetailsWidget kanjiDetailsEv
 
       return filterEv
 
+    -- NW 1.2
     kanjiSelectionEv <-
-      divClass "" $ do
+      divClass "col-sm-4" $ do
         kanjiListWidget kanjiListEv
 
   return ()
@@ -75,8 +80,11 @@ kanjiFilterWidget
   => Event t [RadicalId]
   -> AppMonadT t m (Event t KanjiFilter)
 kanjiFilterWidget validRadicalsEv = do
+
+  -- NW 1
   sentenceTextArea <- divClass "" $ textArea def
 
+  -- NW 2
   (readingTextInput, readingSelectionDropDown, meaningTextInput)
     <- divClass "" $ do
     t <- textInput def
@@ -91,6 +99,7 @@ kanjiFilterWidget validRadicalsEv = do
                     <*> (value readingSelectionDropDown)
                     <*> (value meaningTextInput)
 
+  -- NW 3
   selectedRadicals <- radicalMatrix validRadicalsEv
   let
     kanjiFilter = KanjiFilter <$> (value sentenceTextArea)
@@ -118,7 +127,7 @@ radicalMatrix evValid = do
   rec
     let
       renderMatrix = do
-        divClass "" $ mapM showRadical (Map.toList radicalTable)
+        divClass "row" $ mapM showRadical (Map.toList radicalTable)
 
       showRadical :: (RadicalId, RadicalDetails) -> m (Event t RadicalId)
       showRadical (i,(RadicalDetails r _)) = do
@@ -134,7 +143,7 @@ radicalMatrix evValid = do
             attr = (\c -> ("class" =: c)) <$>
                      (cl <$> zipDyn valid sel)
 
-        (e,_) <- elAttr' "div" ("class" =: "") $
+        (e,_) <- elAttr' "div" ("class" =: "col-sm-1") $
           elDynAttr "button" attr $ text r
         let ev = attachDynWithMaybe f valid
                    (domEvent Click e)
@@ -177,27 +186,29 @@ kanjiDetailsWidget
   => Event t KanjiSelectionDetails -> m ()
 kanjiDetailsWidget ev = do
   let f (KanjiSelectionDetails k v) = do
+        -- NW 1
         kanjiDetailWindow k
+        -- NW 2
         vocabListWindow v
         return ()
   void $ widgetHold (return ()) (f <$> ev)
 
 kanjiDetailWindow :: (DomBuilder t m) => KanjiDetails -> m ()
 kanjiDetailWindow k = do
-  divClass "" $ do
-    divClass "" $ do
-      divClass "" $ do
+  elClass "table" "table" $ do
+    el "tr" $ do
+      el "td" $ do
         elClass "i" "" $
           text (unKanji $ k ^. kanjiCharacter)
-      divClass "" $ do
+      el "td" $ do
         text "Radicals here"
 
-    divClass "" $ do
-      divClass "" $ do
+    el "tr" $ do
+      el "td" $ do
         text $ T.intercalate "," $ map unMeaning $
           k ^. kanjiMeanings
 
-      divClass "" $ do
+      el "td" $ do
         textMay (tshow <$> (unRank <$> k ^. kanjiMostUsedRank))
 
       -- divClass "" $ do
@@ -207,23 +218,21 @@ kanjiDetailWindow k = do
 vocabListWindow :: DomBuilder t m => [VocabDetails] -> m ()
 vocabListWindow vs = do
   let
-    dispVocab v = divClass "row" $ do
-      divClass "" $ do
+    dispVocab v = el "tr" $ do
+      el "td" $ do
         displayVocabT $ v ^. vocab
 
-      divClass "" $ do
-        divClass "" $ do
+      el "td" $ elClass "table" "table" $ do
+        el "tr" $ el "td" $ do
           text $ T.intercalate "," $ map unMeaning
             $ v ^. vocabMeanings
 
-        divClass "" $ do
-          textMay (tshow <$> (unRank <$> v ^. vocabFreqRank))
+        el "tr" $ do
+          el "td" $ textMay (tshow <$> (unRank <$> v ^. vocabFreqRank))
+          el "td" $ textMay (tshow <$> (unWikiRank <$> v ^. vocabWikiRank))
+          el "td" $ textMay (tshow <$> (unWkLevel <$> v ^. vocabWkLevel))
 
-        divClass "" $ do
-          textMay (tshow <$> (unWikiRank <$> v ^. vocabWikiRank))
-          textMay (tshow <$> (unWkLevel <$> v ^. vocabWkLevel))
-
-  divClass "" $ do
+  elClass "table" "table" $ do
     forM_ vs dispVocab
 
 displayVocabT :: DomBuilder t m => Vocab -> m ()

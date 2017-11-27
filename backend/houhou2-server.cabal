@@ -91,6 +91,9 @@ library
       Handler.Home
       Handler.Profile
       Handler.WebSocketHandler
+      Handler.WebSocketHandler.KanjiBrowser
+      Handler.WebSocketHandler.SrsReview
+      Handler.WebSocketHandler.Utils
       Import
       Import.NoFoundation
       Model
