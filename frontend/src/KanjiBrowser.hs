@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 module KanjiBrowser where
 
 import FrontendCommon
@@ -161,25 +162,37 @@ radicalMatrix evValid = do
   return $ Set.toList <$> selectedRadicals
 
 
-kanjiListWidget
-  :: (DomBuilder t m, MonadHold t m)
-  => Event t KanjiList -> m (Event t KanjiId)
+-- kanjiListWidget
+--   :: (DomBuilder t m, MonadHold t m)
+--   => Event t KanjiList -> m (Event t KanjiId)
 kanjiListWidget listEv = do
-  let kanjiTable itms = do
-        el "table" $ do
-          let listItem itm@(i, k, r, m) = do
-                (e, _) <- el' "tr" $ do
-                  el "td" $ text $ (unKanji k)
-                  el "td" $ text $ maybe ""
-                    (\r1 -> "Rank: " <> show r1) (unRank <$> r)
-                  el "td" $ text $ T.intercalate "," $ map unMeaning m
-                return (i <$ domEvent Click e)
-          evs <- mapM listItem itms
-          return $ leftmost evs
-  d <- widgetHold (return never) (kanjiTable <$> listEv)
-  let e = switchPromptlyDyn d
-  return e
-  -- show list
+  let
+    listItem itm@(i, k, r, m) = do
+          (e, _) <- el' "tr" $ do
+            el "td" $ text $ (unKanji k)
+            el "td" $ text $ maybe ""
+              (\r1 -> "Rank: " <> show r1) (unRank <$> r)
+            el "td" $ text $ T.intercalate "," $ map unMeaning m
+          return (i <$ domEvent Click e)
+
+    liWrap i = do
+      ev <- dyn $ listItem <$> i
+      switchPromptly never ev
+
+    fun (This l) _ = l
+    fun (That ln) l = l ++ ln
+    fun (These l _) _ = l
+
+  -- NW 1
+  elClass "table" "table" $ el "tbody" $  do
+    rec
+      lmEv <- getWebSocketResponse $ LoadMoreKanjiResults <$ ev
+      dyn <- foldDyn fun [] (align listEv lmEv)
+      -- NW 1.1
+      d <- simpleList dyn liWrap
+      -- NW 1.2
+      ev <- el "td" $ button "Load More"
+    return $ switchPromptlyDyn $ leftmost <$> d
 
 kanjiDetailsWidget
   :: (DomBuilder t m, MonadHold t m)
@@ -195,7 +208,7 @@ kanjiDetailsWidget ev = do
 
 kanjiDetailWindow :: (DomBuilder t m) => KanjiDetails -> m ()
 kanjiDetailWindow k = do
-  elClass "table" "table" $ do
+  elClass "table" "table" $ el "tbody" $ do
     el "tr" $ do
       el "td" $ do
         elClass "i" "" $
@@ -222,7 +235,7 @@ vocabListWindow vs = do
       el "td" $ do
         displayVocabT $ v ^. vocab
 
-      el "td" $ elClass "table" "table" $ do
+      el "td" $ elClass "table" "table" $ el "tbody" $ do
         el "tr" $ el "td" $ do
           text $ T.intercalate "," $ map unMeaning
             $ v ^. vocabMeanings
@@ -239,12 +252,10 @@ displayVocabT :: DomBuilder t m => Vocab -> m ()
 displayVocabT (Vocab ks) = do
   let
     f k = case k of
-      (KanjiWithReading k f) -> divClass "" $ do
-        divClass "" $ text f
-        divClass "" $ text $ unKanji k
-      (Kana t) -> divClass "" $ do
-        divClass "" $ text ""
-        divClass "" $ text t
+      (KanjiWithReading k f) ->
+        text $ (unKanji k) <> "(" <> f <> ")"
+      (Kana t) ->
+        text t
   mapM_ f ks
 
 textMay (Just v) = text v

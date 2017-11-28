@@ -17,7 +17,10 @@ import qualified Data.Set as Set
 import Text.Pretty.Simple
 import Data.SearchEngine
 
-mostUsedKanjis = undefined
+searchResultCount = 20
+
+mostUsedKanjis kanjiDb = take 20 $ map _kanjiId $ sortWith _kanjiMostUsedRank
+  $ map _kanjiDetails $ Map.elems kanjiDb
 
 -- Pagination,
 getKanjiFilterResult :: KanjiFilter -> WsHandlerM KanjiFilterResult
@@ -41,7 +44,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
     fun
       | (T.null inpTxt) && (T.null filtTxt)
         && (null rads) =
-        mostUsedKanjis
+        mostUsedKanjis kanjiDb
 
       | (T.null inpTxt) && (T.null filtTxt) =
         Set.toList
@@ -73,24 +76,46 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
             $ catMaybes $ map (flip Map.lookup radicalDb) rads)
 
 
-  let kanjisFiltered = catMaybes $
-        (flip Map.lookup) kanjiDb <$> kanjisFilteredIds
+  let
       kanjisFilteredIds = fun
 
-  let kanjiList = map convertKanji $ map _kanjiDetails kanjisFiltered
-      convertKanji
-        :: KanjiDetails
-        -> (KanjiId, Kanji, Maybe Rank, [Meaning])
-      convertKanji k =
-        (k ^. kanjiId, k ^. kanjiCharacter
-        , k ^. kanjiMostUsedRank, k ^. kanjiMeanings)
-      validRadicals = Set.toList $ foldl Set.intersection
-        (Map.keysSet radicalDb) (map _kanjiRadicalSet kanjisFiltered)
+  asks kanjiSearchResult >>= \ref ->
+    liftIO $ writeIORef ref (kanjisFilteredIds, searchResultCount)
+
+  let
+    kanjiList = take searchResultCount $ getKanjiList kanjiDb kanjisFilteredIds
+
+    kanjisFiltered = catMaybes $
+        (flip Map.lookup) kanjiDb <$> kanjisFilteredIds
+    validRadicals = Set.toList $ foldl Set.intersection
+      (Map.keysSet radicalDb) (map _kanjiRadicalSet kanjisFiltered)
 
   return $ KanjiFilterResult kanjiList validRadicals
 
-getLoadMoreKanjiResults :: LoadMoreKanjiResults -> WsHandlerM KanjiFilterResult
-getLoadMoreKanjiResults = undefined
+getKanjiList :: KanjiDb -> [KanjiId] -> KanjiList
+getKanjiList kanjiDb ks = map convertKanji $ map _kanjiDetails kanjisFiltered
+  where
+    kanjisFiltered = catMaybes $
+        (flip Map.lookup) kanjiDb <$> ks
+    convertKanji
+      :: KanjiDetails
+      -> (KanjiId, Kanji, Maybe Rank, [Meaning])
+    convertKanji k =
+      (k ^. kanjiId, k ^. kanjiCharacter
+      , k ^. kanjiMostUsedRank, k ^. kanjiMeanings)
+
+getLoadMoreKanjiResults :: LoadMoreKanjiResults -> WsHandlerM KanjiList
+getLoadMoreKanjiResults _ = do
+  kanjiDb <- lift $ asks appKanjiDb
+  (ks, count) <- asks kanjiSearchResult >>= \ref ->
+    liftIO $ readIORef ref
+  let
+    kanjiList = take searchResultCount $ drop count $ getKanjiList kanjiDb ks
+
+  asks kanjiSearchResult >>= \ref ->
+    liftIO $ writeIORef ref (ks, count + (length kanjiList))
+
+  return kanjiList
 
 getKanjiDetails :: GetKanjiDetails -> WsHandlerM (Maybe KanjiSelectionDetails)
 getKanjiDetails (GetKanjiDetails kId _) = do
@@ -102,7 +127,26 @@ getKanjiDetails (GetKanjiDetails kId _) = do
         catMaybes ((flip Map.lookup) vocabDb <$> keys)
       keys = maybe [] (Set.toList . _kanjiVocabSet) kd
 
-  return $ KanjiSelectionDetails <$> kd ^? _Just . kanjiDetails <*> pure vocabs
+      vs = take searchResultCount vocabs
+
+  asks kanjiVocabResult >>= \ref ->
+    liftIO $ writeIORef ref (keys, searchResultCount)
+  return $ KanjiSelectionDetails <$> kd ^? _Just . kanjiDetails <*> pure vs
+
+getLoadMoreKanjiVocab :: LoadMoreKanjiVocab -> WsHandlerM [VocabDetails]
+getLoadMoreKanjiVocab _ = do
+  vocabDb <- lift $ asks appVocabDb
+
+  (keys, count) <- asks kanjiVocabResult >>= \ref ->
+    liftIO $ readIORef ref
+  let
+      vocabs = map _vocabDetails $
+        catMaybes ((flip Map.lookup) vocabDb <$> keys)
+      vs = take searchResultCount $ drop count vocabs
+
+  asks kanjiVocabResult >>= \ref ->
+    liftIO $ writeIORef ref (keys, count + (length vs))
+  return vs
 
 getVocabSearch :: VocabSearch -> WsHandlerM [VocabDetails]
 getVocabSearch (VocabSearch (AdditionalFilter r _ m)) = do
@@ -112,4 +156,21 @@ getVocabSearch (VocabSearch (AdditionalFilter r _ m)) = do
         catMaybes ((flip Map.lookup) vocabDb <$> keys)
       keys = query vocabSearchEng terms
       terms = (T.words m)
-  return $ vocabs
+  asks vocabSearchResult >>= \ref ->
+    liftIO $ writeIORef ref (keys, searchResultCount)
+  return $ take searchResultCount vocabs
+
+getLoadMoreVocabSearchResult :: LoadMoreVocabSearchResult -> WsHandlerM [VocabDetails]
+getLoadMoreVocabSearchResult _ = do
+  vocabDb <- lift $ asks appVocabDb
+
+  (keys, count) <- asks vocabSearchResult >>= \ref ->
+    liftIO $ readIORef ref
+  let
+      vocabs = map _vocabDetails $
+        catMaybes ((flip Map.lookup) vocabDb <$> keys)
+      vs = take searchResultCount $ drop count vocabs
+
+  asks vocabSearchResult >>= \ref ->
+    liftIO $ writeIORef ref (keys, count + (length vs))
+  return vs

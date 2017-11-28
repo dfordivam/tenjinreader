@@ -25,7 +25,7 @@ newtype Kanji = Kanji { unKanji :: Text }
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype Rank = Rank { unRank :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype Meaning = Meaning { unMeaning :: Text }
   deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
@@ -40,19 +40,19 @@ newtype ReadingNotes = ReadingNotes { unReadingNotes :: Text }
   deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype Grade = Grade { unGrade :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype StrokeCount = StrokeCount { unStrokeCount :: Int }
   deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype JlptLevel = JlptLevel { unJlptLevel :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype WikiRank = WikiRank { unWikiRank :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype WkLevel = WkLevel { unWkLevel :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype RadicalId = RadicalId { unRadicalId :: Int }
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)

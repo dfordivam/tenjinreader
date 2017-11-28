@@ -26,8 +26,12 @@ type AppRequest
     -- Kanji/Vocab Browser
     KanjiFilter
   :<|> LoadMoreKanjiResults
+
   :<|> GetKanjiDetails
+  :<|> LoadMoreKanjiVocab
+
   :<|> VocabSearch
+  :<|> LoadMoreVocabSearchResult
 
 
   :<|> GetSrsStats
@@ -78,12 +82,18 @@ data KanjiSelectionDetails =
   [VocabDetails]
   deriving (Generic, Show, ToJSON, FromJSON)
 
+data LoadMoreKanjiVocab = LoadMoreKanjiVocab
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest LoadMoreKanjiVocab where
+  type ResponseT AppRequest LoadMoreKanjiVocab = [VocabDetails]
+
 ----------------------------------------------------------------
 data LoadMoreKanjiResults = LoadMoreKanjiResults
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest LoadMoreKanjiResults where
-  type ResponseT AppRequest LoadMoreKanjiResults = KanjiFilterResult
+  type ResponseT AppRequest LoadMoreKanjiResults = KanjiList
 
 ----------------------------------------------------------------
 data VocabSearch = VocabSearch AdditionalFilter
@@ -91,6 +101,12 @@ data VocabSearch = VocabSearch AdditionalFilter
 
 instance WebSocketMessage AppRequest VocabSearch where
   type ResponseT AppRequest VocabSearch = [VocabDetails]
+
+data LoadMoreVocabSearchResult = LoadMoreVocabSearchResult
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest LoadMoreVocabSearchResult where
+  type ResponseT AppRequest LoadMoreVocabSearchResult = [VocabDetails]
 
 ----------------------------------------------------------------
 

@@ -31,11 +31,13 @@ getWebSocketHandlerR = do
     redirect $ ("static/websocket/index.html" :: Text)
 
 handleWebSocketConn uId = do
-  iref <- liftIO $ newIORef []
+  iref1  <- liftIO $ newIORef ([],0)
+  iref2  <- liftIO $ newIORef ([],0)
+  iref3  <- liftIO $ newIORef ([],0)
   let runF bs = lift $ runReaderT
         (handleRequest wsHandler bs) (userSessionData)
       userSessionData =
-        WsHandlerEnv iref (fromSqlKey uId)
+        WsHandlerEnv iref1 iref2 iref3 (fromSqlKey uId)
 
   sourceWS $$ ((Data.Conduit.List.mapM runF)
                   =$= sinkWSBinary)
@@ -45,8 +47,12 @@ wsHandler = HandlerWrapper $
 
   h getKanjiFilterResult
   :<&> h getLoadMoreKanjiResults
+
   :<&> h getKanjiDetails
+  :<&> h getLoadMoreKanjiVocab
+
   :<&> h getVocabSearch
+  :<&> h getLoadMoreVocabSearchResult
 
   :<&> h getSrsStats
 

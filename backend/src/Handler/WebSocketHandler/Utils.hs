@@ -18,7 +18,9 @@ import NLP.Romkan
 type WsHandlerM = ReaderT WsHandlerEnv Handler
 
 data WsHandlerEnv = WsHandlerEnv
-  { kanjiSearchResult :: IORef [(KanjiId, KanjiDetails)]
+  { kanjiSearchResult :: IORef ([KanjiId], Int)
+  , kanjiVocabResult  :: IORef ([VocabId], Int)
+  , vocabSearchResult :: IORef ([VocabId], Int)
   , currentUserId :: Int64
   }
 
