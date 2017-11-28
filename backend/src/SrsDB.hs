@@ -37,12 +37,12 @@ import Data.Time.Calendar (Day)
 
 instance Value Day
 
+newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }
+  deriving (Generic, Show, Typeable, Binary, Value)
+
 -- If the user suspends a card and then resume later
 -- 1. It was due when suspended -> make immediately available for review
 -- 2. not due -> no suspend?
-
-newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }
-  deriving (Generic, Show, Typeable, Binary, Value)
 
 data SrsEntryState =
   Suspended SrsInterval | NextReviewDate Day SrsInterval
@@ -77,9 +77,16 @@ data SrsEntry = SrsEntry
 makeLenses ''SrsEntry
 
 instance Key SrsEntryId
+instance Key KanjiId
+instance Key VocabId
+instance (Value a, Value b) => Value (Either a b)
 
 data SrsReviewData = SrsReviewData
   { _reviews :: Tree SrsEntryId SrsEntry
+  , _kanjiSrsMap :: Tree KanjiId SrsEntryId
+  , _vocabSrsMap :: Tree VocabId SrsEntryId
+  -- An Srs Item may not have an entry in this map
+  , _srsKanjiVocabMap :: Tree SrsEntryId (Either KanjiId VocabId)
   } deriving (Generic, Show, Typeable, Binary, Value)
 
 makeLenses ''SrsReviewData

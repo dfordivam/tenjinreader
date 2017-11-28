@@ -54,6 +54,8 @@ wsHandler = HandlerWrapper $
   :<&> h getVocabSearch
   :<&> h getLoadMoreVocabSearchResult
 
+  :<&> h getQuickAddSrsItem
+
   :<&> h getSrsStats
 
   :<&> h getGetNextReviewItem

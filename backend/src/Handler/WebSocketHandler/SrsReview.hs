@@ -162,7 +162,6 @@ getDoReview :: DoReview
   -> WsHandlerM Bool
 getDoReview (DoReview results) = do
   today <- liftIO $ utctDay <$> getCurrentTime
-  master <- lift $ getYesod
   uId <- asks currentUserId
 
   let
@@ -177,6 +176,7 @@ getDoReview (DoReview results) = do
       (reviews %%~ (\rt -> foldlM doUp rt results))
   return True
 
+updateSrsEntry :: Bool -> Day -> SrsEntry -> SrsEntry
 updateSrsEntry b today r = r
   & reviewState %~ modifyState
   & stats %~ modifyStats
@@ -293,3 +293,70 @@ checkAnswerInt readings kanaAlts =
     False -> AnswerIncorrect "T"
   where
     kanas = mconcat $ map (map snd) kanaAlts
+
+getQuickAddSrsItem :: QuickAddSrsItem -> WsHandlerM ()
+getQuickAddSrsItem (QuickAddSrsItem v) = do
+  uId <- asks currentUserId
+
+  srsItm <- lift $ makeSrsEntry v
+  let
+    upFun :: _ => SrsEntry
+      -> SrsReviewData -> m SrsReviewData
+    upFun itm rd = do
+      mx <- Tree.lookupMaxTree (rd ^. reviews)
+      let newk = maybe zerokey nextKey mx
+          zerokey = SrsEntryId 0
+          nextKey (SrsEntryId k, _) = SrsEntryId (k + 1)
+
+      rd & reviews %%~ Tree.insertTree newk itm
+         >>= srsKanjiVocabMap %%~ Tree.insertTree newk v
+         >>= case v of
+         (Left k) ->
+           kanjiSrsMap %%~ Tree.insertTree k newk
+         (Right v) ->
+           vocabSrsMap %%~ Tree.insertTree v newk
+
+  forM srsItm $ \itm -> do
+    lift $ transactSrsDB_ $
+      userReviews %%~ updateTreeM uId (upFun itm)
+  return ()
+
+data TRM = TRM Text [Reading] [Meaning]
+
+makeSrsEntry
+  :: (Either KanjiId VocabId)
+  -> Handler (Maybe SrsEntry)
+makeSrsEntry v = do
+  today <- liftIO $ utctDay <$> getCurrentTime
+  tmp <- case v of
+    (Left kId) -> do
+      kanjiDb <- asks appKanjiDb
+      let k = Map.lookup kId kanjiDb
+          r = (++)
+            <$> k ^? _Just . kanjiDetails . kanjiOnyomi
+            <*> k ^? _Just . kanjiDetails . kanjiKunyomi
+          m = k ^? _Just . kanjiDetails . kanjiMeanings
+          f = unKanji <$>
+            k ^? _Just . kanjiDetails . kanjiCharacter
+      return $ TRM <$> f <*> r <*> m
+
+    (Right vId) -> do
+      vocabDb <- asks appVocabDb
+      let v = Map.lookup vId vocabDb
+          r = fmap ((:[]) . Reading) $ vocabToKana
+            <$> v ^? _Just . vocabDetails . vocab
+          m = v ^? _Just . vocabDetails . vocabMeanings
+          f = getVocabField <$>
+            v ^? _Just . vocabDetails . vocab
+      return $ TRM <$> f <*> r <*> m
+
+  let get (TRM f r m) = SrsEntry
+        { _reviewState = NextReviewDate today (SrsInterval 0)
+          , _stats = SrsEntryStats 0 0
+          , _readings = r
+          , _meaning  = m
+          , _readingNotes = Nothing
+          , _meaningNotes = Nothing
+          , _field = f
+        }
+  return (get <$> tmp)

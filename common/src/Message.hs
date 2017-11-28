@@ -33,6 +33,7 @@ type AppRequest
   :<|> VocabSearch
   :<|> LoadMoreVocabSearchResult
 
+  :<|> QuickAddSrsItem
 
   :<|> GetSrsStats
 
@@ -107,6 +108,13 @@ data LoadMoreVocabSearchResult = LoadMoreVocabSearchResult
 
 instance WebSocketMessage AppRequest LoadMoreVocabSearchResult where
   type ResponseT AppRequest LoadMoreVocabSearchResult = [VocabDetails]
+
+----------------------------------------------------------------
+data QuickAddSrsItem = QuickAddSrsItem (Either KanjiId VocabId)
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest QuickAddSrsItem where
+  type ResponseT AppRequest QuickAddSrsItem = ()
 
 ----------------------------------------------------------------
 

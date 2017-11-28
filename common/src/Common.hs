@@ -83,6 +83,11 @@ vocabToKana (Vocab ks) = mconcat $ map getFur ks
     getFur (KanjiWithReading _ t) = t
     getFur (Kana t) = t
 
+getVocabField:: Vocab -> Text
+getVocabField (Vocab ks) = mconcat $ map f ks
+  where f (Kana t) = t
+        f (KanjiWithReading k _) = unKanji k
+
 data KanjiDetails = KanjiDetails
   { _kanjiId             :: KanjiId
   , _kanjiCharacter      :: Kanji
