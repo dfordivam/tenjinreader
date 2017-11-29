@@ -9,6 +9,7 @@ module Handler.WebSocketHandler.KanjiBrowser where
 
 import Import
 import Protolude (foldl)
+import SrsDB
 import Control.Lens
 import Handler.WebSocketHandler.Utils
 import qualified Data.Text as T
@@ -16,6 +17,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Text.Pretty.Simple
 import Data.SearchEngine
+import qualified Data.BTree.Impure as Tree
 
 searchResultCount = 20
 
@@ -120,57 +122,69 @@ getLoadMoreKanjiResults _ = do
 getKanjiDetails :: GetKanjiDetails -> WsHandlerM (Maybe KanjiSelectionDetails)
 getKanjiDetails (GetKanjiDetails kId _) = do
   kanjiDb <- lift $ asks appKanjiDb
-  vocabDb <- lift $ asks appVocabDb
   let kd = Map.lookup kId kanjiDb
 
-      vocabs = map _vocabDetails $
-        catMaybes ((flip Map.lookup) vocabDb <$> keys)
       keys = maybe [] (Set.toList . _kanjiVocabSet) kd
 
-      vs = take searchResultCount vocabs
+  uId <- asks currentUserId
+  rs <- lift $ transactReadOnlySrsDB $ \db ->
+    Tree.lookupTree uId (db ^. userReviews) >>= mapM (\rd ->
+      Tree.lookupTree kId (rd ^. kanjiSrsMap))
+
+  vs <- loadVocabList (take searchResultCount keys)
 
   asks kanjiVocabResult >>= \ref ->
     liftIO $ writeIORef ref (keys, searchResultCount)
-  return $ KanjiSelectionDetails <$> kd ^? _Just . kanjiDetails <*> pure vs
+  return $ KanjiSelectionDetails <$> kd ^? _Just . kanjiDetails
+    <*> rs <*> vs
 
-getLoadMoreKanjiVocab :: LoadMoreKanjiVocab -> WsHandlerM [VocabDetails]
+loadVocabList keys = do
+  vocabDb <- lift $ asks appVocabDb
+  let
+      vocabs = map _vocabDetails $
+        catMaybes ((flip Map.lookup) vocabDb <$> keys)
+
+  uId <- asks currentUserId
+  s <- lift $ transactReadOnlySrsDB $ \db ->
+    Tree.lookupTree uId (db ^. userReviews) >>= mapM (\rd -> do
+      mapM ((flip Tree.lookupTree) (rd ^. vocabSrsMap)) keys)
+  return $ zip vocabs <$> s
+
+getLoadMoreKanjiVocab :: LoadMoreKanjiVocab -> WsHandlerM VocabList
 getLoadMoreKanjiVocab _ = do
   vocabDb <- lift $ asks appVocabDb
 
   (keys, count) <- asks kanjiVocabResult >>= \ref ->
     liftIO $ readIORef ref
-  let
-      vocabs = map _vocabDetails $
-        catMaybes ((flip Map.lookup) vocabDb <$> keys)
-      vs = take searchResultCount $ drop count vocabs
+
+  vs <- loadVocabList (take searchResultCount
+                       $ drop count keys)
 
   asks kanjiVocabResult >>= \ref ->
     liftIO $ writeIORef ref (keys, count + (length vs))
-  return vs
+  return $ maybe [] id vs
 
-getVocabSearch :: VocabSearch -> WsHandlerM [VocabDetails]
+getVocabSearch :: VocabSearch -> WsHandlerM VocabList
 getVocabSearch (VocabSearch (AdditionalFilter r _ m)) = do
   vocabDb <- lift $ asks appVocabDb
   vocabSearchEng <- lift $ asks appVocabSearchEng
-  let vocabs = map _vocabDetails $
-        catMaybes ((flip Map.lookup) vocabDb <$> keys)
+  let
       keys = query vocabSearchEng terms
       terms = (T.words m)
+  vs <- loadVocabList (take searchResultCount keys)
   asks vocabSearchResult >>= \ref ->
     liftIO $ writeIORef ref (keys, searchResultCount)
-  return $ take searchResultCount vocabs
+  return $ maybe [] id vs
 
-getLoadMoreVocabSearchResult :: LoadMoreVocabSearchResult -> WsHandlerM [VocabDetails]
+getLoadMoreVocabSearchResult :: LoadMoreVocabSearchResult -> WsHandlerM VocabList
 getLoadMoreVocabSearchResult _ = do
   vocabDb <- lift $ asks appVocabDb
 
   (keys, count) <- asks vocabSearchResult >>= \ref ->
     liftIO $ readIORef ref
-  let
-      vocabs = map _vocabDetails $
-        catMaybes ((flip Map.lookup) vocabDb <$> keys)
-      vs = take searchResultCount $ drop count vocabs
 
+  vs <- loadVocabList (take searchResultCount
+                       $ drop count keys)
   asks vocabSearchResult >>= \ref ->
     liftIO $ writeIORef ref (keys, count + (length vs))
-  return vs
+  return $ maybe [] id vs

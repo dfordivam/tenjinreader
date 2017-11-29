@@ -9,10 +9,7 @@ module Handler.WebSocketHandler.SrsReview where
 
 import Import
 import Control.Lens hiding (reviews)
-import Model
 import SrsDB
-import Message
-import Common
 import Handler.WebSocketHandler.Utils
 import qualified Data.Text as T
 import qualified Data.Map as Map
@@ -26,6 +23,7 @@ import Data.Aeson
 import qualified Data.BTree.Impure as Tree
 import Control.Monad.Haskey
 import Data.BTree.Alloc (AllocM, AllocReaderM)
+import Database.Persist.Sql
 
 getSrsStats :: GetSrsStats -> WsHandlerM SrsStats
 getSrsStats _ = do
@@ -294,7 +292,7 @@ checkAnswerInt readings kanaAlts =
   where
     kanas = mconcat $ map (map snd) kanaAlts
 
-getQuickAddSrsItem :: QuickAddSrsItem -> WsHandlerM ()
+getQuickAddSrsItem :: QuickAddSrsItem -> WsHandlerM (Maybe SrsEntryId)
 getQuickAddSrsItem (QuickAddSrsItem v) = do
   uId <- asks currentUserId
 
@@ -319,7 +317,14 @@ getQuickAddSrsItem (QuickAddSrsItem v) = do
   forM srsItm $ \itm -> do
     lift $ transactSrsDB_ $
       userReviews %%~ updateTreeM uId (upFun itm)
-  return ()
+
+  s <- lift $ transactReadOnlySrsDB $ \db ->
+    Tree.lookupTree uId (db ^. userReviews) >>= mapM (\rd ->
+      case v of
+        (Left k) -> Tree.lookupTree k (rd ^. kanjiSrsMap)
+        (Right v) -> Tree.lookupTree v (rd ^. vocabSrsMap))
+  return $ join s
+
 
 data TRM = TRM Text [Reading] [Meaning]
 
@@ -360,3 +365,17 @@ makeSrsEntry v = do
           , _field = f
         }
   return (get <$> tmp)
+
+initSrsDb :: Handler ()
+initSrsDb = do
+  users <- runDB $ selectKeysList ([] :: [Filter User]) []
+  transactSrsDB_ $ \db -> do
+    let f db u = do
+          let uId = fromSqlKey u
+              d = SrsReviewData  Tree.empty Tree.empty Tree.empty Tree.empty
+          Tree.lookupTree uId (db ^. userReviews) >>= \case
+            (Just _) -> return db
+            Nothing -> db & userReviews %%~ (Tree.insertTree uId d)
+    foldM f db users
+
+  return ()

@@ -4,6 +4,8 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module KanjiBrowser where
 
 import FrontendCommon
@@ -195,16 +197,13 @@ kanjiListWidget listEv = do
     return $ switchPromptlyDyn $ leftmost <$> d
 
 kanjiDetailsWidget
-  :: (DomBuilder t m, MonadHold t m)
+  :: _
   => Event t KanjiSelectionDetails -> m ()
 kanjiDetailsWidget ev = do
-  let f (KanjiSelectionDetails k v) = do
-        -- NW 1
-        kanjiDetailWindow k
-        -- NW 2
-        vocabListWindow v
-        return ()
-  void $ widgetHold (return ()) (f <$> ev)
+  let f1 (KanjiSelectionDetails k s v) = k
+  let f2 (KanjiSelectionDetails k s v) = v
+  widgetHold (return()) (kanjiDetailWindow <$> (f1 <$> ev))
+  vocabListWindow LoadMoreKanjiVocab (f2 <$> ev)
 
 kanjiDetailWindow :: (DomBuilder t m) => KanjiDetails -> m ()
 kanjiDetailWindow k = do
@@ -228,25 +227,60 @@ kanjiDetailWindow k = do
       --   textMay (unOnYomiT <$> on)
       --   textMay (unKunYomiT <$> ku)
 
-vocabListWindow :: DomBuilder t m => [VocabDetails] -> m ()
-vocabListWindow vs = do
+vocabListWindow :: _
+  => req -> Event t VocabList -> m ()
+vocabListWindow req listEv = do
   let
-    dispVocab v = el "tr" $ do
+    listItem (v,s) = el "tr" $ do
       el "td" $ do
         displayVocabT $ v ^. vocab
 
       el "td" $ elClass "table" "table" $ el "tbody" $ do
-        el "tr" $ el "td" $ do
-          text $ T.intercalate "," $ map unMeaning
+        el "tr" $ do
+          el "td" $ text $ T.intercalate "," $ map unMeaning
             $ v ^. vocabMeanings
+          el "td" $ srsEntryWidget (Right $ v ^. vocabId)s
 
         el "tr" $ do
           el "td" $ textMay (tshow <$> (unRank <$> v ^. vocabFreqRank))
           el "td" $ textMay (tshow <$> (unWikiRank <$> v ^. vocabWikiRank))
           el "td" $ textMay (tshow <$> (unWkLevel <$> v ^. vocabWkLevel))
 
-  elClass "table" "table" $ do
-    forM_ vs dispVocab
+    liWrap i = do
+      dyn $ listItem <$> i
+
+    fun (This l) _ = l
+    fun (That ln) l = l ++ ln
+    fun (These l _) _ = l
+
+  -- NW 1
+  elClass "table" "table" $ el "tbody" $  do
+    rec
+      lmEv <- getWebSocketResponse $ req <$ ev
+      dyn <- foldDyn fun [] (align listEv lmEv)
+      -- NW 1.1
+      simpleList dyn liWrap
+      -- NW 1.2
+      ev <- el "td" $ button "Load More"
+    return ()
+
+srsEntryWidget :: _ => (Either KanjiId VocabId) -> Maybe SrsEntryId -> m ()
+srsEntryWidget i s = do
+  let
+    widget s = case s of
+      (Just sId) -> do
+        ev <- button "Edit Srs Item"
+        return never
+
+      (Nothing) -> do
+        ev <- button "Add to Srs"
+        getWebSocketResponse $ QuickAddSrsItem i <$ ev
+  rec
+    sDyn <- holdDyn s resp
+    resp <- switchPromptly never
+      =<< (dyn $ widget <$> sDyn)
+
+  return ()
 
 displayVocabT :: DomBuilder t m => Vocab -> m ()
 displayVocabT (Vocab ks) = do
@@ -276,4 +310,4 @@ vocabSearchWidget = divClass "" $ divClass "" $ do
                   <*> value meaning)
     getWebSocketResponse (updated vsDyn)
 
-  void $ widgetHold (return ()) (vocabListWindow <$> vocabResEv)
+  vocabListWindow LoadMoreVocabSearchResult vocabResEv

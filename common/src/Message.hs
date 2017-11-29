@@ -78,16 +78,17 @@ data GetKanjiDetails =
 instance WebSocketMessage AppRequest GetKanjiDetails where
   type ResponseT AppRequest GetKanjiDetails = Maybe KanjiSelectionDetails
 
+type VocabList = [(VocabDetails, Maybe SrsEntryId)]
+
 data KanjiSelectionDetails =
-  KanjiSelectionDetails KanjiDetails
-  [VocabDetails]
+  KanjiSelectionDetails KanjiDetails (Maybe SrsEntryId) VocabList
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data LoadMoreKanjiVocab = LoadMoreKanjiVocab
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest LoadMoreKanjiVocab where
-  type ResponseT AppRequest LoadMoreKanjiVocab = [VocabDetails]
+  type ResponseT AppRequest LoadMoreKanjiVocab = VocabList
 
 ----------------------------------------------------------------
 data LoadMoreKanjiResults = LoadMoreKanjiResults
@@ -101,20 +102,20 @@ data VocabSearch = VocabSearch AdditionalFilter
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest VocabSearch where
-  type ResponseT AppRequest VocabSearch = [VocabDetails]
+  type ResponseT AppRequest VocabSearch = VocabList
 
 data LoadMoreVocabSearchResult = LoadMoreVocabSearchResult
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest LoadMoreVocabSearchResult where
-  type ResponseT AppRequest LoadMoreVocabSearchResult = [VocabDetails]
+  type ResponseT AppRequest LoadMoreVocabSearchResult = VocabList
 
 ----------------------------------------------------------------
 data QuickAddSrsItem = QuickAddSrsItem (Either KanjiId VocabId)
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest QuickAddSrsItem where
-  type ResponseT AppRequest QuickAddSrsItem = ()
+  type ResponseT AppRequest QuickAddSrsItem = Maybe SrsEntryId
 
 ----------------------------------------------------------------
 
