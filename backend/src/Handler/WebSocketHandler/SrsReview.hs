@@ -27,7 +27,37 @@ import Database.Persist.Sql
 
 getSrsStats :: GetSrsStats -> WsHandlerM SrsStats
 getSrsStats _ = do
-  return $ SrsStats 0 0 0 0
+  uId <- asks currentUserId
+  rs <- getAllPendingReviews
+  allRs <- lift $ transactReadOnlySrsDB $ \db -> do
+    rd <- Tree.lookupTree uId $ db ^. userReviews
+    mapM Tree.toList (_reviews <$> rd)
+  -- { reviewsToday :: Int
+  -- , totalItems :: Int
+  -- , totalReviews :: Int
+  -- , averageSuccess :: Int
+  let total = maybe 0 length allRs
+      succ = sumOf (folded . _2 . stats . successCount) <$> allRs
+      fail = sumOf (folded . _2 . stats . failureCount) <$> allRs
+      totalR = maybe 0 id $ (+) <$> succ <*> fail
+  return $ SrsStats (length rs) total totalR 0
+
+getAllPendingReviews :: WsHandlerM [(SrsEntryId, SrsEntry)]
+getAllPendingReviews = do
+  uId <- asks currentUserId
+  today <- liftIO $ utctDay <$> getCurrentTime
+
+  lift $ transactReadOnlySrsDB $ \db -> do
+    rd <- Tree.lookupTree uId $ db ^. userReviews
+    rs <- mapM Tree.toList (_reviews <$> rd)
+    let
+      f (k,r) = join $ g
+        <$> (r ^? reviewState . _NextReviewDate)
+        where g (d,_) = if d <= today
+                then Just (k,r)
+                else Nothing
+
+    return $ maybe [] (mapMaybe f) rs
 
 getBrowseSrsItems      :: BrowseSrsItems
   -> WsHandlerM [SrsItem]
@@ -140,21 +170,8 @@ getEditSrsItem (EditSrsItem sItm)= return ()
 getGetNextReviewItem :: GetNextReviewItems
   -> WsHandlerM [ReviewItem]
 getGetNextReviewItem (GetNextReviewItems alreadyPresent) = do
-  uId <- asks currentUserId
-  today <- liftIO $ utctDay <$> getCurrentTime
-
-  rs <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userReviews
-    rs <- mapM Tree.toList (_reviews <$> rd)
-    let
-      f (k,r) = join $ g
-        <$> (r ^? reviewState . _NextReviewDate)
-        where g (d,_) = if d <= today
-                then Just (k,r)
-                else Nothing
-
-    return $ maybe [] (mapMaybe f) rs
-  return $ getReviewItem <$> rs
+  rs <- getAllPendingReviews
+  return $ getReviewItem <$> (take 20 rs)
 
 getDoReview :: DoReview
   -> WsHandlerM Bool

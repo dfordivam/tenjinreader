@@ -58,7 +58,7 @@ showStatsWidget s = do
     divClass "" $ do
       divClass "" $
         divClass "" $
-          text $ ""
+          text $ tshow s
       divClass "" $ do
         divClass "" $
           divClass "" $
