@@ -13,7 +13,7 @@ module Message
 import Protolude
 import Data.Aeson
 import Data.Default
-import Data.Time (UTCTime)
+import Data.Time.Calendar
 
 import Reflex.Dom.WebSocket.Message
 
@@ -134,8 +134,14 @@ data SrsStats = SrsStats
   deriving (Generic, Show, ToJSON, FromJSON)
 
 ----------------------------------------------------------------
+data SrsItemLevel = LearningLvl | IntermediateLvl | MatureLvl
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
-data BrowseSrsItems = BrowseSrsItems [SrsLevel]
+data BrowseSrsItems
+  = BrowseDueItems SrsItemLevel
+  | BrowseNewItems
+  | BrowseSuspItems SrsItemLevel
+  | BrowseOtherItems SrsItemLevel
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest BrowseSrsItems where
@@ -192,18 +198,17 @@ instance WebSocketMessage AppRequest EditSrsItem where
   type ResponseT AppRequest EditSrsItem = ()
 
 ----------------------------------------------------------------
-data BulkEditSrsItems = BulkEditSrsItems [SrsEntryId] BulkEditOperation BrowseSrsItems
+data BulkEditSrsItems = BulkEditSrsItems [SrsEntryId] BulkEditOperation
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data BulkEditOperation
   = SuspendSrsItems
-  | ResumeSrsItems
-  | ChangeSrsLevel SrsLevel
-  | ChangeSrsReviewData UTCTime
+  | MarkDueSrsItems
+  | ChangeSrsReviewData Day
   | DeleteSrsItems
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest BulkEditSrsItems where
-  type ResponseT AppRequest BulkEditSrsItems = [SrsItem]
+  type ResponseT AppRequest BulkEditSrsItems = ()
 
 ----------------------------------------------------------------

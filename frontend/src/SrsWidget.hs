@@ -123,10 +123,50 @@ progressStatsCard l l1 l2 (v1,v2) =
         divClass "" $
           divClass "" $ text $ tshow v2
 
--- TODO Fix this srsLevels
-srsLevels :: Map SrsLevel Text
-srsLevels = Map.fromList $ map (\g -> (SrsLevel g, (tshow g))) [0..8]
+srsLevels = Map.fromList
+  [ (LearningLvl, "Learning" :: Text)
+  , (IntermediateLvl , "Intermediate")
+  , (MatureLvl, "Mature")]
 
+data BrowseSrsItemsOptions
+  = BrowseSrsItemsDue
+  | BrowseSrsItemsNew
+  | BrowseSrsItemsSusp
+  | BrowseSrsItemsOther
+  deriving (Eq, Ord, Show)
+
+browseOptions = Map.fromList
+  [ (BrowseSrsItemsDue, "Due" :: Text)
+  ,  (BrowseSrsItemsNew, "New")
+  ,  (BrowseSrsItemsSusp, "Suspended")
+  ,  (BrowseSrsItemsOther, "Others")]
+
+getBrowseSrsItemsEv ::
+     (MonadFix m, MonadHold t m, Reflex t)
+  => Dropdown t BrowseSrsItemsOptions
+  -> Dropdown t SrsItemLevel
+  -> m (Dynamic t BrowseSrsItems)
+getBrowseSrsItemsEv filt levels = do
+  let f (This BrowseSrsItemsNew) _ = BrowseNewItems
+      f (This b) BrowseNewItems = g b LearningLvl
+      f (This b) (BrowseDueItems l)   = g b l
+      f (This b) (BrowseSuspItems l)  = g b l
+      f (This b) (BrowseOtherItems l) = g b l
+
+      f (That _) BrowseNewItems = BrowseNewItems
+      f (That l) (BrowseDueItems _) = BrowseDueItems l
+      f (That l) (BrowseSuspItems _) = BrowseSuspItems l
+      f (That l) (BrowseOtherItems _) = BrowseOtherItems l
+
+      f (These b l) _ = g b l
+
+      g BrowseSrsItemsDue l = BrowseDueItems l
+      g BrowseSrsItemsNew _ = BrowseNewItems
+      g BrowseSrsItemsSusp l = BrowseSuspItems l
+      g BrowseSrsItemsOther l = BrowseOtherItems l
+
+  foldDyn f (BrowseDueItems LearningLvl)
+    (align (filt ^. dropdown_change) (levels ^. dropdown_change))
 -- Fetch all srs items then apply the filter client side
 -- fetch srs items for every change in filter
 --
@@ -144,16 +184,11 @@ browseSrsItemsWidget = do
 
           checkbox False def -- & setValue .~ allSelected
 
-        levels
-          <- divClass "" $
-             divClass "" $ el "label" $
-               dropdown (SrsLevel 0) (constDyn srsLevels) def
+        filt <- dropdown (BrowseSrsItemsDue) (constDyn browseOptions) def
+        levels <- dropdown (LearningLvl) (constDyn srsLevels) def
 
-         -- Kanji/Vocab
-         -- Pending review
-
-        return (BrowseSrsItems <$> ((:[]) <$> _dropdown_change levels)
-               , selectAllToggleCheckBox)
+        brwDyn <- getBrowseSrsItemsEv filt levels
+        return (brwDyn, selectAllToggleCheckBox, value filt)
 
     checkBoxList selAllEv es =
       divClass "" $ do
@@ -170,17 +205,11 @@ browseSrsItemsWidget = do
 
     checkBoxListEl :: Event t Bool -> SrsItem
       -> AppMonadT t m (Event t (SrsEntryId, Bool))
-    checkBoxListEl selAllEv (SrsItem i v sus pend) = divClass "" $ do
+    checkBoxListEl selAllEv (SrsItem i t) = divClass "" $ do
       let
-        f (Left (Vocab ((Kana k):_))) = k
-        f (Right (Kanji k)) = k
-        -- c = if sus
-        --   then divClass "grey"
-        --   else if pend
-        --     then divClass "violet"
-        --     else divClass "black"
       c1 <- do
         divClass "" $ do
+          text t
           ev <- button "edit"
           openEditSrsItemWidget $ i <$ ev
         divClass "" $
@@ -190,17 +219,17 @@ browseSrsItemsWidget = do
   -- UI
   divClass "" $ do
     -- Filter Options
-    (browseSrsFilterEv, selectAllToggleCheckBox) <-
+    (browseSrsFilterDyn, selectAllToggleCheckBox, filtOptsDyn) <-
       filterOptionsWidget
 
-    filteredList <- getWebSocketResponse browseSrsFilterEv
-    browseSrsFilterDyn <- holdDyn (BrowseSrsItems []) browseSrsFilterEv
     rec
       let
-        itemEv = leftmost [filteredList, afterEditList]
-
         checkBoxSelAllEv = updated $
           value selectAllToggleCheckBox
+
+      itemEv <- getWebSocketResponse $ leftmost
+        [updated browseSrsFilterDyn
+        , tagDyn browseSrsFilterDyn editDone]
 
       -- List and selection checkBox
       selList <- divClass "" $ do
@@ -208,8 +237,8 @@ browseSrsItemsWidget = do
           (checkBoxList checkBoxSelAllEv <$> itemEv)
 
       -- Action buttons
-      afterEditList <-
-        bulkEditWidgetActionButtons browseSrsFilterDyn $ join selList
+      editDone <-
+        bulkEditWidgetActionButtons filtOptsDyn $ join selList
     return ()
 
   closeEv <- divClass "" $
@@ -218,55 +247,59 @@ browseSrsItemsWidget = do
 
 bulkEditWidgetActionButtons
   :: AppMonad t m
-  => Dynamic t BrowseSrsItems
+  => Dynamic t BrowseSrsItemsOptions
   -> Dynamic t [SrsEntryId]
-  -> AppMonadT t m (Event t [SrsItem])
+  -> AppMonadT t m (Event t ())
 bulkEditWidgetActionButtons filtOptsDyn selList = divClass "" $ do
-  currentTime <- liftIO getCurrentTime
+  today <- liftIO $ utctDay <$> getCurrentTime
 
-  suspendEv <- divClass "" $
-    button "Suspend"
+  let btn t active = do
+        let attr True = ("type" =: "button") <> ("class" =: "btn btn-primary active")
+            attr False = ("type" =: "button") <> ("class" =: "btn btn-primary disabled")
+        (e, _) <- elDynAttr' "button" (attr <$> active) $ text t
+        return $ domEvent Click e
+      felem = flip elem
 
-  resumeEv <- divClass "" $
-    button "Resume"
+  el "table" $ el "tbody" $ do
+    suspendEv <-
+      el "td" $
+      btn "Suspend" $ (felem [BrowseSrsItemsDue, BrowseSrsItemsOther]) <$> filtOptsDyn
 
-  deleteEv <- divClass "" $
-    button "Delete"
+    markDueEv <- el "td" $
+      btn "Mark Due" $ (felem [BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
 
-  changeLvlSel <- divClass "" $
-    dropdown (SrsLevel 0) (constDyn srsLevels) $ def
-  changeLvlEv <- divClass "" $
-    button "Change Level"
+    deleteEv <- el "td" $
+      btn "Delete" (constDyn True)
 
-  reviewDateChange <- divClass "" $
-    button "Change Review Date"
+    reviewDateChange <- el "td" $
+      btn "Change Review Date" $ (felem [BrowseSrsItemsDue,
+         BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
 
-  dateDyn <- divClass "" $ datePicker currentTime
-  let bEditOp = leftmost
-        [DeleteSrsItems <$ deleteEv
-        , SuspendSrsItems <$ suspendEv
-        , ResumeSrsItems <$ resumeEv
-        , ChangeSrsLevel <$> tagPromptlyDyn (value changeLvlSel) changeLvlEv
-        , ChangeSrsReviewData <$> tagPromptlyDyn dateDyn reviewDateChange]
-  getWebSocketResponse $ (\((s,b),e) -> BulkEditSrsItems s e b) <$>
-    (attachDyn ((,) <$> selList <*> filtOptsDyn) bEditOp)
+    dateDyn <- el "td" $ datePicker today
+    let bEditOp = leftmost
+          [DeleteSrsItems <$ deleteEv
+          , MarkDueSrsItems <$ markDueEv
+          , SuspendSrsItems <$ suspendEv
+          , ChangeSrsReviewData <$> tagPromptlyDyn dateDyn reviewDateChange]
+    getWebSocketResponse $ (uncurry BulkEditSrsItems) <$>
+      (attachDyn selList bEditOp)
 
 datePicker
   :: (MonadWidget t m)
-  => UTCTime -> m (Dynamic t UTCTime)
-datePicker defTime = divClass "" $ do
+  => Day -> m (Dynamic t Day)
+datePicker today = divClass "" $ do
   let dayList = makeList [1..31]
       monthList = makeList [1..12]
       yearList = makeList [2000..2030]
       makeList x = constDyn $ Map.fromList $ (\x -> (x, tshow x)) <$> x
       (currentYear, currentMonth, currentDay)
-        = (\(UTCTime d _) -> toGregorian d) defTime
+        = toGregorian today
       mycol = divClass ""
         --elAttr "div" (("class" =: "column") <> ("style" =: "min-width: 2em;"))
   day <- mycol $ dropdown currentDay dayList $ def
   month <- mycol $ dropdown currentMonth monthList $ def
   year <- mycol $ dropdown currentYear yearList $ def
-  return $ UTCTime <$> (fromGregorian <$> value year <*> value month <*> value day) <*> pure 1
+  return $ fromGregorian <$> value year <*> value month <*> value day
 
 openEditSrsItemWidget
   :: (AppMonad t m)
@@ -360,9 +393,9 @@ openEditSrsItemWidget ev = do
         return (ret, saveEv)
 
       reviewDataPicker :: (MonadWidget t m) =>
-        Maybe UTCTime -> m (Dynamic t (Maybe UTCTime))
+        Maybe Day -> m (Dynamic t (Maybe Day))
       reviewDataPicker inp = do
-        currentTime <- liftIO getCurrentTime
+        today <- liftIO $ utctDay <$> getCurrentTime
 
         let
           addDateW = do
@@ -375,7 +408,7 @@ openEditSrsItemWidget ev = do
                 button "Remove Review Date"
               return (removeDate, newDateDyn)
 
-          defDate = maybe currentTime identity inp
+          defDate = maybe today identity inp
 
         rec
           vDyn <- holdDyn (isJust inp) (leftmost [False <$ r, True <$ a])

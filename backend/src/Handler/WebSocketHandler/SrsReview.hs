@@ -59,104 +59,84 @@ getAllPendingReviews = do
 
     return $ maybe [] (mapMaybe f) rs
 
-getBrowseSrsItems      :: BrowseSrsItems
-  -> WsHandlerM [SrsItem]
-getBrowseSrsItems (BrowseSrsItems lvls) = do
+getBrowseSrsItems :: BrowseSrsItems -> WsHandlerM [SrsItem]
+getBrowseSrsItems brws = do
+  uId <- asks currentUserId
+  today <- liftIO $ utctDay <$> getCurrentTime
 
-  return $ []
+  let
+    filF (k,r) = (k,r) <$ case brws of
+      (BrowseDueItems l) -> join $ g
+        <$> (r ^? reviewState . _NextReviewDate)
+        where g (d, interval) = if d <= today
+                then checkInterval l interval
+                else Nothing
+
+      (BrowseNewItems) -> r ^? reviewState . _NewReview
+
+      (BrowseSuspItems l) -> join $ checkInterval l
+        <$> (r ^? reviewState . _Suspended)
+
+      (BrowseOtherItems l) -> join $ g
+        <$> (r ^? reviewState . _NextReviewDate)
+        where g (d, interval) = if d > today
+                then checkInterval l interval
+                else Nothing
+
+    checkInterval LearningLvl (SrsInterval l)=
+      if l <= 4 then Just () else Nothing
+
+    checkInterval IntermediateLvl (SrsInterval l)=
+      if l > 4 && l <= 60 then Just () else Nothing
+
+    checkInterval MatureLvl (SrsInterval l)=
+      if l > 60 then Just () else Nothing
+
+  rs <- lift $ transactReadOnlySrsDB $ \db -> do
+    rd <- Tree.lookupTree uId $ db ^. userReviews
+    rs <- mapM Tree.toList (_reviews <$> rd)
+    return $ maybe [] (mapMaybe filF) rs
+  return $ map (\(i,r) -> SrsItem i (r ^. field)) rs
 
 getBulkEditSrsItems :: BulkEditSrsItems
-  -> WsHandlerM [SrsItem]
-getBulkEditSrsItems (BulkEditSrsItems ss op filt) = do
-  curTime <- liftIO getCurrentTime
+  -> WsHandlerM ()
+getBulkEditSrsItems
+  (BulkEditSrsItems ss DeleteSrsItems) = do
+  return ()
 
-  -- case op of
-  --   SuspendSrsItems -> do
-  --     let
-  --       f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
-  --       f sMap sId = do
-  --         let
-  --           sIdK = (makeKey $ Just sId)
-  --           s = Map.lookup sIdK sMap
-  --           sNew = s & _Just . srsEntrySuspensionDate ?~ curTime
-  --           sMap' = Map.update (const sNew) sIdK sMap
-  --         mapM runSrsDB (updateSrsEntry <$> sNew)
-  --         return sMap'
+getBulkEditSrsItems (BulkEditSrsItems ss op) = do
+  today <- liftIO $ utctDay <$> getCurrentTime
+  uId <- asks currentUserId
 
-  --     nMap <- foldlM f srsEsMap ss
-  --     modify (set srsEntries nMap)
+  let
+    upF =
+      case op of
+        SuspendSrsItems ->
+          reviewState %~ \case
+            NextReviewDate _ i -> Suspended i
+            a -> a
+        MarkDueSrsItems ->
+          reviewState %~ \case
+            NextReviewDate _ i -> NextReviewDate today i
+            Suspended i -> NextReviewDate today i
+            a -> a
+        ChangeSrsReviewData d ->
+          reviewState %~ \case
+            NextReviewDate _ i -> NextReviewDate d i
+            Suspended i -> NextReviewDate d i
+            a -> a
 
-  --   ResumeSrsItems -> do
-  --     let
-  --       f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
-  --       f sMap sId = do
-  --         let
-  --           sIdK = (makeKey $ Just sId)
-  --           s = Map.lookup sIdK sMap
-  --           -- s must be already suspended and has a valid review date
-  --           -- Add check for grade <8 ??
-  --           reviewDate :: Maybe UTCTime
-  --           reviewDate = g <$> (s ^? _Just . srsEntrySuspensionDate . _Just)
-  --             <*> (s ^? _Just . srsEntryNextAnswerDate . _Just)
-  --           g susDate prevReviewDate = if susDate > prevReviewDate
-  --             then curTime
-  --             else addUTCTime (diffUTCTime prevReviewDate susDate) curTime
-  --           sNew :: Maybe SrsEntry
-  --           sNew = join $ (\r -> s & _Just . srsEntrySuspensionDate .~ Nothing
-  --                    & _Just . srsEntryNextAnswerDate ?~ r) <$> reviewDate
-  --           sMap' = maybe sMap identity ((\n -> Map.update (const (Just n)) sIdK sMap) <$> sNew)
-  --         mapM runSrsDB (updateSrsEntry <$> sNew)
-  --         return sMap'
+    doUp :: (AllocM m) => Tree.Tree SrsEntryId SrsEntry
+      -> SrsEntryId
+      -> m (Tree.Tree SrsEntryId SrsEntry)
+    doUp t rId = t & updateTreeM rId
+      (\r -> return $ upF r)
 
-  --     nMap <- foldlM f srsEsMap ss
-  --     modify (set srsEntries nMap)
+  lift $ transactSrsDB_ $
+    userReviews %%~ updateTreeM uId
+      (reviews %%~ (\rt -> foldlM doUp rt ss))
 
-  --   ChangeSrsLevel l -> do
-  --     let
-  --       f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
-  --       f sMap sId = do
-  --         let
-  --           sIdK = (makeKey $ Just sId)
-  --           s = Map.lookup sIdK sMap
-  --           sNew = s & _Just . srsEntryCurrentGrade .~ l
-  --           sMap' = Map.update (const sNew) sIdK sMap
-  --         mapM runSrsDB (updateSrsEntry <$> sNew)
-  --         return sMap'
-
-  --     nMap <- foldlM f srsEsMap ss
-  --     modify (set srsEntries nMap)
-
-  --   ChangeSrsReviewData d -> do
-  --     let
-  --       f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
-  --       f sMap sId = do
-  --         let
-  --           sIdK = (makeKey $ Just sId)
-  --           s = Map.lookup sIdK sMap
-  --           sNew = s & _Just . srsEntryNextAnswerDate ?~ d
-  --           sMap' = Map.update (const sNew) sIdK sMap
-  --         mapM runSrsDB (updateSrsEntry <$> sNew)
-  --         return sMap'
-
-  --     nMap <- foldlM f srsEsMap ss
-  --     modify (set srsEntries nMap)
-
-  --   DeleteSrsItems -> do
-  --     let
-  --       f :: Map SrsEntryId SrsEntry -> SrsEntryId -> WsHandlerM (Map SrsEntryId SrsEntry)
-  --       f sMap sId = do
-  --         let
-  --           sIdK = (makeKey $ Just sId)
-  --           s = Map.lookup sIdK sMap
-  --           sNew = s & _Just . srsEntryIsDeleted .~ True
-  --           sMap' = Map.update (const sNew) sIdK sMap
-  --         mapM runSrsDB (updateSrsEntry <$> sNew)
-  --         return sMap'
-
-  --     nMap <- foldlM f srsEsMap ss
-  --     modify (set srsEntries nMap)
-
-  getBrowseSrsItems filt
+  return ()
 
 getSrsItem :: GetSrsItem
   -> WsHandlerM (Maybe SrsItemFull)
@@ -373,7 +353,7 @@ makeSrsEntry v = do
       return $ TRM <$> f <*> r <*> m
 
   let get (TRM f r m) = SrsEntry
-        { _reviewState = NextReviewDate today (SrsInterval 0)
+        { _reviewState = NewReview
           , _stats = SrsEntryStats 0 0
           , _readings = r
           , _meaning  = m

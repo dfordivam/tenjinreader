@@ -44,7 +44,7 @@ newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }
 -- 1. It was due when suspended -> make immediately available for review
 -- 2. not due -> no suspend?
 
-data SrsEntryState =
+data SrsEntryState = NewReview |
   Suspended SrsInterval | NextReviewDate Day SrsInterval
   deriving (Generic, Show, Typeable, Binary, Value)
 

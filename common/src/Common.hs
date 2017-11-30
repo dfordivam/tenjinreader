@@ -14,8 +14,8 @@ import Protolude
 import Control.Lens.TH
 import Data.Aeson hiding (Value)
 import Data.Default
-import Data.Time (UTCTime)
 import Data.Binary
+import Data.Time.Calendar
 import Data.BTree.Primitives (Value)
 
 instance Value Int
@@ -135,16 +135,14 @@ data ReadingType = OnYomi | KunYomi | Nanori
 data SrsItem = SrsItem
  {
    srsItemId :: SrsEntryId
- , srsVocabOrKanji :: Either Vocab Kanji
- , srsItemSuspended :: Bool
- , srsItemPendingReview :: Bool
+ , srsItemField :: Text
  }
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data SrsItemFull = SrsItemFull
   { srsItemFullId :: SrsEntryId
   , srsItemFullVocabOrKanji :: Either Vocab Kanji
-  , srsReviewDate :: (Maybe UTCTime)
+  , srsReviewDate :: (Maybe Day)
   , srsMeanings :: (Text)
   , srsReadings :: (Text)
   , srsCurrentGrade :: (Int)
