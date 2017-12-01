@@ -196,7 +196,7 @@ browseSrsItemsWidget = do
 
         brwDyn <- getBrowseSrsItemsEv filt levels
         let filtOptsDyn = BrowseSrsItems <$> value revType <*> brwDyn
-        return (filtOptsDyn, selectAllToggleCheckBox, value filt)
+        return (filtOptsDyn, selectAllToggleCheckBox, value filt, value revType)
 
     checkBoxList selAllEv es =
       divClass "" $ do
@@ -227,7 +227,7 @@ browseSrsItemsWidget = do
   -- UI
   divClass "" $ do
     -- Filter Options
-    (browseSrsFilterDyn, selectAllToggleCheckBox, filtOptsDyn) <-
+    (browseSrsFilterDyn, selectAllToggleCheckBox, filtOptsDyn, revTypeDyn) <-
       filterOptionsWidget
 
     rec
@@ -246,7 +246,7 @@ browseSrsItemsWidget = do
 
       -- Action buttons
       editDone <-
-        bulkEditWidgetActionButtons filtOptsDyn $ join selList
+        bulkEditWidgetActionButtons filtOptsDyn revTypeDyn $ join selList
     return ()
 
   closeEv <- divClass "" $
@@ -256,9 +256,10 @@ browseSrsItemsWidget = do
 bulkEditWidgetActionButtons
   :: AppMonad t m
   => Dynamic t BrowseSrsItemsOptions
+  -> Dynamic t ReviewType
   -> Dynamic t [SrsEntryId]
   -> AppMonadT t m (Event t ())
-bulkEditWidgetActionButtons filtOptsDyn selList = divClass "" $ do
+bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "" $ do
   today <- liftIO $ utctDay <$> getCurrentTime
 
   let btn t active = do
@@ -289,8 +290,8 @@ bulkEditWidgetActionButtons filtOptsDyn selList = divClass "" $ do
           , MarkDueSrsItems <$ markDueEv
           , SuspendSrsItems <$ suspendEv
           , ChangeSrsReviewData <$> tagPromptlyDyn dateDyn reviewDateChange]
-    getWebSocketResponse $ (uncurry BulkEditSrsItems) <$>
-      (attachDyn selList bEditOp)
+    getWebSocketResponse $
+      (attachDynWith ($) (BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
 
 datePicker
   :: (MonadWidget t m)
