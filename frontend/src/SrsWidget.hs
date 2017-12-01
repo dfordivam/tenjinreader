@@ -10,12 +10,13 @@ module SrsWidget where
 
 import FrontendCommon
 import SpeechRecog
-import ReviewState hiding (ProdReview, RecogReview)
+import ReviewState
 
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import NLP.Romkan (toHiragana)
+import Data.List.NonEmpty (NonEmpty)
 
 data SrsWidgetView =
   ShowStatsWindow | ShowReviewWindow | ShowBrowseSrsItemsWindow
@@ -39,7 +40,7 @@ srsWidget = divClass "" $ do
       browseSrsItemsWidget
 
     ev3 <- handleVisibility ShowReviewWindow vis $
-      reviewWidget RecogReview
+      reviewWidget (Proxy :: Proxy RecogReview)
   return ()
 
 showStats
@@ -144,8 +145,8 @@ browseOptions = Map.fromList
 
 revTypeSel = Map.fromList
   [ (Nothing, "All" :: Text)
-  , (Just RecogReview, "Recognition")
-  , (Just ProdReview, "Production")]
+  , (Just ReviewTypeRecogReview, "Recognition")
+  , (Just ReviewTypeProdReview, "Production")]
 
 getBrowseSrsItemsEv ::
      (MonadFix m, MonadHold t m, Reflex t)
@@ -431,11 +432,12 @@ openEditSrsItemWidget ev = do
   void $ widgetHold (return ()) (modalWidget <$> srsItEv)
 
 reviewWidget
-  :: (AppMonad t m)
-  => ReviewType
+  :: forall t m rt proxy . (AppMonad t m, SrsReviewType rt)
+  => proxy rt
   -> AppMonadT t m (Event t SrsWidgetView)
-reviewWidget rt = do
+reviewWidget p = do
   let
+    rt = reviewType p
 
   let attr = ("class" =: "")
              <> ("style" =: "height: 50rem;")
@@ -452,7 +454,7 @@ reviewWidget rt = do
     -- 5. refresh (if initEv was Nothing)
 
     let
-      addItemEv = AddItemsEv <$> leftmost [initEv, fetchMoreReviewsResp]
+      addItemEv = AddItemsEv <$> leftmost [initEv, fetchMoreReviewsResp] :: Event t (ReviewStateEvent rt)
 
     -- Output Events
     -- 1. Show review item
@@ -635,7 +637,7 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
   return (dr, hiragana, resEv <$> correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
-checkAnswer :: (Either [Meaning] [Reading])
+checkAnswer :: (Either (NonEmpty Meaning) (NonEmpty Reading))
             -> Text
             -> Bool
 checkAnswer (Left m) t = elem t answers

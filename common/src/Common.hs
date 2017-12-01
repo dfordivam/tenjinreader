@@ -167,5 +167,6 @@ instance Default SrsReviewStats where
   def = SrsReviewStats 0 0 0
 
 data ReviewType =
-  RecogReview | ProdReview
+    ReviewTypeRecogReview
+  | ReviewTypeProdReview
   deriving (Eq, Ord, Enum, Bounded, Generic, Show, ToJSON, FromJSON)

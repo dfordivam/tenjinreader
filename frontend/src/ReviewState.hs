@@ -15,18 +15,19 @@ import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import System.Random
+import Data.List.NonEmpty (NonEmpty)
 
 data ReviewStatus =
   NotAnswered | AnsweredWrong
   | AnsweredWithMistake | AnsweredWithoutMistake
   deriving (Eq)
 
--- type ReviewState = Map RecogReview ReviewStatus -- Recog -> These ReviewStatus ReviewStatus -- Prod -> ReviewStatus
 data ProdReview = ProdReview ReviewStatus
 data RecogReview = RecogReview (These ReviewStatus ReviewStatus)
 
 class SrsReviewType rt where
   data ReviewResult rt
+  reviewType :: proxy rt -> ReviewType
 
   initState :: ReviewItem -> rt
   -- Left True -> No Mistake
@@ -34,7 +35,40 @@ class SrsReviewType rt where
   -- Right rt -> Not Complete
   updateReviewState :: ReviewResult rt -> Bool -> rt -> Either Bool rt
   getAnswer :: ReviewItem -> (ReviewResult rt) -> Either
-    [Meaning] [Reading]
+    (NonEmpty Meaning) (NonEmpty Reading)
+
+instance SrsReviewType ProdReview where
+  data ReviewResult ProdReview = ReadingProdReview
+  reviewType = const ReviewTypeProdReview
+  initState _ = ProdReview NotAnswered
+  updateReviewState _ True (ProdReview NotAnswered) = Left True
+  updateReviewState _ True (ProdReview AnsweredWrong) = Left False
+  updateReviewState _ False _ = Right (ProdReview AnsweredWrong)
+  updateReviewState _ _ _ = error "updateReviewState: Invalid state"
+  getAnswer ri _ = Right $ ri ^. reviewItemReading . _1
+
+instance SrsReviewType RecogReview where
+  data ReviewResult RecogReview = ReadingRecogReview | MeaningRecogReview
+  reviewType = const ReviewTypeRecogReview
+  initState _ = RecogReview (These NotAnswered NotAnswered)
+
+  getAnswer ri ReadingRecogReview = Right $ ri ^. reviewItemReading . _1
+  getAnswer ri MeaningRecogReview = Left $ ri ^. reviewItemMeaning . _1
+
+  updateReviewState rt b (RecogReview ths) = if bothDone
+    then Left $ result
+    else Right $ RecogReview newThs
+    where
+      newThs = case rt of
+        ReadingRecogReview -> mapThis f ths
+        MeaningRecogReview -> mapThat f ths
+      f NotAnswered = if b then AnsweredWithoutMistake else AnsweredWrong
+      f _ = if b then AnsweredWithMistake else AnsweredWrong
+
+      done r = (r == AnsweredWithMistake) || (r == AnsweredWithoutMistake)
+      bothDone = mergeTheseWith done done (&&) newThs
+      result = mergeTheseWith correct correct (&&) newThs
+      correct = (== AnsweredWithoutMistake)
 
 type Result = (SrsEntryId,Bool)
 
@@ -54,22 +88,6 @@ data ReviewStateEvent rt
   = DoReviewEv (SrsEntryId, ReviewResult rt, Bool)
   | AddItemsEv [ReviewItem]
   | UndoReview
-
--- data RecogReview =
---   RecogMeaningReview | RecogReadingReview
---   deriving (Eq, Ord, Enum, Bounded, Generic, Show)
-
--- isComplete :: ReviewState -> Maybe Bool
--- isComplete rSt =
---   if all done reviews
---     then Just $ not (any wrong reviews)
---     else Nothing
---   where done AnsweredWithMistake = True
---         done AnsweredWithoutMistake = True
---         done _ = False
---         wrong AnsweredWithMistake = True
---         wrong _ = False
---         reviews = map snd $ Map.toList rSt
 
 
 widgetStateFun :: (SrsReviewType rt) => SrsWidgetState rt -> ReviewStateEvent rt -> SrsWidgetState rt
@@ -107,4 +125,3 @@ handlerSendResultEv (WaitingForResp _ rs) (That _) = WaitingForResp rs []
 handlerSendResultEv (WaitingForResp _ []) (That _) = ReadyToSend
 handlerSendResultEv (WaitingForResp _ (rs)) (These rn _) = WaitingForResp (rs ++ [rn]) []
 handlerSendResultEv (WaitingForResp _ []) (These rn _) = WaitingForResp [rn] []
-
