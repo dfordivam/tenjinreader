@@ -107,6 +107,8 @@ makeLenses ''KanjiDetails
 data VocabDetails = VocabDetails
   { _vocabId             :: VocabId
   , _vocab               :: Vocab
+  , _vocabKanaStem       :: Text
+  , _vocabKanjiStem      :: Text
   , _vocabIsCommon       :: Bool
   , _vocabFreqRank       :: Maybe Rank
   , _vocabJlptLevel      :: Maybe JlptLevel
@@ -165,5 +167,5 @@ instance Default SrsReviewStats where
   def = SrsReviewStats 0 0 0
 
 data ReviewType =
-  MeaningReview | ReadingReview
+  RecogReview | ProdReview
   deriving (Eq, Ord, Enum, Bounded, Generic, Show, ToJSON, FromJSON)

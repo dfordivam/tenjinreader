@@ -21,6 +21,7 @@ executable frontend
                        KanjiBrowser
                        SrsWidget
                        SpeechRecog
+                       ReviewState
                        FrontendCommon
   -- other-extensions:
   build-depends:       base >=4.9 && <4.11

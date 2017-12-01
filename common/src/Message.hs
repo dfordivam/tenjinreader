@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Message
   where
 
@@ -14,6 +15,8 @@ import Protolude
 import Data.Aeson
 import Data.Default
 import Data.Time.Calendar
+import Data.List.NonEmpty (NonEmpty)
+import Control.Lens.TH
 
 import Reflex.Dom.WebSocket.Message
 
@@ -134,22 +137,25 @@ data SrsStats = SrsStats
   deriving (Generic, Show, ToJSON, FromJSON)
 
 ----------------------------------------------------------------
-data SrsItemLevel = LearningLvl | IntermediateLvl | MatureLvl
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
+data BrowseSrsItems = BrowseSrsItems (Maybe ReviewType) BrowseSrsItemsFilter
+  deriving (Generic, Show, ToJSON, FromJSON)
 
-data BrowseSrsItems
+instance WebSocketMessage AppRequest BrowseSrsItems where
+  type ResponseT AppRequest BrowseSrsItems = [SrsItem]
+
+data BrowseSrsItemsFilter
   = BrowseDueItems SrsItemLevel
   | BrowseNewItems
   | BrowseSuspItems SrsItemLevel
   | BrowseOtherItems SrsItemLevel
   deriving (Generic, Show, ToJSON, FromJSON)
 
-instance WebSocketMessage AppRequest BrowseSrsItems where
-  type ResponseT AppRequest BrowseSrsItems = [SrsItem]
+data SrsItemLevel = LearningLvl | IntermediateLvl | MatureLvl
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 ----------------------------------------------------------------
 data GetNextReviewItems =
-  GetNextReviewItems [SrsEntryId]
+  GetNextReviewItems ReviewType [SrsEntryId]
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest GetNextReviewItems where
@@ -157,13 +163,14 @@ instance WebSocketMessage AppRequest GetNextReviewItems where
     = [ReviewItem]
 
 data ReviewItem = ReviewItem
-  SrsEntryId
-  (Either Vocab Kanji)
-  ([Meaning], Maybe MeaningNotes)
-  ([Reading], Maybe ReadingNotes)
+  { _reviewItemId ::  SrsEntryId
+  , _reviewItemField :: (Either Text Vocab)
+  , _reviewItemMeaning :: (NonEmpty Meaning, Maybe MeaningNotes)
+  , _reviewItemReading :: (NonEmpty Reading, Maybe ReadingNotes)
+  }
   deriving (Generic, Show, ToJSON, FromJSON)
 
-data DoReview = DoReview [(SrsEntryId, Bool)]
+data DoReview = DoReview ReviewType [(SrsEntryId, Bool)]
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest DoReview where
@@ -212,3 +219,5 @@ instance WebSocketMessage AppRequest BulkEditSrsItems where
   type ResponseT AppRequest BulkEditSrsItems = ()
 
 ----------------------------------------------------------------
+
+makeLenses ''ReviewItem

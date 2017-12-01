@@ -4,16 +4,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecursiveDo #-}
 module SrsWidget where
 
 import FrontendCommon
 import SpeechRecog
+import ReviewState hiding (ProdReview, RecogReview)
 
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import System.Random
 import NLP.Romkan (toHiragana)
 
 data SrsWidgetView =
@@ -38,7 +39,7 @@ srsWidget = divClass "" $ do
       browseSrsItemsWidget
 
     ev3 <- handleVisibility ShowReviewWindow vis $
-      reviewWidget
+      reviewWidget RecogReview
   return ()
 
 showStats
@@ -141,11 +142,16 @@ browseOptions = Map.fromList
   ,  (BrowseSrsItemsSusp, "Suspended")
   ,  (BrowseSrsItemsOther, "Others")]
 
+revTypeSel = Map.fromList
+  [ (Nothing, "All" :: Text)
+  , (Just RecogReview, "Recognition")
+  , (Just ProdReview, "Production")]
+
 getBrowseSrsItemsEv ::
      (MonadFix m, MonadHold t m, Reflex t)
   => Dropdown t BrowseSrsItemsOptions
   -> Dropdown t SrsItemLevel
-  -> m (Dynamic t BrowseSrsItems)
+  -> m (Dynamic t BrowseSrsItemsFilter)
 getBrowseSrsItemsEv filt levels = do
   let f (This BrowseSrsItemsNew) _ = BrowseNewItems
       f (This b) BrowseNewItems = g b LearningLvl
@@ -186,9 +192,11 @@ browseSrsItemsWidget = do
 
         filt <- dropdown (BrowseSrsItemsDue) (constDyn browseOptions) def
         levels <- dropdown (LearningLvl) (constDyn srsLevels) def
+        revType <- dropdown (Nothing) (constDyn revTypeSel) def
 
         brwDyn <- getBrowseSrsItemsEv filt levels
-        return (brwDyn, selectAllToggleCheckBox, value filt)
+        let filtOptsDyn = BrowseSrsItems <$> value revType <*> brwDyn
+        return (filtOptsDyn, selectAllToggleCheckBox, value filt)
 
     checkBoxList selAllEv es =
       divClass "" $ do
@@ -422,124 +430,18 @@ openEditSrsItemWidget ev = do
 
   void $ widgetHold (return ()) (modalWidget <$> srsItEv)
 
-data ReviewStatus =
-  NotAnswered | AnsweredWrong
-  | AnsweredWithMistake | AnsweredWithoutMistake
-  deriving (Eq)
-
-type ReviewState = Map ReviewType ReviewStatus
-type Result = (SrsEntryId,Bool)
-
-data SrsWidgetState = SrsWidgetState
-  { reviewQueue :: Map SrsEntryId (ReviewItem, ReviewState)
-  , resultQueue :: Maybe Result
-  , reviewStats :: SrsReviewStats
-  }
-
-data ReviewStateEvent
-  = DoReviewEv (SrsEntryId, ReviewType, Bool)
-  | AddItemsEv [ReviewItem]
-  | UndoReview
-
--- Just True -> No Mistake
--- Just False -> Did Mistake
--- Nothing -> Not Complete
-isComplete :: ReviewState -> Maybe Bool
-isComplete rSt =
-  if all done reviews
-    then Just $ not (any wrong reviews)
-    else Nothing
-  where done AnsweredWithMistake = True
-        done AnsweredWithoutMistake = True
-        done _ = False
-        wrong AnsweredWithMistake = True
-        wrong _ = False
-        reviews = map snd $ Map.toList rSt
-
-
-widgetStateFun :: SrsWidgetState -> ReviewStateEvent -> SrsWidgetState
-widgetStateFun st (AddItemsEv ri) =
-  st { reviewQueue = Map.union (reviewQueue st)
-         (Map.fromList $ map (\r@(ReviewItem i _ _ _) -> (i,(r, defState))) ri)
-      , resultQueue = Nothing
-      }
-  where defState = Map.fromList [(ReadingReview, NotAnswered), (MeaningReview, NotAnswered)]
-
-widgetStateFun st (DoReviewEv (i,rt,b)) = if b
-  then
-    let
-      stNew = (Map.adjust fun rt) <$> stOld
-      done = join $ isComplete <$> stNew
-      fun NotAnswered = AnsweredWithoutMistake
-      fun AnsweredWrong = AnsweredWithMistake
-      fun _ = error "Already answered"
-      upFun (r,_) = case done of
-        (Just _) -> Nothing
-        Nothing -> (,) <$> pure r <*> stNew
-    in st
-      { reviewQueue = Map.update upFun i (reviewQueue st)
-      , resultQueue = (,) <$> pure i <*> done
-      }
-
-  else
-    let
-      stNew = (Map.adjust fun rt) <$> stOld
-      fun NotAnswered = AnsweredWrong
-      fun AnsweredWrong = AnsweredWrong
-      fun _ = error "Already answered"
-    in st
-      { reviewQueue = Map.update (\(r,_) -> (,) <$> pure r <*> stNew) i (reviewQueue st)
-      , resultQueue = Nothing
-      }
-
-  where
-    stOld = snd <$> Map.lookup i (reviewQueue st)
-
-widgetStateFun st (UndoReview) = st
-
-
-getReviewFun :: SrsWidgetState -> () -> Maybe (ReviewItem, SrsReviewStats, ReviewType)
-getReviewFun st _ = (\a b c -> (a,b,c)) <$> rItem ^? _Just . _1
-  <*> pure (reviewStats st) <*> revPending
-  where
-    rItem = Map.minView (reviewQueue st) ^? _Just . _1
-    revPending = fst <$> (join $ headMay <$> ((\m -> filter (f . snd) (Map.assocs m)) <$>
-      rItem ^? _Just . _2))
-    f NotAnswered = True
-    f AnsweredWrong = True
-    f _ = False
-
--- Result Synchronise with server
--- TODO implement feature to re-send result if no response recieved
-data ResultsSyncState =
-  ReadyToSend
-  | WaitingForResp [Result] [Result]
-
-sendResultEvFun (ReadyToSend) = Nothing
-sendResultEvFun (WaitingForResp r _) = Just (DoReview r)
-
-handlerSendResultEv :: ResultsSyncState -> (These Result ()) -> ResultsSyncState
-handlerSendResultEv ReadyToSend (This r) = WaitingForResp [r] []
-handlerSendResultEv ReadyToSend (That _) = error "Got result resp, when not expecting"
-handlerSendResultEv ReadyToSend (These r _) = error "Got result resp, when not expecting"
-handlerSendResultEv (WaitingForResp r rs) (This rn) = WaitingForResp r (rs ++ [rn])
-handlerSendResultEv (WaitingForResp _ rs) (That _) = WaitingForResp rs []
-handlerSendResultEv (WaitingForResp _ []) (That _) = ReadyToSend
-handlerSendResultEv (WaitingForResp _ (rs)) (These rn _) = WaitingForResp (rs ++ [rn]) []
-handlerSendResultEv (WaitingForResp _ []) (These rn _) = WaitingForResp [rn] []
-
-
 reviewWidget
   :: (AppMonad t m)
-  => AppMonadT t m (Event t SrsWidgetView)
-reviewWidget = do
+  => ReviewType
+  -> AppMonadT t m (Event t SrsWidgetView)
+reviewWidget rt = do
   let
 
   let attr = ("class" =: "")
              <> ("style" =: "height: 50rem;")
 
   ev <- getPostBuild
-  initEv <- getWebSocketResponse $ GetNextReviewItems [] <$ ev
+  initEv <- getWebSocketResponse $ GetNextReviewItems rt [] <$ ev
 
   rec
     -- Input Events
@@ -561,9 +463,9 @@ reviewWidget = do
       (mergeList [addItemEv, reviewResultEv])
 
     let sendResultEv = fmapMaybe sendResultEvFun (updated sendResultDyn)
-        addResEv = fmapMaybe (resultQueue) (updated widgetStateDyn)
-        fetchMoreReviews = GetNextReviewItems <$> ffilter ((< 5) . length)
-          ((Map.keys . reviewQueue) <$> (updated widgetStateDyn))
+        addResEv = fmapMaybe (_resultQueue) (updated widgetStateDyn)
+        fetchMoreReviews = GetNextReviewItems rt <$> ffilter ((< 5) . length)
+          ((Map.keys . _reviewQueue) <$> (updated widgetStateDyn))
 
     fetchMoreReviewsResp <- getWebSocketResponse fetchMoreReviews
     sendResultDyn <- foldDyn (flip handlerSendResultEv) ReadyToSend
@@ -571,49 +473,52 @@ reviewWidget = do
     sendResResp <- getWebSocketResponse sendResultEv
 
   -- toss <- liftIO $ randomIO
-  --   rt = if toss then ReadingReview else MeaningReview
+  --   rt = if toss then RecogReadingReview else RecogMeaningReview
     (closeEv, reviewResultEv) <- elAttr "div" attr $ divClass "" $ do
       closeEv <- divClass "" $
         button "Close Review"
 
-      -- Start initEv (show review if available)
-      -- review done ev, fetch new event after update of dyn
-      let reviewItemEv = attachDynWithMaybe getReviewFun
-            widgetStateDyn $ leftmost
-              [void reviewResultEv, void initEv]
-
       -- Show refresh button if no review available
-      drDyn <- widgetHold (return never) $
-        reviewWidgetView <$> reviewItemEv
-
-      let reviewResultEv = switchPromptlyDyn drDyn
+      reviewResultEv <- reviewWidgetView
+        (_reviewStats <$> widgetStateDyn)
+        =<< getRevItemDyn widgetStateDyn never
 
       return (closeEv, reviewResultEv)
 
   return $ ShowStatsWindow <$ closeEv
 
+-- Start initEv (show review if available)
+-- review done ev, fetch new event after update of dyn
+getRevItemDyn :: _
+  => Dynamic t (SrsWidgetState rt)
+  -> Event t ()
+  -> m (Dynamic t (Maybe (ReviewItem, ReviewResult rt)))
+getRevItemDyn widgetStateDyn ev = do
+  return $ constDyn Nothing
+
 reviewWidgetView
-  :: AppMonad t m
-  => (ReviewItem, SrsReviewStats, ReviewType)
-  -> AppMonadT t m (Event t ReviewStateEvent)
-reviewWidgetView (ri@(ReviewItem i k m r), s, rt) = do
+  :: (AppMonad t m, SrsReviewType rt)
+  => Dynamic t SrsReviewStats
+  -> Dynamic t (Maybe (ReviewItem, ReviewResult rt))
+  -> AppMonadT t m (Event t (ReviewStateEvent rt))
+reviewWidgetView statsDyn dyn2 = do
   let
     statsRowAttr = ("class" =: "")
               <> ("style" =: "height: 15rem;")
     statsTextAttr = ("style" =: "font-size: large;")
 
-    showStats s = do
+    showStats = do
       let colour c = ("style" =: ("color: " <> c <>";" ))
       elAttr "span" (colour "black") $
-        text $ tshow (_srsReviewStats_pendingCount s)  <> " "
+        dynText $ (tshow . _srsReviewStats_pendingCount) <$> statsDyn
       elAttr "span" (colour "green") $
-        text $ tshow (_srsReviewStats_correctCount s) <> " "
+        dynText $ (tshow . _srsReviewStats_correctCount) <$> statsDyn
       elAttr "span" (colour "red") $
-        text $ tshow (_srsReviewStats_incorrectCount s)
+        dynText $ (tshow . _srsReviewStats_incorrectCount) <$> statsDyn
 
   divClass "" $ elAttr "div" statsRowAttr $ do
     elAttr "span" statsTextAttr $
-      showStats s
+      showStats
 
   let kanjiRowAttr = ("class" =: "")
          <> ("style" =: "height: 10rem;")
@@ -622,17 +527,20 @@ reviewWidgetView (ri@(ReviewItem i k m r), s, rt) = do
   elAttr "div" kanjiRowAttr $
     elAttr "span" kanjiTextAttr $ do
       let
-        f (Left (Vocab ((Kana k):_))) = k
-        f (Right (Kanji k)) = k
-      text $ f k
+        f Nothing = "No Reviews available"
+        f (Just (Left t)) = t
+        f (Just (Right (Vocab ((Kana t):_)))) = t
+      dynText $ f <$> (preview (_Just . _1 . reviewItemField) <$> dyn2)
 
-  (dr,inpTextValue) <- inputFieldWidget ri rt
+  dr <- dyn $ ffor dyn2 $ \case
+    (Nothing) -> return never
+    (Just v) -> inputFieldWidget v
 
-  drSpeech <- case rt of
-    ReadingReview ->
-      ((\b -> DoReviewEv (i, ReadingReview, b)) <$>) <$>
-        speechRecogWidget (fst r)
-    _ -> return never
+  -- drSpeech <- case rt of
+  --   RecogReadingReview ->
+  --     ((\b -> DoReviewEv (i, RecogReadingReview, b)) <$>) <$>
+  --       speechRecogWidget (fst r)
+  --   _ -> return never
 
   -- FIXME Show notes only after answering
   --       <> ("style" =: "height: 10rem;")
@@ -646,31 +554,33 @@ reviewWidgetView (ri@(ReviewItem i k m r), s, rt) = do
   --   elClass "h3" "" $ text "Notes:"
   --   elAttr "p" notesTextAttr $ text notes
 
-  evB <- divClass "" $ divClass "" $ do
-    ev1 <- divClass "" $
-      button "Undo"
-    ev2 <- divClass "" $
-      button "Add Meaning"
-    ev3 <- divClass "" $
-      button "Edit"
-    openEditSrsItemWidget (i <$ ev3)
-    return $ leftmost
-      [UndoReview <$ ev1]
+  -- Footer
+  -- evB <- divClass "" $ divClass "" $ do
+  --   ev1 <- divClass "" $
+  --     button "Undo"
+  --   ev2 <- divClass "" $
+  --     button "Add Meaning"
+  --   ev3 <- divClass "" $
+  --     button "Edit"
+  --   openEditSrsItemWidget (i <$ ev3)
+  --   return $ leftmost
+  --     [UndoReview <$ ev1]
     -- TODO AddAnswer support
       -- , AddAnswer i rt <$> tagDyn inpTextValue ev2]
-  return $ leftmost [evB, dr, drSpeech]
+  evReview <- switchPromptly never dr
+  return evReview
+    --leftmost [evB, dr, drSpeech]
 
 inputFieldWidget
   :: _
-  => ReviewItem
-  -> ReviewType
-  -> m (Event t ReviewStateEvent, Dynamic t Text)
-inputFieldWidget ri rt = do
+  => (ReviewItem, ReviewResult rt)
+  -> m (Event t (ReviewStateEvent rt))
+inputFieldWidget (ri, rt) = do
   let
-    style = "text-align: center;" <> color
-    color = if rt == MeaningReview
-      then "background-color: palegreen;"
-      else "background-color: aliceblue;"
+    style = "text-align: center;" -- <> color
+    -- color = if rt == RecogMeaningReview
+    --   then "background-color: palegreen;"
+    --   else "background-color: aliceblue;"
     inputField ev = do
       let tiAttr = def
             & textInputConfig_setValue .~ ev
@@ -688,22 +598,21 @@ inputFieldWidget ri rt = do
     (dr, inpTxtEv, resEv) <-
       reviewInputFieldHandler inpField rt ri
   widgetHold (return ()) (showResult <$> resEv)
-  return (dr, value inpField)
+  return (dr)
 
 reviewInputFieldHandler
  :: (MonadFix m,
      MonadHold t m,
-     Reflex t)
+     Reflex t,
+     SrsReviewType rt)
  => TextInput t
- -> ReviewType
+ -> ReviewResult rt
  -> ReviewItem
- -> m (Event t ReviewStateEvent, Event t Text, Event t Text)
-reviewInputFieldHandler ti rt (ReviewItem i k m r) = do
+ -> m (Event t (ReviewStateEvent rt), Event t Text, Event t Text)
+reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
   let enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
       correct = checkAnswer n <$> value ti
-      n = case rt of
-        MeaningReview -> Left $ fst m
-        ReadingReview -> Right $ fst r
+      n = getAnswer ri rt
       h _ NewReview = ShowAnswer
       h _ ShowAnswer = NextReview
       h _ _ = NewReview
@@ -712,18 +621,17 @@ reviewInputFieldHandler ti rt (ReviewItem i k m r) = do
     sendResult = ffilter (== NextReview) (tagDyn dyn enterPress)
     dr = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
 
-    hiragana = case rt of
-      MeaningReview -> never
-      -- TODO Implement proper kana writing support
-      ReadingReview -> toHiragana <$> (ti ^. textInput_input)
+    hiragana = never
+    -- case rt of
+    --   RecogMeaningReview -> never
+    --   -- TODO Implement proper kana writing support
+    --   RecogReadingReview -> toHiragana <$> (ti ^. textInput_input)
     correctEv = tagDyn correct enterPress
   -- the dr event will fire after the correctEv (on second enter press)
   let resEv b = (if b
         then "Correct : "
         else "Incorrect : ") <> ans
-      ans = mconcat $ intersperse ", "  $ case rt of
-        MeaningReview -> map unMeaning $ fst m
-        ReadingReview -> map unReading $ fst r
+      ans = show n
   return (dr, hiragana, resEv <$> correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
