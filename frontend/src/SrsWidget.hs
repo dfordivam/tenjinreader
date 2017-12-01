@@ -144,9 +144,8 @@ browseOptions = Map.fromList
   ,  (BrowseSrsItemsOther, "Others")]
 
 revTypeSel = Map.fromList
-  [ (Nothing, "All" :: Text)
-  , (Just ReviewTypeRecogReview, "Recognition")
-  , (Just ReviewTypeProdReview, "Production")]
+  [ (ReviewTypeRecogReview, "Recognition" :: Text)
+  , (ReviewTypeProdReview, "Production")]
 
 getBrowseSrsItemsEv ::
      (MonadFix m, MonadHold t m, Reflex t)
@@ -193,7 +192,7 @@ browseSrsItemsWidget = do
 
         filt <- dropdown (BrowseSrsItemsDue) (constDyn browseOptions) def
         levels <- dropdown (LearningLvl) (constDyn srsLevels) def
-        revType <- dropdown (Nothing) (constDyn revTypeSel) def
+        revType <- dropdown (ReviewTypeRecogReview) (constDyn revTypeSel) def
 
         brwDyn <- getBrowseSrsItemsEv filt levels
         let filtOptsDyn = BrowseSrsItems <$> value revType <*> brwDyn

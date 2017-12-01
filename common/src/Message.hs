@@ -137,7 +137,7 @@ data SrsStats = SrsStats
   deriving (Generic, Show, ToJSON, FromJSON)
 
 ----------------------------------------------------------------
-data BrowseSrsItems = BrowseSrsItems (Maybe ReviewType) BrowseSrsItemsFilter
+data BrowseSrsItems = BrowseSrsItems ReviewType BrowseSrsItemsFilter
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest BrowseSrsItems where
@@ -205,13 +205,15 @@ instance WebSocketMessage AppRequest EditSrsItem where
   type ResponseT AppRequest EditSrsItem = ()
 
 ----------------------------------------------------------------
-data BulkEditSrsItems = BulkEditSrsItems [SrsEntryId] BulkEditOperation
+data BulkEditSrsItems = BulkEditSrsItems ReviewType [SrsEntryId] BulkEditOperation
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data BulkEditOperation
   = SuspendSrsItems
   | MarkDueSrsItems
   | ChangeSrsReviewData Day
+  | RemoveFromReviewType
+  | AddBothReviewType
   | DeleteSrsItems
   deriving (Generic, Show, ToJSON, FromJSON)
 

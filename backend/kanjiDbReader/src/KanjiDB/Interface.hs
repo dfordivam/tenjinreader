@@ -40,10 +40,13 @@ makeKanjiDetails k i ms = KanjiDetails
   (getReadings $ k ^. DB.kanjiKunyomi)
   (getReadings $ k ^. DB.kanjiNanori)
   (WkLevel <$> k ^. DB.kanjiWkLevel)
-  (Meaning <$> (DB._kanjiMeaningMeaning <$> ms))
+  (getMeanings (DB._kanjiMeaningMeaning <$> ms))
   where
     getReadings :: Maybe Text -> [Reading]
     getReadings t = maybe [] (map Reading) (T.splitOn "," <$> t)
+
+getMeanings :: [Text] -> [Meaning]
+getMeanings ms = map Meaning $ map T.strip $ mconcat $ map (T.splitOn ";") ms
 
 makeVocabDetails
   :: DB.Vocab
@@ -53,12 +56,14 @@ makeVocabDetails
 makeVocabDetails v i ms = VocabDetails
   (VocabId i)
   (Vocab $ [Kana $ v ^. DB.vocabKanaWriting]) -- TODO Fix this
+  ("")
+  ("")
   (v ^. DB.vocabIsCommon)
   (Rank <$> v ^. DB.vocabFreqRank)
   (JlptLevel <$> v ^. DB.vocabJlptLevel)
   (WkLevel <$> v ^. DB.vocabWkLevel)
   (WikiRank <$> v ^. DB.vocabWikiRank)
-  (Meaning <$> (DB._vocabMeaningMeaning <$> ms))
+  (getMeanings (DB._vocabMeaningMeaning <$> ms))
 
 getKanjis :: DBMonad [(KanjiId, KanjiDetails)]
 getKanjis = do

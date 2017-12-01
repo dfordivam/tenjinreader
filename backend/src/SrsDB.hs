@@ -32,10 +32,13 @@ import Control.Monad.Haskey
 import Database.Haskey.Alloc.Concurrent (Root)
 import Data.Binary.Orphans
 import GHC.Generics (Generic)
+import Data.These
+import Data.List.NonEmpty (NonEmpty)
 
 import Data.Time.Calendar (Day)
 
 instance Value Day
+instance Value a => Value (NonEmpty a)
 
 newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }
   deriving (Generic, Show, Typeable, Binary, Value)
@@ -64,11 +67,13 @@ data SrsEntryStats = SrsEntryStats
 
 makeLenses ''SrsEntryStats
 
+instance (Value a, Value b) => Value (Either a b)
+instance (Value a, Value b) => Value (These a b)
+
 data SrsEntry = SrsEntry
-  {  _reviewState :: SrsEntryState
-   , _stats :: SrsEntryStats
-   , _readings :: [Reading]
-   , _meaning :: [Meaning]
+  {  _reviewState :: These (SrsEntryState, SrsEntryStats) (SrsEntryState, SrsEntryStats)
+   , _readings :: NonEmpty Reading
+   , _meaning :: NonEmpty Meaning
    , _readingNotes :: Maybe ReadingNotes
    , _meaningNotes :: Maybe MeaningNotes
    , _field :: Text
@@ -79,7 +84,6 @@ makeLenses ''SrsEntry
 instance Key SrsEntryId
 instance Key KanjiId
 instance Key VocabId
-instance (Value a, Value b) => Value (Either a b)
 
 data SrsReviewData = SrsReviewData
   { _reviews :: Tree SrsEntryId SrsEntry

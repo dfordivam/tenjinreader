@@ -24,6 +24,8 @@ import qualified Data.BTree.Impure as Tree
 import Control.Monad.Haskey
 import Data.BTree.Alloc (AllocM, AllocReaderM)
 import Database.Persist.Sql
+import Data.These
+import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 
 getSrsStats :: GetSrsStats -> WsHandlerM SrsStats
 getSrsStats _ = do
@@ -37,10 +39,25 @@ getSrsStats _ = do
   -- , totalReviews :: Int
   -- , averageSuccess :: Int
   let total = maybe 0 length allRs
-      succ = sumOf (folded . _2 . stats . successCount) <$> allRs
-      fail = sumOf (folded . _2 . stats . failureCount) <$> allRs
+      succ = sumOf (folded . _2 . reviewState . (to mergeSucF)) <$> allRs
+      fail = sumOf (folded . _2 . reviewState . (to mergeFailF)) <$> allRs
+      mergeSucF = mergeTheseWith getSucF getSucF (+)
+      getSucF = (view (_2 . successCount))
+      mergeFailF = mergeTheseWith getFailF getFailF (+)
+      getFailF = (view (_2 . failureCount))
       totalR = maybe 0 id $ (+) <$> succ <*> fail
   return $ SrsStats (length rs) total totalR 0
+
+-- ( _2 %%~ (here (\x -> print x))) (3, This 4)
+-- view (_2 . (to (here pure ))) (3, These 4 7)
+
+getRecogReviewState r =
+  case (r ^? reviewState . _This) of
+    (Just s) -> Just s
+    Nothing ->
+      case (r ^? reviewState . _These) of
+        (Just (s,_)) -> Just s
+        Nothing -> Nothing
 
 getAllPendingReviews :: WsHandlerM [(SrsEntryId, SrsEntry)]
 getAllPendingReviews = do
@@ -51,8 +68,8 @@ getAllPendingReviews = do
     rd <- Tree.lookupTree uId $ db ^. userReviews
     rs <- mapM Tree.toList (_reviews <$> rd)
     let
-      f (k,r) = join $ g
-        <$> (r ^? reviewState . _NextReviewDate)
+      f (k,r) = g =<< (getRecogReviewState r) ^? _Just .
+          _1 . _NextReviewDate
         where g (d,_) = if d <= today
                 then Just (k,r)
                 else Nothing
@@ -60,25 +77,34 @@ getAllPendingReviews = do
     return $ maybe [] (mapMaybe f) rs
 
 getBrowseSrsItems :: BrowseSrsItems -> WsHandlerM [SrsItem]
-getBrowseSrsItems brws = do
+getBrowseSrsItems (BrowseSrsItems rt brws) = do
   uId <- asks currentUserId
   today <- liftIO $ utctDay <$> getCurrentTime
 
   let
+    selRT :: _ -> _
+    selRT l = case rt of
+      ReviewTypeRecogReview ->
+        these (preview (_1 . l)) (const Nothing)
+          (\a b -> preview (_1 . l) a)
+      ReviewTypeProdReview ->
+        these (const Nothing) (preview (_1 . l))
+          (\a b -> preview (_1 . l) b)
+
     filF (k,r) = (k,r) <$ case brws of
-      (BrowseDueItems l) -> join $ g
-        <$> (r ^? reviewState . _NextReviewDate)
+      (BrowseDueItems l) -> g =<<
+        (r ^. reviewState . to (selRT _NextReviewDate))
         where g (d, interval) = if d <= today
                 then checkInterval l interval
                 else Nothing
 
-      (BrowseNewItems) -> r ^? reviewState . _NewReview
+      (BrowseNewItems) -> r ^. reviewState . to (selRT _NewReview)
 
-      (BrowseSuspItems l) -> join $ checkInterval l
-        <$> (r ^? reviewState . _Suspended)
+      (BrowseSuspItems l) -> checkInterval l =<<
+        (r ^. reviewState . to (selRT _Suspended))
 
-      (BrowseOtherItems l) -> join $ g
-        <$> (r ^? reviewState . _NextReviewDate)
+      (BrowseOtherItems l) -> g =<<
+        (r ^. reviewState . to (selRT _NextReviewDate))
         where g (d, interval) = if d > today
                 then checkInterval l interval
                 else Nothing
@@ -101,27 +127,30 @@ getBrowseSrsItems brws = do
 getBulkEditSrsItems :: BulkEditSrsItems
   -> WsHandlerM ()
 getBulkEditSrsItems
-  (BulkEditSrsItems ss DeleteSrsItems) = do
+  (BulkEditSrsItems _ ss DeleteSrsItems) = do
   return ()
 
-getBulkEditSrsItems (BulkEditSrsItems ss op) = do
+getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
   today <- liftIO $ utctDay <$> getCurrentTime
   uId <- asks currentUserId
 
   let
+    setL = case rt of
+      ReviewTypeRecogReview -> here
+      ReviewTypeProdReview -> there
     upF =
       case op of
         SuspendSrsItems ->
-          reviewState %~ \case
+          reviewState . setL . _1 %~ \case
             NextReviewDate _ i -> Suspended i
             a -> a
         MarkDueSrsItems ->
-          reviewState %~ \case
+          reviewState . setL . _1 %~ \case
             NextReviewDate _ i -> NextReviewDate today i
             Suspended i -> NextReviewDate today i
             a -> a
         ChangeSrsReviewData d ->
-          reviewState %~ \case
+          reviewState . setL . _1 %~ \case
             NextReviewDate _ i -> NextReviewDate d i
             Suspended i -> NextReviewDate d i
             a -> a
@@ -149,13 +178,13 @@ getEditSrsItem (EditSrsItem sItm)= return ()
 
 getGetNextReviewItem :: GetNextReviewItems
   -> WsHandlerM [ReviewItem]
-getGetNextReviewItem (GetNextReviewItems alreadyPresent) = do
+getGetNextReviewItem (GetNextReviewItems rt alreadyPresent) = do
   rs <- getAllPendingReviews
   return $ getReviewItem <$> (take 20 rs)
 
 getDoReview :: DoReview
   -> WsHandlerM Bool
-getDoReview (DoReview results) = do
+getDoReview (DoReview rt results) = do
   today <- liftIO $ utctDay <$> getCurrentTime
   uId <- asks currentUserId
 
@@ -164,21 +193,24 @@ getDoReview (DoReview results) = do
       -> (SrsEntryId, Bool)
       -> m (Tree.Tree SrsEntryId SrsEntry)
     doUp t (rId,b) = updateTreeM rId
-        (\r -> return $ updateSrsEntry b today r) t
+        (\r -> return $ updateSrsEntry b today rt r) t
 
   lift $ transactSrsDB_ $
     userReviews %%~ updateTreeM uId
       (reviews %%~ (\rt -> foldlM doUp rt results))
   return True
 
-updateSrsEntry :: Bool -> Day -> SrsEntry -> SrsEntry
-updateSrsEntry b today r = r
-  & reviewState %~ modifyState
-  & stats %~ modifyStats
+updateSrsEntry :: Bool -> Day -> ReviewType -> SrsEntry -> SrsEntry
+updateSrsEntry b today rt r = r
+  & reviewState . setL . _1 %~ modifyState
+  & reviewState . setL . _2 %~ modifyStats
 
   where
+    setL = case rt of
+      ReviewTypeRecogReview -> here
+      ReviewTypeProdReview -> there
     modifyState (NextReviewDate d i) =
-      getNextReviewDate (r ^. stats) today d i b
+      getNextReviewDate today d i b
     modifyState s = s -- error
 
     modifyStats s = if b
@@ -197,7 +229,7 @@ getReviewItem
   :: (SrsEntryId, SrsEntry)
   -> ReviewItem
 getReviewItem (i,s) =
-  ReviewItem i (Right $ Kanji (s ^. field)) (m,mn) (r,rn)
+  ReviewItem i (Left (s ^. field)) (m,mn) (r,rn)
   where
     m = (s ^. meaning)
     mn = (s ^. meaningNotes)
@@ -221,14 +253,13 @@ getRandomItems inp s = do
     fmap (\k -> Map.lookup k idMap) $ Set.toList set
 
 getNextReviewDate
-  :: SrsEntryStats
-  -> Day
+  :: Day
   -> Day
   -> SrsInterval
   -> Bool
   -> SrsEntryState
 getNextReviewDate
-  stats today dueDate (SrsInterval lastInterval) success =
+  today dueDate (SrsInterval lastInterval) success =
   NextReviewDate (addDays nextInterval today) (SrsInterval fullInterval)
   where extraDays = diffDays today dueDate
         fullInterval = lastInterval + extraDays
@@ -323,7 +354,7 @@ getQuickAddSrsItem (QuickAddSrsItem v) = do
   return $ join s
 
 
-data TRM = TRM Text [Reading] [Meaning]
+data TRM = TRM Text (NonEmpty Reading) (NonEmpty Meaning)
 
 makeSrsEntry
   :: (Either KanjiId VocabId)
@@ -334,10 +365,10 @@ makeSrsEntry v = do
     (Left kId) -> do
       kanjiDb <- asks appKanjiDb
       let k = Map.lookup kId kanjiDb
-          r = (++)
+          r = nonEmpty =<< (++)
             <$> k ^? _Just . kanjiDetails . kanjiOnyomi
             <*> k ^? _Just . kanjiDetails . kanjiKunyomi
-          m = k ^? _Just . kanjiDetails . kanjiMeanings
+          m = nonEmpty =<< k ^? _Just . kanjiDetails . kanjiMeanings
           f = unKanji <$>
             k ^? _Just . kanjiDetails . kanjiCharacter
       return $ TRM <$> f <*> r <*> m
@@ -345,22 +376,22 @@ makeSrsEntry v = do
     (Right vId) -> do
       vocabDb <- asks appVocabDb
       let v = Map.lookup vId vocabDb
-          r = fmap ((:[]) . Reading) $ vocabToKana
-            <$> v ^? _Just . vocabDetails . vocab
-          m = v ^? _Just . vocabDetails . vocabMeanings
+          r = (flip (:|) []) <$> Reading <$>
+            (vocabToKana <$> v ^? _Just . vocabDetails . vocab)
+          m = nonEmpty =<< v ^? _Just . vocabDetails . vocabMeanings
           f = getVocabField <$>
             v ^? _Just . vocabDetails . vocab
       return $ TRM <$> f <*> r <*> m
 
   let get (TRM f r m) = SrsEntry
-        { _reviewState = NewReview
-          , _stats = SrsEntryStats 0 0
+        { _reviewState = These state state
           , _readings = r
           , _meaning  = m
           , _readingNotes = Nothing
           , _meaningNotes = Nothing
           , _field = f
         }
+      state = (NewReview, SrsEntryStats 0 0)
   return (get <$> tmp)
 
 initSrsDb :: Handler ()
