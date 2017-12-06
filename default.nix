@@ -5,6 +5,7 @@
     common = ./common;
     backend = ./backend;
     kanjidbreader = ./backend/kanjiDbReader;
+    jmdict-parser = ./backend/jmdict-parser;
     frontend = ./frontend;
   };
 
@@ -15,7 +16,7 @@
   };
 
   shells = {
-    ghc = ["common" "backend" "frontend" "kanjidbreader"];
+    ghc = ["common" "backend" "frontend" "kanjidbreader" "jmdict-parser"];
     ghcjs = ["common" "frontend"];
   };
 
