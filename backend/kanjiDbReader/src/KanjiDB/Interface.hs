@@ -15,6 +15,9 @@ import qualified Data.Set as Set
 import Data.Time (LocalTime)
 import qualified Data.Text as T
 import Control.Lens
+import Data.JMDict.AST.AST
+
+import Text.MeCab (new)
 
 openKanjiDB = open "KanjiDatabase.sqlite"
 
@@ -153,3 +156,36 @@ getVocabKanjis v = do
     query v = map DB._vocabKanjiKanji $
               filter_ (\r -> r ^. DB.vocabKanjiVocab ==. val_ v)
                 (all_ (DB._jmdictVocabKanji DB.jmdictDb))
+
+getMecab =  new ["mecab", "-d"
+      , "/home/divam/nobup/mecab-tools/mecab-ipadic-neologd-output-files"]
+
+isKana c = c > l && c < h
+  where l = chr $ 12352
+        h = chr $ 12543
+
+makeFurigana :: KanjiPhrase -> ReadingPhrase -> Either Text Vocab
+makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab <$> (f kgs r)
+  where
+    kgs = T.groupBy (\ a b -> (isKana a) == (isKana b)) k
+    f :: [Text] -> Text -> Either Text [KanjiOrKana]
+    f [] r
+      | T.null r = Right []
+      | otherwise = Right [Kana r]
+
+    f (kg:[]) r
+      | T.null r = Left "Found kg, but r is T.null"
+      | otherwise = if r == kg
+        then Right [Kana r]
+        else Right [KanjiWithReading (Kanji kg) r]
+
+    f (kg:kg2:kgs) r
+      | T.null r = Left "r is T.null"
+      | otherwise = if (isKana (T.head kg))
+        then case (T.stripPrefix kg r) of
+          (Just rs) -> ((Kana kg) :) <$> (f (kg2:kgs) rs)
+          Nothing -> Left $ "stripPrefix: " <> kg <> ", " <> r
+        else case (T.breakOn kg2 r) of
+          (rk, rs)
+            | T.null rk -> Left "breakOn fst T.null"
+            | otherwise -> ((KanjiWithReading (Kanji kg) rk) :) <$> (f (kg2:kgs) rs)
