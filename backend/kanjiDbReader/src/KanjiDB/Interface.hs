@@ -177,7 +177,9 @@ makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab <$> (f kgs r)
       | T.null r = Left "Found kg, but r is T.null"
       | otherwise = if r == kg
         then Right [Kana r]
-        else Right [KanjiWithReading (Kanji kg) r]
+        else if (isKana (T.head kg))
+          then Left $ "Found kana not equal to r: " <> kg <> ", " <> r
+          else Right [KanjiWithReading (Kanji kg) r]
 
     f (kg:kg2:kgs) r
       | T.null r = Left "r is T.null"
@@ -189,3 +191,12 @@ makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab <$> (f kgs r)
           (rk, rs)
             | T.null rk -> Left "breakOn fst T.null"
             | otherwise -> ((KanjiWithReading (Kanji kg) rk) :) <$> (f (kg2:kgs) rs)
+
+testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b))
+  [("いじり回す", "いじりまわす")
+  ,("弄りまわす", "いじりまわす")
+  , ("弄り回す", "いじりまわす")
+  , ("いじり回す", "いじりまわ") -- Fail
+  ]
+
+
