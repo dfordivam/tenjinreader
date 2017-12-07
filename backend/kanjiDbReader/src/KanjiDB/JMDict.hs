@@ -6,7 +6,7 @@
 module KanjiDB.JMDict
   where
 
-import Protolude
+import Protolude hiding (to)
 import           Control.Lens
 import qualified Data.JMDict.XML.Parser as X
 import qualified Data.List.NonEmpty as NE
@@ -29,8 +29,9 @@ import Data.IORef
 import Data.Conduit
 import Control.Monad.IO.Class
 import Control.Monad
-import NLP.Romkan
 import KanjiDB.Interface
+import KanjiDB.KanaTable
+import Common
 
 test :: IO () -- [Either ParseError Entry]
 test = do
@@ -67,7 +68,7 @@ checkReadingElementMatches e =  f (e ^. entryReadingElements)
     f (r:|rs) = all (== r') rs'
       where r' = g r
             rs' = fmap g rs
-            g = (ReadingPhrase . toHiragana . toRoma . unReadingPhrase . _readingPhrase)
+            g = (ReadingPhrase . toHiragana . unReadingPhrase . _readingPhrase)
 
 checkFurigana e = case (e ^. entryKanjiElements) of
   [] -> True
@@ -87,24 +88,30 @@ checkFurigana e = case (e ^. entryKanjiElements) of
 
 --   :: Entry
 --   -> VocabDetails
--- makeVocabDetails e = VocabDetails
---   (VocabId $ unEntryId $ e ^. entryUniqueId)
---   (Vocab $ [Kana $ v ^. DB.vocabKanaWriting]) -- TODO Fix this
---   ("")
---   ("")
---   (v ^. DB.vocabIsCommon)
---   (Rank <$> v ^. DB.vocabFreqRank)
---   (JlptLevel <$> v ^. DB.vocabJlptLevel)
---   (WkLevel <$> v ^. DB.vocabWkLevel)
---   (WikiRank <$> v ^. DB.vocabWikiRank)
---   (getMeanings (DB._vocabMeaningMeaning <$> ms))
+makeVocabDetails e = VocabDetails
+  (VocabId $ unEntryId $ e ^. entryUniqueId)
+  (makeVocab e)
+  -- ("")
+  -- ("")
+  -- (v ^. DB.vocabIsCommon)
+  -- (Rank <$> v ^. DB.vocabFreqRank)
+  -- (JlptLevel <$> v ^. DB.vocabJlptLevel)
+  -- (WkLevel <$> v ^. DB.vocabWkLevel)
+  -- (WikiRank <$> v ^. DB.vocabWikiRank)
+  -- (getMeanings (DB._vocabMeaningMeaning <$> ms))
 
 -- Furigana reading for vocab item
 -- Pick first KanjiElement and first ReadingElement as its reading
 -- For entries without KanjiElement, use the ReadingElement
--- makeVocab :: Entry -> Vocab
--- makeVocab e = case e ^. entryKanjiElements of
---   [] -> Kana $ unReadingElement $ firstReading
---   (k:_) -> makeFurigana k firstReading
---  where
---    firstReading = NE.head $ e ^. entryReadingElements
+makeVocab :: Entry -> Vocab
+makeVocab e = case e ^. entryKanjiElements of
+  [] -> kanaVocab
+  (ks) -> case (asum $ fmap (rightToMaybe . (f (e ^. entryReadingElements))) ks) of
+    (Just v) -> v
+    (Nothing) -> kanaVocab
+  where
+    f (r:|_) k = case (r ^. readingRestrictKanji) of
+      [] ->  makeFurigana (k ^. kanjiPhrase) (r ^. readingPhrase)
+      (k:_) -> makeFurigana (k) (r ^. readingPhrase)
+    kanaVocab = Vocab [Kana $ unReadingPhrase $
+               e ^. entryReadingElements . to (NE.head) . readingPhrase]
