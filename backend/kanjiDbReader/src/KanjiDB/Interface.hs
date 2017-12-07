@@ -16,6 +16,7 @@ import Data.Time (LocalTime)
 import qualified Data.Text as T
 import Control.Lens
 import Data.JMDict.AST.AST
+import NLP.Romkan
 
 import Text.MeCab (new)
 
@@ -166,7 +167,7 @@ isKana c = c > l && c < h
 
 makeFurigana :: KanjiPhrase -> ReadingPhrase -> Either Text Vocab
 makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab
-  <$> (g kgs r)
+  <$> (g (map getKana kgs) (getKana r))
   where
     g kgs r = case reverse kgs of
       (kl:krev) -> case T.stripSuffix kl r of
@@ -196,6 +197,7 @@ makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab
         else case (T.breakOn kg2 (T.tail r)) of
           (rk, rs)
             -> (KanjiWithReading (Kanji kg) (T.cons (T.head r) rk) :) <$> (f (kg2:kgs) rs)
+getKana = (toHiragana . toRoma)
 
 testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b))
   [("いじり回す", "いじりまわす")
@@ -209,6 +211,7 @@ testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b)
   , ("霞ケ関", "かすみがせき")  -- Not supported yet
   , ("ケント紙", "ケントし")
   , ("二酸化ケイ素", "にさんかケイそ")
+  , ("ページ違反", "ぺーじいはん")
   ]
 
     -- f (kg:[]) r
