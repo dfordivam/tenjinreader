@@ -29,11 +29,12 @@ import Data.Conduit
 import Control.Monad.IO.Class
 import Control.Monad
 import KanjiDB.KanaTable
+import KanjiDB.Search
 import Common
 
 import Text.MeCab (new)
 
-test :: IO () -- [Either ParseError Entry]
+test :: IO [Entry]
 test = do
   ref <- newIORef 0
   es <- runResourceT $ parseFile parseSetting "/home/divam/nobup/jmdict/JMdict"
@@ -42,6 +43,7 @@ test = do
     .| Data.Conduit.List.mapM (\x -> liftIO $ printLeft ref x)
     .| Data.Conduit.List.take 10000000000
   print =<< readIORef ref
+  return $ catMaybes $ fmap rightToMaybe es
     -- >>= pPrint
 -- has _Left (Left 12)
 -- anyOf (folded . _1 . _Just) (== 1) [(Just 5, Just 4),(Just 1, Nothing)]
