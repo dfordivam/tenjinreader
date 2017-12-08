@@ -1,4 +1,5 @@
 compiler: ghcjs
 packages:
   common/
+  common/jmdict-ast
   frontend/

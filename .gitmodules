@@ -4,3 +4,6 @@
 [submodule "backend/jmdict-parser"]
 	path = backend/jmdict-parser
 	url = git@github.com:dfordivam/jmdict-parser.git
+[submodule "common/jmdict-ast"]
+	path = common/jmdict-ast
+	url = git@github.com:dfordivam/jmdict-ast.git
