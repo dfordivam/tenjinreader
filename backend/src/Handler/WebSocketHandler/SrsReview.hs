@@ -376,9 +376,10 @@ makeSrsEntry v = do
     (Right vId) -> do
       vocabDb <- asks appVocabDb
       let v = Map.lookup vId vocabDb
-          r = (flip (:|) []) <$> Reading <$>
-            (vocabToKana <$> v ^? _Just . vocabDetails . vocab)
-          m = nonEmpty =<< v ^? _Just . vocabDetails . vocabMeanings
+          r = nonEmpty $ v ^.. _Just . vocabEntry . entryReadingElements
+            . traverse . readingPhrase . to (Reading . unReadingPhrase)
+          m = nonEmpty $ v ^.. _Just . vocabEntry . entrySenses
+            . traverse . senseGlosses . traverse . glossDefinition . to (Meaning)
           f = v ^? _Just . vocabDetails . vocab
             . to Right . to (:|[])
       return $ TRM <$> f <*> r <*> m
