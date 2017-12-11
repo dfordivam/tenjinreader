@@ -8,6 +8,7 @@
     jmdict-xml-parser = ./backend/jmdict-parser;
     jmdict-ast = ./common/jmdict-ast;
     frontend = ./frontend;
+    hs-nlp-jp-utils = ./common/hs-nlp-jp-utils;
   };
 
   android.frontend = {
@@ -54,6 +55,7 @@
         beam-core = self.callCabal2nix "beam-core" "${beam-src}/beam-core" {};
         beam-sqlite = self.callCabal2nix "beam-core" "${beam-src}/beam-sqlite" {};
         beam-migrate = self.callCabal2nix "beam-core" "${beam-src}/beam-migrate" {};
+
     };
 
 })

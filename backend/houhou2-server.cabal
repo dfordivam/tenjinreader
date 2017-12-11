@@ -77,6 +77,8 @@ library
     , haskey-mtl
     , binary-orphans
     , kanjidbreader
+    , jmdict-ast
+    , hs-nlp-jp-utils
     , these
     , common
   if (flag(dev)) || (flag(library-only))

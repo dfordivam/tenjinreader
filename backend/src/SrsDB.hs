@@ -70,13 +70,23 @@ makeLenses ''SrsEntryStats
 instance (Value a, Value b) => Value (Either a b)
 instance (Value a, Value b) => Value (These a b)
 
+-- By Default do
+-- Prod + Recog(M + R) for Vocab with kanji in reading (Can be decided on FE)
+-- Prod + Recog(M) for Vocab with only kana reading
+-- Recog - for Kanji review
+--
+-- The default field will be chosen
+-- 1. From user entered text
+-- 2. Vocab with maximum kanjis
 data SrsEntry = SrsEntry
   {  _reviewState :: These (SrsEntryState, SrsEntryStats) (SrsEntryState, SrsEntryStats)
+  -- XXX Does this require grouping
+  -- readings also contain other/alternate readings
    , _readings :: NonEmpty Reading
    , _meaning :: NonEmpty Meaning
    , _readingNotes :: Maybe ReadingNotes
    , _meaningNotes :: Maybe MeaningNotes
-   , _field :: Text
+   , _field :: NonEmpty Text
   } deriving (Generic, Show, Typeable, Binary, Value)
 
 makeLenses ''SrsEntry

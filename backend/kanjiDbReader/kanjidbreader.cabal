@@ -16,8 +16,6 @@ library
                        , KanjiDB.DB
                        , KanjiDB.Interface
                        , KanjiDB.JMDict
-                       , KanjiDB.KanaTable
-                       , KanjiDB.Search
   hs-source-dirs:      src
   default-language:    Haskell2010
   default-extensions:  NoImplicitPrelude
@@ -39,9 +37,11 @@ library
                      , containers
                      , text
                      , jmdict-xml-parser
+                     , jmdict-ast
                      , pretty-simple
                      , conduit
                      , xml-conduit
                      , resourcet
                      , mecab
                      , full-text-search
+                     , hs-nlp-jp-utils

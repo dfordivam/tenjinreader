@@ -18,7 +18,7 @@ import           Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Maybe
 import Text.Read
-import Data.JMDict.AST.AST
+import Data.JMDict.AST
 import Data.JMDict.AST.Parser
 import Data.Char
 import Text.Pretty.Simple
@@ -47,7 +47,7 @@ parseAndSearch es se m t = do
           fmap ((flip Map.lookup) es) eIds
         gs = e ^.. (traverse . entrySenses . traverse
                     . senseGlosses . traverse
-                    . X.glossDefinition)
+                    . glossDefinition)
   return $ fmap fun feats
 
 

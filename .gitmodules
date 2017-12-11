@@ -7,3 +7,6 @@
 [submodule "common/jmdict-ast"]
 	path = common/jmdict-ast
 	url = git@github.com:dfordivam/jmdict-ast.git
+[submodule "common/hs-nlp-jp-utils"]
+	path = common/hs-nlp-jp-utils
+	url = git@github.com:dfordivam/hs-nlp-jp-utils.git

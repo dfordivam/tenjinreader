@@ -4,6 +4,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module KanjiDB.JMDict
+  (getJMDictEntries)
   where
 
 import Protolude hiding (to)
@@ -17,8 +18,8 @@ import           Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Maybe
 import Text.Read
-import Data.JMDict.AST.AST
-import Data.JMDict.AST.Parser
+import Data.JMDict.AST
+import Data.JMDict.AST.Parser hiding (isKana)
 import Data.Char
 import Text.Pretty.Simple
 import qualified Data.Conduit.List
@@ -28,11 +29,19 @@ import Data.IORef
 import Data.Conduit
 import Control.Monad.IO.Class
 import Control.Monad
-import KanjiDB.KanaTable
-import KanjiDB.Search
+import NLP.Japanese.Utils
 import Common
 
 import Text.MeCab (new)
+
+getJMDictEntries :: FilePath -> IO [(Entry, VocabDetails)]
+getJMDictEntries fp =
+  runResourceT $ parseFile parseSetting fp
+    $$ X.parseJMDict
+    .| Data.Conduit.List.map makeAST
+    .| Data.Conduit.List.mapMaybe (rightToMaybe)
+    .| Data.Conduit.List.map (\x -> (x, makeVocabDetails x))
+    .| Data.Conduit.List.consume
 
 test :: IO [Entry]
 test = do
@@ -70,7 +79,7 @@ checkReadingElementMatches e =  f (e ^. entryReadingElements)
     f (r:|rs) = all (== r') rs'
       where r' = g r
             rs' = fmap g rs
-            g = (ReadingPhrase . toHiragana . unReadingPhrase . _readingPhrase)
+            g = (ReadingPhrase . katakanaToHiragana . unReadingPhrase . _readingPhrase)
 
 checkFurigana e = case (e ^. entryKanjiElements) of
   [] -> True
@@ -80,21 +89,15 @@ checkFurigana e = case (e ^. entryKanjiElements) of
       [] -> isRight $ makeFurigana (k ^. kanjiPhrase) (r ^. readingPhrase)
       (k:_) -> isRight $ makeFurigana (k) (r ^. readingPhrase)
 
--- getVocabs :: IO [(VocabId, VocabData)]
--- getVocabs = do
---   es <- runResourceT $ parseFile parseSetting "/home/divam/nobup/jmdict/JMdict"
---     $$ X.parseJMDict
---     .| Data.Conduit.List.map makeAST
---     .| Data.Conduit.List.consume
 
-
---   :: Entry
---   -> VocabDetails
+makeVocabDetails :: Entry
+  -> VocabDetails
 makeVocabDetails e = VocabDetails
-  (VocabId $ unEntryId $ e ^. entryUniqueId)
+  (e ^. entryUniqueId)
   (makeVocab e)
   False -- TODO
   Nothing -- TODO
+  []
   -- (getMeanings (DB._vocabMeaningMeaning <$> ms))
 
 -- Furigana reading for vocab item
@@ -119,7 +122,7 @@ getMecab =  new ["mecab", "-d"
 
 makeFurigana :: KanjiPhrase -> ReadingPhrase -> Either Text Vocab
 makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab
-  <$> (g (map toHiragana kgs) (toHiragana r))
+  <$> (g (map katakanaToHiragana kgs) (katakanaToHiragana r))
   where
     g kgs r = case reverse kgs of
       (kl:krev) -> case T.stripSuffix kl r of
@@ -134,7 +137,7 @@ makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab
 
     f (kg:[]) r
       | T.null r = Left "Found kg, but r is T.null"
-      | otherwise = if kg `isSameAs` r
+      | otherwise = if kg == r
         then Right [Kana r]
         else if (isKana (T.head kg))
           then Left $ "Found kana not equal to r: " <> kg <> ", " <> r
@@ -166,39 +169,14 @@ testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b)
   , ("シェリー酒", "シェリーしゅ")
   ]
 
-    -- f (kg:[]) r
-    --   | T.null r = Left "Found kg, but r is T.null"
-    --   | otherwise = if kg `isSameAs` r
-    --     then Right [Kana r]
-    --     else if (isKana (T.head kg))
-    --       then Left $ "Found kana not equal to r: " <> kg <> ", " <> r
-    --       else Right [KanjiWithReading (Kanji kg) r]
+-- isSameAs t1 t2
+--   | T.length t1 == T.length t2 = all compareChars (zip (T.unpack t1) (T.unpack t2))
+--   | otherwise = False
 
-    -- f (kg:kg2:kgs) r
-    --   | T.null r = Left "r is null"
-    --   | otherwise = if (isKana (T.head kg))
-    --     then case (T.splitAt (T.length kg) r) of
-    --       (rf, rs) -> if isSameAs kg rf
-    --         then ((Kana kg) :) <$> (f (kg2:kgs) rs)
-    --         else Left $ "stripPrefix: " <> kg <> ", " <> r
+-- isSameAsC c1 c2 = compareChars (c1, c2)
 
-    --     else case
-    --       ((T.breakOn kg2 (T.tail r)),
-    --         (T.break (isSameAsC $ T.head kg2) (T.tail r))) of
-    --       ((rk1, rs1) , (rk2, rs2)) ->
-    --         let (rk, rs) = if T.length rk1 > T.length rk2 then (rk1,rs1) else (rk2,rs2)
-    --         in (KanjiWithReading (Kanji kg) (T.cons (T.head r) rk) :)
-    --                    <$> (f (kg2:kgs) rs)
-
-
-isSameAs t1 t2
-  | T.length t1 == T.length t2 = all compareChars (zip (T.unpack t1) (T.unpack t2))
-  | otherwise = False
-
-isSameAsC c1 c2 = compareChars (c1, c2)
-
-compareChars = f
-  where
-    f ('ヶ', c2) = elem c2 ['か', 'が','ヶ', 'ケ']
-    f ('ケ', c2) = elem c2 ['か', 'が','ヶ', 'ケ']
-    f (c1, c2) = c1 == c2
+-- compareChars = f
+--   where
+--     f ('ヶ', c2) = elem c2 ['か', 'が','ヶ', 'ケ']
+--     f ('ケ', c2) = elem c2 ['か', 'が','ヶ', 'ケ']
+--     f (c1, c2) = c1 == c2
