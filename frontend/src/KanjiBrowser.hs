@@ -290,11 +290,11 @@ srsEntryWidget i s = do
 displayVocabT :: DomBuilder t m => Vocab -> m ()
 displayVocabT (Vocab ks) = do
   let
-    f k = case k of
-      (KanjiWithReading k f) ->
-        text $ (unKanji k) <> "(" <> f <> ")"
-      (Kana t) ->
-        text t
+    f (Kana k) = text k
+    f (KanjiWithReading (Kanji k) r)
+      = el "ruby" $ do
+          text k
+          el "rt" $ text r
   mapM_ f ks
 
 textMay (Just v) = text v
