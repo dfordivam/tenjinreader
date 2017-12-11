@@ -197,8 +197,8 @@ kanjiListWidget listEv = do
     return $ switchPromptlyDyn $ leftmost <$> d
 
 kanjiDetailsWidget
-  :: _
-  => Event t KanjiSelectionDetails -> m ()
+  :: AppMonad t m
+  => Event t KanjiSelectionDetails -> AppMonadT t m ()
 kanjiDetailsWidget ev = do
   let f1 (KanjiSelectionDetails k s v) = k
   let f2 (KanjiSelectionDetails k s v) = v
@@ -227,8 +227,11 @@ kanjiDetailWindow k = do
       --   textMay (unOnYomiT <$> on)
       --   textMay (unKunYomiT <$> ku)
 
-vocabListWindow :: _
-  => req -> Event t VocabList -> m ()
+vocabListWindow
+  :: (AppMonad t m
+     , WebSocketMessage AppRequest req
+     , ResponseT AppRequest req ~ [(VocabDetails, Maybe SrsEntryId)])
+  => req -> Event t VocabList -> AppMonadT t m ()
 vocabListWindow req listEv = do
   let
     listItem (v,s) = el "tr" $ do
@@ -239,12 +242,10 @@ vocabListWindow req listEv = do
         el "tr" $ do
           el "td" $ text $ T.intercalate "," $ map unMeaning
             $ v ^. vocabMeanings
-          el "td" $ srsEntryWidget (Right $ v ^. vocabId)s
+          el "td" $ srsEntryWidget (Right $ v ^. vocabId) s
 
         el "tr" $ do
           el "td" $ textMay (tshow <$> (unRank <$> v ^. vocabFreqRank))
-          el "td" $ textMay (tshow <$> (unWikiRank <$> v ^. vocabWikiRank))
-          el "td" $ textMay (tshow <$> (unWkLevel <$> v ^. vocabWkLevel))
 
     liWrap i = do
       dyn $ listItem <$> i
@@ -264,7 +265,11 @@ vocabListWindow req listEv = do
       ev <- el "td" $ button "Load More"
     return ()
 
-srsEntryWidget :: _ => (Either KanjiId VocabId) -> Maybe SrsEntryId -> m ()
+-- Controls to add/edit related srs items
+srsEntryWidget :: AppMonad t m
+  => (Either KanjiId VocabId)
+  -> Maybe SrsEntryId
+  -> AppMonadT t m ()
 srsEntryWidget i s = do
   let
     widget s = case s of

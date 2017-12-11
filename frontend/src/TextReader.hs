@@ -19,7 +19,7 @@ textReaderWidget
   :: AppMonad t m
   => AppMonadT t m ()
 textReaderWidget = divClass "" $ do
-  ta <- textArea
+  ta <- textArea def
 
   send <- button "send"
 
@@ -27,10 +27,11 @@ textReaderWidget = divClass "" $ do
     (GetAnnotatedText <$> (tagDyn (value ta) send))
 
   widgetHold (return ())
-    (readingPane <$> annTextEv)
+    (readingPane (constDyn True) <$> annTextEv)
+  return ()
 
-vocabRuby :: Dynamic t Bool -> Vocab -> m (_)
-vocabRuby visDyn (Vocab ks) =
+vocabRuby :: (_) => Dynamic t Bool -> Vocab -> m (_)
+vocabRuby visDyn (Vocab ks) = do
   let
     g r True = r
     g _ _ = ""
@@ -38,22 +39,28 @@ vocabRuby visDyn (Vocab ks) =
     f (KanjiWithReading (Kanji k) r)
       = el "ruby" $ do
           text k
-          el "rt" $ dyntext (g r <$> visDyn)
+          el "rt" $ dynText (g r <$> visDyn)
   (e,_) <- el' "span" $ mapM f ks
   return $ (domEvent Click e, domEvent Mouseenter e, domEvent Mouseleave e)
 
-readingPane :: Dynamic t Bool -> [(Either Text (Vocab, VocabId))]
+readingPane :: AppMonad t m
+  => Dynamic t Bool
+  -> AnnotatedText -- [(Either Text (Vocab, VocabId, Bool))]
+  -> AppMonadT t m ()
 readingPane showAllFurigana annText = do
   vIdEv <- el "div" $ el "p" $ do
-    let f (Left t) = text t
-        f (Right (v, vId)) = do
+    let f (Left t) = never <$ text t
+        f (Right (v, vId, vis)) = do
           rec
             let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
-            visDyn <- holdDyn True evVis
+            visDyn <- holdDyn vis evVis
             (ek, eme, eml) <- vocabRuby visDyn v
           return $ vId <$ ek
-    mapM f annText
+    leftmost <$> mapM f annText
 
   el "div" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails <$> vIdEv
     showVocabDetailsWidget detailsEv
+
+showVocabDetailsWidget detailsEv = do
+  text "vocab detials widget"

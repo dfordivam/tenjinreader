@@ -51,6 +51,9 @@ type AppRequest
   :<|> EditSrsItem
   :<|> BulkEditSrsItems
 
+  :<|> GetAnnotatedText
+  :<|> GetVocabDetails
+
 ----------------------------------------------------------------
 data KanjiFilter = KanjiFilter
   { textContent :: Text
@@ -221,5 +224,19 @@ instance WebSocketMessage AppRequest BulkEditSrsItems where
   type ResponseT AppRequest BulkEditSrsItems = ()
 
 ----------------------------------------------------------------
+type AnnotatedText = [(Either Text (Vocab, VocabId, Bool))]
+data GetAnnotatedText = GetAnnotatedText Text
+  deriving (Generic, Show, ToJSON, FromJSON)
 
+instance WebSocketMessage AppRequest GetAnnotatedText where
+  type ResponseT AppRequest GetAnnotatedText = AnnotatedText
+
+----------------------------------------------------------------
+data GetVocabDetails = GetVocabDetails VocabId
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest GetVocabDetails where
+  type ResponseT AppRequest GetVocabDetails = Maybe Entry
+
+----------------------------------------------------------------
 makeLenses ''ReviewItem

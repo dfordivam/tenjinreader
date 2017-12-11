@@ -13,6 +13,7 @@ module TopWidget
 import FrontendCommon
 import SrsWidget
 import KanjiBrowser
+import TextReader
 
 -- from package common
 import Common
@@ -44,7 +45,8 @@ widget = divClass "container" $ do
     Map.fromList
       [(0, ("SRS", srsWidget))
       ,(1, ("Kanji", kanjiBrowseWidget))
-      , (2, ("Vocab", vocabSearchWidget))]
+      , (2, ("Vocab", vocabSearchWidget))
+      , (3, ("Reader", textReaderWidget))]
 
 -- <nav class="navbar navbar-default">
 --   <div class="container-fluid">
