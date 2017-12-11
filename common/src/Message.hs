@@ -167,7 +167,7 @@ instance WebSocketMessage AppRequest GetNextReviewItems where
 
 data ReviewItem = ReviewItem
   { _reviewItemId ::  SrsEntryId
-  , _reviewItemField :: (Either Text Vocab)
+  , _reviewItemField :: SrsEntryField
   , _reviewItemMeaning :: (NonEmpty Meaning, Maybe MeaningNotes)
   , _reviewItemReading :: (NonEmpty Reading, Maybe ReadingNotes)
   }
@@ -221,7 +221,7 @@ data BulkEditOperation
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest BulkEditSrsItems where
-  type ResponseT AppRequest BulkEditSrsItems = ()
+  type ResponseT AppRequest BulkEditSrsItems = Maybe ()
 
 ----------------------------------------------------------------
 type AnnotatedText = [(Either Text (Vocab, VocabId, Bool))]

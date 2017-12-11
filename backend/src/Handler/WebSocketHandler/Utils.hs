@@ -14,6 +14,7 @@ import Yesod.WebSockets
 import Text.MeCab
 import KanjiDB
 import NLP.Romkan
+import NLP.Japanese.Utils
 
 type WsHandlerM = ReaderT WsHandlerEnv Handler
 
@@ -34,6 +35,6 @@ getKana t = do
       readings :: [Text]
       readings = catMaybes $ map (headMay . reverse . (T.splitOn ",")) feats
       -- convert valid characters to hiragana
-      f = map (toHiragana . toRoma) $ filter isJP readings
+      f = map katakanaToHiragana $ filter hasKanaOrKanji readings
 
   return $ mconcat f

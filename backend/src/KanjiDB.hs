@@ -187,9 +187,10 @@ data VocabSearchFields
   | VocabGloss
   deriving (Eq, Ord, Enum, Bounded, Ix, Show)
 
-getVocabSE :: [Entry] -> VocabSearchEngine
-getVocabSE docs = insertDocs docs init
+getVocabSE :: VocabDb -> VocabSearchEngine
+getVocabSE vDb = insertDocs docs init
   where
+    docs = vDb ^.. traverse . vocabEntry
     init = initSearchEngine conf vocabSearchRankParams
     conf = SearchConfig _entryUniqueId extractTerms transformQry (const noFeatures)
     extractTerms :: Entry -> VocabSearchFields -> [Term]

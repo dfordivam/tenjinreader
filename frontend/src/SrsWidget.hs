@@ -217,7 +217,7 @@ browseSrsItemsWidget = do
       let
       c1 <- do
         divClass "" $ do
-          text t
+          text $ (tshow t)
           ev <- button "edit"
           openEditSrsItemWidget $ i <$ ev
         divClass "" $
@@ -290,8 +290,9 @@ bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "" $ do
           , MarkDueSrsItems <$ markDueEv
           , SuspendSrsItems <$ suspendEv
           , ChangeSrsReviewData <$> tagPromptlyDyn dateDyn reviewDateChange]
-    getWebSocketResponse $
+    doUpdate <- getWebSocketResponse $
       (attachDynWith ($) (BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
+    return $ fmapMaybe identity doUpdate
 
 datePicker
   :: (MonadWidget t m)
@@ -469,7 +470,8 @@ reviewWidget p = do
         fetchMoreReviews = GetNextReviewItems rt <$> ffilter ((< 5) . length)
           ((Map.keys . _reviewQueue) <$> (updated widgetStateDyn))
 
-    fetchMoreReviewsResp <- getWebSocketResponse fetchMoreReviews
+    dEv <- debounce 120 fetchMoreReviews
+    fetchMoreReviewsResp <- getWebSocketResponse dEv
     sendResultDyn <- foldDyn (flip handlerSendResultEv) ReadyToSend
       (align addResEv (() <$ sendResResp))
     sendResResp <- getWebSocketResponse sendResultEv
@@ -529,10 +531,7 @@ reviewWidgetView statsDyn dyn2 = do
   elAttr "div" kanjiRowAttr $
     elAttr "span" kanjiTextAttr $ do
       let
-        f Nothing = "No Reviews available"
-        f (Just (Left t)) = t
-        f (Just (Right (Vocab ((Kana t):_)))) = t
-      dynText $ f <$> (preview (_Just . _1 . reviewItemField) <$> dyn2)
+      dynText $ showReviewItemField <$> (preview (_Just . _1 . reviewItemField) <$> dyn2)
 
   dr <- dyn $ ffor dyn2 $ \case
     (Nothing) -> return never
@@ -572,6 +571,8 @@ reviewWidgetView statsDyn dyn2 = do
   evReview <- switchPromptly never dr
   return evReview
     --leftmost [evB, dr, drSpeech]
+
+showReviewItemField t = "review item here"
 
 inputFieldWidget
   :: _

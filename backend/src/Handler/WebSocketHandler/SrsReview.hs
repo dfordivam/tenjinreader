@@ -125,10 +125,10 @@ getBrowseSrsItems (BrowseSrsItems rt brws) = do
   return $ map (\(i,r) -> SrsItem i (r ^. field)) rs
 
 getBulkEditSrsItems :: BulkEditSrsItems
-  -> WsHandlerM ()
+  -> WsHandlerM (Maybe ())
 getBulkEditSrsItems
   (BulkEditSrsItems _ ss DeleteSrsItems) = do
-  return ()
+  return Nothing
 
 getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
   today <- liftIO $ utctDay <$> getCurrentTime
@@ -165,7 +165,7 @@ getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
     userReviews %%~ updateTreeM uId
       (reviews %%~ (\rt -> foldlM doUp rt ss))
 
-  return ()
+  return Nothing
 
 getSrsItem :: GetSrsItem
   -> WsHandlerM (Maybe SrsItemFull)
@@ -229,7 +229,7 @@ getReviewItem
   :: (SrsEntryId, SrsEntry)
   -> ReviewItem
 getReviewItem (i,s) =
-  ReviewItem i (Left (s ^. field)) (m,mn) (r,rn)
+  ReviewItem i (s ^. field) (m,mn) (r,rn)
   where
     m = (s ^. meaning)
     mn = (s ^. meaningNotes)
@@ -354,7 +354,7 @@ getQuickAddSrsItem (QuickAddSrsItem v) = do
   return $ join s
 
 
-data TRM = TRM Text (NonEmpty Reading) (NonEmpty Meaning)
+data TRM = TRM SrsEntryField (NonEmpty Reading) (NonEmpty Meaning)
 
 makeSrsEntry
   :: (Either KanjiId VocabId)
@@ -369,8 +369,8 @@ makeSrsEntry v = do
             <$> k ^? _Just . kanjiDetails . kanjiOnyomi
             <*> k ^? _Just . kanjiDetails . kanjiKunyomi
           m = nonEmpty =<< k ^? _Just . kanjiDetails . kanjiMeanings
-          f = unKanji <$>
-            k ^? _Just . kanjiDetails . kanjiCharacter
+          f = k ^? _Just . kanjiDetails . kanjiCharacter . to unKanji
+            . to Left . to (:|[])
       return $ TRM <$> f <*> r <*> m
 
     (Right vId) -> do
@@ -379,8 +379,8 @@ makeSrsEntry v = do
           r = (flip (:|) []) <$> Reading <$>
             (vocabToKana <$> v ^? _Just . vocabDetails . vocab)
           m = nonEmpty =<< v ^? _Just . vocabDetails . vocabMeanings
-          f = getVocabField <$>
-            v ^? _Just . vocabDetails . vocab
+          f = v ^? _Just . vocabDetails . vocab
+            . to Right . to (:|[])
       return $ TRM <$> f <*> r <*> m
 
   let get (TRM f r m) = SrsEntry

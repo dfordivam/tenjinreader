@@ -34,8 +34,10 @@ handleWebSocketConn uId = do
   iref1  <- liftIO $ newIORef ([],0)
   iref2  <- liftIO $ newIORef ([],0)
   iref3  <- liftIO $ newIORef ([],0)
-  let runF bs = lift $ runReaderT
-        (handleRequest wsHandler bs) (userSessionData)
+  let runF bs = do
+        liftIO $ putStrLn $ decodeUtf8 bs
+        lift $ runReaderT
+          (handleRequest wsHandler bs) (userSessionData)
       userSessionData =
         WsHandlerEnv iref1 iref2 iref3 (fromSqlKey uId)
 
@@ -66,6 +68,9 @@ wsHandler = HandlerWrapper $
   :<&> h getSrsItem
   :<&> h getEditSrsItem
   :<&> h getBulkEditSrsItems
+
+  :<&> h getAnnotatedText
+  :<&> h getVocabDetails
 
   where
   h :: (WebSocketMessage Message.AppRequest a, Monad m)

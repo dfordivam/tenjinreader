@@ -86,7 +86,7 @@ data SrsEntry = SrsEntry
    , _meaning :: NonEmpty Meaning
    , _readingNotes :: Maybe ReadingNotes
    , _meaningNotes :: Maybe MeaningNotes
-   , _field :: NonEmpty Text
+   , _field :: SrsEntryField
   } deriving (Generic, Show, Typeable, Binary, Value)
 
 makeLenses ''SrsEntry

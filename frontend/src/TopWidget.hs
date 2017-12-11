@@ -31,11 +31,14 @@ import qualified Data.Text as T
 topWidget :: MonadWidget t m => m ()
 topWidget = do
   let url = "ws://localhost:3000/websocket"
-  withWSConnection
+  (_,ws) <- withWSConnection
     url
     never -- close event
     True -- reconnect
     widget
+  let resp = traceEvent ("Response") (_webSocket_recv ws)
+  d <- holdDyn "" resp
+  dynText ((tshow . BS.length) <$> d)
   return ()
 
 widget :: AppMonad t m => AppMonadT t m ()

@@ -18,6 +18,7 @@ import qualified Data.Set as Set
 import Text.Pretty.Simple
 import Data.SearchEngine
 import qualified Data.BTree.Impure as Tree
+import NLP.Japanese.Utils
 
 searchResultCount = 20
 
@@ -188,3 +189,11 @@ getLoadMoreVocabSearchResult _ = do
   asks vocabSearchResult >>= \ref ->
     liftIO $ writeIORef ref (keys, count + (length vs))
   return $ maybe [] id vs
+
+getAnnotatedText :: GetAnnotatedText
+  -> WsHandlerM AnnotatedText
+getAnnotatedText (GetAnnotatedText t) = return []
+
+getVocabDetails :: GetVocabDetails
+  -> WsHandlerM (Maybe Entry)
+getVocabDetails _ = return Nothing

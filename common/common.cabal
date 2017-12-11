@@ -19,6 +19,7 @@ library
   exposed-modules:     Message
                        Common
                        Radicals
+                       DerivingInstances
   -- other-extensions:
   build-depends:       base >=4.9 && <4.11
                      , reflex-websocket-interface-shared
