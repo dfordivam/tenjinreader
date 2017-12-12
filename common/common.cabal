@@ -30,6 +30,8 @@ library
                      , lens
                      , containers
                      , binary
+                     , text
+                     , hs-nlp-jp-utils
                      -- TODO remove this
                      , haskey-btree
                      , jmdict-ast
