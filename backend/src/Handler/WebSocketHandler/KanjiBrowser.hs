@@ -19,6 +19,7 @@ import Text.Pretty.Simple
 import Data.SearchEngine
 import qualified Data.BTree.Impure as Tree
 import NLP.Japanese.Utils
+import Mecab
 
 searchResultCount = 20
 
@@ -192,8 +193,21 @@ getLoadMoreVocabSearchResult _ = do
 
 getAnnotatedText :: GetAnnotatedText
   -> WsHandlerM AnnotatedText
-getAnnotatedText (GetAnnotatedText t) = return []
+getAnnotatedText (GetAnnotatedText t) = do
+  lift $ getAnnTextInt t
+
+getAnnTextInt t = do
+  vocabDb <- asks appVocabDb
+  mec <- asks appMecabPtr
+  se <- asks appVocabSearchEng
+  liftIO $ parseAndSearch vocabDb se mec t
+
 
 getVocabDetails :: GetVocabDetails
-  -> WsHandlerM (Maybe Entry)
-getVocabDetails _ = return Nothing
+  -> WsHandlerM [Entry]
+getVocabDetails (GetVocabDetails eIds) = do
+  vocabDb <- lift $ asks appVocabDb
+  let
+    e = catMaybes $
+        fmap ((flip Map.lookup) vocabDb) eIds
+  return $ e ^.. traverse . vocabEntry

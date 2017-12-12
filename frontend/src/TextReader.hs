@@ -27,7 +27,7 @@ textReaderWidget = divClass "" $ do
     (GetAnnotatedText <$> (tagDyn (value ta) send))
 
   widgetHold (return ())
-    (readingPane (constDyn True) <$> annTextEv)
+    (readingPane (constDyn False) <$> annTextEv)
   return ()
 
 vocabRuby :: (_) => Dynamic t Bool -> Vocab -> m (_)

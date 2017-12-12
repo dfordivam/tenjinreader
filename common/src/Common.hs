@@ -170,6 +170,8 @@ data ReviewType =
   | ReviewTypeProdReview
   deriving (Eq, Ord, Enum, Bounded, Generic, Show, ToJSON, FromJSON)
 
+type AnnotatedText = [(Either Text (Vocab, [VocabId], Bool))]
+
 makeLenses ''SrsReviewStats
 makeLenses ''VocabDetails
 makeLenses ''KanjiDetails

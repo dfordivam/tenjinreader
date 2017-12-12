@@ -224,7 +224,6 @@ instance WebSocketMessage AppRequest BulkEditSrsItems where
   type ResponseT AppRequest BulkEditSrsItems = Maybe ()
 
 ----------------------------------------------------------------
-type AnnotatedText = [(Either Text (Vocab, VocabId, Bool))]
 data GetAnnotatedText = GetAnnotatedText Text
   deriving (Generic, Show, ToJSON, FromJSON)
 
@@ -232,11 +231,11 @@ instance WebSocketMessage AppRequest GetAnnotatedText where
   type ResponseT AppRequest GetAnnotatedText = AnnotatedText
 
 ----------------------------------------------------------------
-data GetVocabDetails = GetVocabDetails VocabId
+data GetVocabDetails = GetVocabDetails [VocabId]
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest GetVocabDetails where
-  type ResponseT AppRequest GetVocabDetails = Maybe Entry
+  type ResponseT AppRequest GetVocabDetails = [Entry]
 
 ----------------------------------------------------------------
 makeLenses ''ReviewItem

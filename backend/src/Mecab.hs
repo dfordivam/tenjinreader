@@ -1,15 +1,15 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
-module KanjiDB.Mecab
+module Mecab
   where
 
 import Protolude hiding (to, (&))
 import           Control.Lens
-import qualified Data.JMDict.XML.Parser as X
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Text as T
@@ -19,42 +19,53 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Text.Read
 import Data.JMDict.AST
-import Data.JMDict.AST.Parser
 import Data.Char
 import Text.Pretty.Simple
-import qualified Data.Conduit.List
-import Text.XML.Stream.Parse hiding (anyOf)
-import Control.Monad.Trans.Resource
-import Data.IORef
-import Data.Conduit
-import Control.Monad.IO.Class
-import Control.Monad
-import KanjiDB.KanaTable
 import Common
+import KanjiDB
+import NLP.Japanese.Utils
+import KanjiDB.JMDict
 
 import Data.Ix
 import Text.MeCab
 import Data.SearchEngine
 
+parseAndSearch :: Map EntryId VocabData
+  -> VocabSearchEngine
+  -> MeCab
+  -> Text
+  -> IO AnnotatedText
 parseAndSearch es se m t = do
-  feats <- catMaybes <$> parseMecab m t
+  feats <- liftIO $ parseMecab m t
   let
-    fun feat = (term, gs)
+    fun ("", _) = Nothing
+    fun (surf, Nothing) = Just (Left surf)
+    fun (surf, Just feat) = Just $ (\v -> (v, eIds, True))
+      <$> getVocabFurigana (surf,reading)
       where
         term = (_mecabNodeFeat7 feat)
+        reading = (_mecabNodeFeat8 feat)
         eIds = query se [term]
         e = catMaybes $
           fmap ((flip Map.lookup) es) eIds
-        gs = e ^.. (traverse . entrySenses . traverse
+        gs = take 5 $ e ^.. (traverse . vocabEntry
+                    . entrySenses . traverse
                     . senseGlosses . traverse
                     . glossDefinition)
-  return $ fmap fun feats
+  return $ catMaybes $ fmap fun feats
 
+getVocabFurigana (surf, reading) =
+  case makeFurigana (KanjiPhrase surf) (ReadingPhrase reading) of
+    (Left _) -> Left surf
+    (Right v) -> Right v
 
+parseMecab :: MeCab -> Text -> IO ([(Text, Maybe MecabNodeFeatures)])
 parseMecab m t = do
-  nodes <- liftIO $ parseToNodes m t
+  nodes <- parseToNodes m t
+  pPrint $ nodes
   let feats = map nodeFeature nodes
-  return $ fmap makeMecabFeat feats
+  return $ zip (map nodeSurface nodes)
+    (fmap makeMecabFeat feats)
 
 makeMecabFeat :: Text -> Maybe MecabNodeFeatures
 makeMecabFeat n = case T.splitOn "," n of

@@ -4,7 +4,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module KanjiDB.JMDict
-  (getJMDictEntries)
+  (getJMDictEntries
+  , makeFurigana)
   where
 
 import Protolude hiding (to)
