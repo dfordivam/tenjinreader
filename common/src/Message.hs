@@ -235,7 +235,8 @@ data GetVocabDetails = GetVocabDetails [VocabId]
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest GetVocabDetails where
-  type ResponseT AppRequest GetVocabDetails = [Entry]
+  type ResponseT AppRequest GetVocabDetails =
+    [(Entry, Maybe SrsEntryId)]
 
 ----------------------------------------------------------------
 makeLenses ''ReviewItem

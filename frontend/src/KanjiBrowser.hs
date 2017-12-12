@@ -242,7 +242,7 @@ vocabListWindow req listEv = do
         el "tr" $ do
           el "td" $ text $ T.intercalate "," $ map unMeaning
             $ v ^. vocabMeanings
-          el "td" $ srsEntryWidget (Right $ v ^. vocabId) s
+          el "td" $ addEditSrsEntryWidget (Right $ v ^. vocabId) s
 
         el "tr" $ do
           el "td" $ textMay (tshow <$> (unRank <$> v ^. vocabFreqRank))
@@ -264,38 +264,6 @@ vocabListWindow req listEv = do
       -- NW 1.2
       ev <- el "td" $ button "Load More"
     return ()
-
--- Controls to add/edit related srs items
-srsEntryWidget :: AppMonad t m
-  => (Either KanjiId VocabId)
-  -> Maybe SrsEntryId
-  -> AppMonadT t m ()
-srsEntryWidget i s = do
-  let
-    widget s = case s of
-      (Just sId) -> do
-        ev <- button "Edit Srs Item"
-        return never
-
-      (Nothing) -> do
-        ev <- button "Add to Srs"
-        getWebSocketResponse $ QuickAddSrsItem i <$ ev
-  rec
-    sDyn <- holdDyn s resp
-    resp <- switchPromptly never
-      =<< (dyn $ widget <$> sDyn)
-
-  return ()
-
-displayVocabT :: DomBuilder t m => Vocab -> m ()
-displayVocabT (Vocab ks) = do
-  let
-    f (Kana k) = text k
-    f (KanjiWithReading (Kanji k) r)
-      = el "ruby" $ do
-          text k
-          el "rt" $ text r
-  mapM_ f ks
 
 textMay (Just v) = text v
 textMay Nothing = text ""

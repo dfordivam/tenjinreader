@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -12,8 +14,9 @@ import Message as X
 import Common as X
 import Radicals as X
 
-import Protolude as X hiding (link, (&), list, Alt)
-import Control.Lens as X ((.~), (^.), (?~), (^?), _1, _2, _Just, view, over, views, preview)
+import Protolude as X hiding (link, (&), list, Alt, to)
+import Control.Lens as X ((.~), (^.), (?~), (^?), _1, _2
+  , _Just, view, over, views, preview, (^..), to)
 import Control.Monad.Fix as X
 
 import Reflex.Dom as X
@@ -43,3 +46,35 @@ handleVisibility v dv mv = elDynAttr "div" (f <$> dv) mv
 
 tshow :: (Show a) => a -> Text
 tshow = (T.pack . show)
+
+-- Controls to add/edit related srs items
+addEditSrsEntryWidget :: AppMonad t m
+  => (Either KanjiId VocabId)
+  -> Maybe SrsEntryId
+  -> AppMonadT t m ()
+addEditSrsEntryWidget i s = do
+  let
+    widget s = case s of
+      (Just sId) -> do
+        ev <- button "Edit Srs Item"
+        return never
+
+      (Nothing) -> do
+        ev <- button "Add to Srs"
+        getWebSocketResponse $ QuickAddSrsItem i <$ ev
+  rec
+    sDyn <- holdDyn s resp
+    resp <- switchPromptly never
+      =<< (dyn $ widget <$> sDyn)
+
+  return ()
+
+displayVocabT :: DomBuilder t m => Vocab -> m ()
+displayVocabT (Vocab ks) = do
+  let
+    f (Kana k) = text k
+    f (KanjiWithReading (Kanji k) r)
+      = el "ruby" $ do
+          text k
+          el "rt" $ text r
+  mapM_ f ks

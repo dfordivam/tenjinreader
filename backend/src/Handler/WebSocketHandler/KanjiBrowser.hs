@@ -204,10 +204,10 @@ getAnnTextInt t = do
 
 
 getVocabDetails :: GetVocabDetails
-  -> WsHandlerM [Entry]
+  -> WsHandlerM [(Entry, Maybe SrsEntryId)]
 getVocabDetails (GetVocabDetails eIds) = do
   vocabDb <- lift $ asks appVocabDb
   let
     e = catMaybes $
         fmap ((flip Map.lookup) vocabDb) eIds
-  return $ e ^.. traverse . vocabEntry
+  return $ e ^.. traverse . vocabEntry . to (flip (,) Nothing)
