@@ -30,7 +30,8 @@ import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 getSrsStats :: GetSrsStats -> WsHandlerM SrsStats
 getSrsStats _ = do
   uId <- asks currentUserId
-  rs <- getAllPendingReviews
+  -- TODO Fix this
+  rs <- getAllPendingReviews ReviewTypeRecogReview
   allRs <- lift $ transactReadOnlySrsDB $ \db -> do
     rd <- Tree.lookupTree uId $ db ^. userReviews
     mapM Tree.toList (_reviews <$> rd)
@@ -51,13 +52,21 @@ getSrsStats _ = do
 -- ( _2 %%~ (here (\x -> print x))) (3, This 4)
 -- view (_2 . (to (here pure ))) (3, These 4 7)
 
-recogReviewState :: (Profunctor p, Contravariant f)
-  => Optic' p f SrsEntry (Maybe (SrsEntryState, SrsEntryStats))
-recogReviewState = to (\r -> (r ^? reviewState . _This)
-  <|> (r ^? reviewState . _These . _1))
+reviewStateL :: (Profunctor p, Contravariant f)
+  => ReviewType
+  -> Optic' p f SrsEntry (Maybe (SrsEntryState, SrsEntryStats))
+reviewStateL ReviewTypeRecogReview
+  = to (\r -> (r ^? reviewState . _This)
+    <|> (r ^? reviewState . _These . _1))
 
-getAllPendingReviews :: WsHandlerM [(SrsEntryId, SrsEntry)]
-getAllPendingReviews = do
+reviewStateL ReviewTypeProdReview
+  = to (\r -> (r ^? reviewState . _That)
+    <|> (r ^? reviewState . _These . _2))
+
+getAllPendingReviews
+  :: ReviewType
+  -> WsHandlerM [(SrsEntryId, SrsEntry)]
+getAllPendingReviews rt = do
   uId <- asks currentUserId
   today <- liftIO $ utctDay <$> getCurrentTime
 
@@ -66,8 +75,8 @@ getAllPendingReviews = do
     rs <- mapM Tree.toList (_reviews <$> rd)
     let
       f (k,r) = (k,r) <$
-        (r ^? recogReviewState . _Just . _1 . _NewReview)
-        <|> (g =<< r ^? recogReviewState . _Just .
+        (r ^? (reviewStateL rt) . _Just . _1 . _NewReview)
+        <|> (g =<< r ^? (reviewStateL rt) . _Just .
             _1 . _NextReviewDate)
         where g (d,_) = if d <= today
                 then Just (k,r)
@@ -178,7 +187,7 @@ getEditSrsItem (EditSrsItem sItm)= return ()
 getGetNextReviewItem :: GetNextReviewItems
   -> WsHandlerM [ReviewItem]
 getGetNextReviewItem (GetNextReviewItems rt alreadyPresent) = do
-  rs <- getAllPendingReviews
+  rs <- getAllPendingReviews rt
   return $ getReviewItem <$> (take 20 rs)
 
 getDoReview :: DoReview

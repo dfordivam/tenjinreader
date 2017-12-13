@@ -21,7 +21,7 @@ import Data.List.NonEmpty (NonEmpty)
 import System.Random
 
 data SrsWidgetView =
-  ShowStatsWindow | ShowReviewWindow | ShowBrowseSrsItemsWindow
+  ShowStatsWindow | ShowReviewWindow ReviewType | ShowBrowseSrsItemsWindow
   deriving (Eq)
 
 srsWidget
@@ -32,7 +32,7 @@ srsWidget = divClass "" $ do
 
   rec
     let
-      visEv = leftmost [ev1,ev2,ev3]
+      visEv = leftmost [ev1,ev2,ev3,ev4]
     vis <- holdDyn ShowStatsWindow visEv
 
     ev1 <- handleVisibility ShowStatsWindow vis $
@@ -41,8 +41,11 @@ srsWidget = divClass "" $ do
     ev2 <- handleVisibility ShowBrowseSrsItemsWindow vis $
       browseSrsItemsWidget
 
-    ev3 <- handleVisibility ShowReviewWindow vis $
+    ev3 <- handleVisibility (ShowReviewWindow ReviewTypeRecogReview) vis $
       reviewWidget (Proxy :: Proxy RecogReview)
+
+    ev4 <- handleVisibility (ShowReviewWindow ReviewTypeProdReview) vis $
+      reviewWidget (Proxy :: Proxy ProdReview)
   return ()
 
 showStats
@@ -58,7 +61,7 @@ showStatsWidget
   :: (MonadWidget t m)
   => SrsStats -> m (Event t SrsWidgetView)
 showStatsWidget s = do
-  startReviewEv <- divClass "" $ do
+  divClass "" $ do
     divClass "" $ do
       divClass "" $
         divClass "" $
@@ -68,8 +71,6 @@ showStatsWidget s = do
           divClass "" $
             text ""
 
-        divClass "" $
-          button "Start reviewing"
 
   --   statsCard "Reviews Today" (reviewsToday s)
   --   statsCard "Total Items" (totalItems s)
@@ -94,8 +95,11 @@ showStatsWidget s = do
   --       divClass "" $
   --         text "Set in Stone"
 
+  ev1 <- button "Recog Review"
+  ev2 <- button "Prod Review"
   browseEv <- button "Browse Srs Items"
-  return $ leftmost [ShowReviewWindow <$ startReviewEv
+  return $ leftmost [ShowReviewWindow ReviewTypeRecogReview <$ ev1
+                    , ShowReviewWindow ReviewTypeProdReview <$ ev2
                     , ShowBrowseSrsItemsWindow <$ browseEv]
 
 statsCard t val = divClass "" $ do
@@ -227,6 +231,8 @@ browseSrsItemsWidget = do
       return $ (,) i <$> updated (value c1)
 
   -- UI
+  closeEv <- divClass "" $
+    button "Close Widget"
   divClass "" $ do
     -- Filter Options
     (browseSrsFilterDyn, selectAllToggleCheckBox, filtOptsDyn, revTypeDyn) <-
@@ -251,8 +257,6 @@ browseSrsItemsWidget = do
         bulkEditWidgetActionButtons filtOptsDyn revTypeDyn $ join selList
     return ()
 
-  closeEv <- divClass "" $
-    button "Close Widget"
   return $ ShowStatsWindow <$ closeEv
 
 bulkEditWidgetActionButtons
