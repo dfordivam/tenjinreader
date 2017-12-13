@@ -161,18 +161,21 @@ syncResultWithServer rt addEv = do
   rec
     let
       sendResultEv = traceEvent "sendResEv" $
-        fmapMaybe sendResultEvFun (updated sendResultDyn)
+        fmapMaybeCheap sendResultEvFun $
+        tagDyn sendResultDyn $ leftmost [void addEv, void sendResResp]
 
-      sendResultEvFun (SendResults r) = Just (DoReview rt r)
+      sendResultEvFun (SendResults r) = DoReview rt <$> Nothing
       sendResultEvFun _ = Nothing
 
+    sendResResp <- getWebSocketResponse sendResultEv
+
+    sendResDelayedEv <- delay 0.5 sendResultEv
     sendResultDyn <- foldDyn (flip $ foldl (flip handlerSendResultEv)) ReadyToSend
-      $ mergeList [ SendingResult <$ sendResultEv
+      $ mergeList [
+        SendingResult <$ sendResDelayedEv
       , RespRecieved <$ sendResResp
       , AddResult <$> addEv
       , RetrySendResult <$ never ]
-
-    sendResResp <- getWebSocketResponse sendResultEv
   return ()
 
 handlerSendResultEv :: ResultSyncEvent -> ResultsSyncState -> ResultsSyncState
