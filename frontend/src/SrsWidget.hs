@@ -496,14 +496,14 @@ reviewWidget p = do
 getRevItemDyn :: _
   => Dynamic t (SrsWidgetState rt)
   -> Event t ()
-  -> m (Dynamic t (Maybe (ReviewItem, ReviewResult rt)))
+  -> m (Dynamic t (Maybe (ReviewItem, ActualReviewType rt)))
 getRevItemDyn widgetStateDyn ev = do
   return $ constDyn Nothing
 
 reviewWidgetView
   :: (AppMonad t m, SrsReviewType rt)
   => Dynamic t SrsReviewStats
-  -> Dynamic t (Maybe (ReviewItem, ReviewResult rt))
+  -> Dynamic t (Maybe (ReviewItem, ActualReviewType rt))
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
 reviewWidgetView statsDyn dyn2 = do
   let
@@ -576,7 +576,7 @@ showReviewItemField t = "review item here"
 
 inputFieldWidget
   :: _
-  => (ReviewItem, ReviewResult rt)
+  => (ReviewItem, ActualReviewType rt)
   -> m (Event t (ReviewStateEvent rt))
 inputFieldWidget (ri, rt) = do
   let
@@ -609,7 +609,7 @@ reviewInputFieldHandler
      Reflex t,
      SrsReviewType rt)
  => TextInput t
- -> ReviewResult rt
+ -> ActualReviewType rt
  -> ReviewItem
  -> m (Event t (ReviewStateEvent rt), Event t Text, Event t Text)
 reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do

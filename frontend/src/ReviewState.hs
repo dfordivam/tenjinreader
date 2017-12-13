@@ -26,19 +26,19 @@ data ProdReview = ProdReview ReviewStatus
 data RecogReview = RecogReview (These ReviewStatus ReviewStatus)
 
 class SrsReviewType rt where
-  data ReviewResult rt
+  data ActualReviewType rt
   reviewType :: proxy rt -> ReviewType
 
   initState :: ReviewItem -> rt
   -- Left True -> No Mistake
   -- Left False -> Did Mistake
   -- Right rt -> Not Complete
-  updateReviewState :: ReviewResult rt -> Bool -> rt -> Either Bool rt
-  getAnswer :: ReviewItem -> (ReviewResult rt) -> Either
+  updateReviewState :: ActualReviewType rt -> Bool -> rt -> Either Bool rt
+  getAnswer :: ReviewItem -> (ActualReviewType rt) -> Either
     (NonEmpty Meaning) (NonEmpty Reading)
 
 instance SrsReviewType ProdReview where
-  data ReviewResult ProdReview = ReadingProdReview
+  data ActualReviewType ProdReview = ReadingProdReview
   reviewType = const ReviewTypeProdReview
   initState _ = ProdReview NotAnswered
   updateReviewState _ True (ProdReview NotAnswered) = Left True
@@ -48,7 +48,7 @@ instance SrsReviewType ProdReview where
   getAnswer ri _ = Right $ ri ^. reviewItemReading . _1
 
 instance SrsReviewType RecogReview where
-  data ReviewResult RecogReview = ReadingRecogReview | MeaningRecogReview
+  data ActualReviewType RecogReview = ReadingRecogReview | MeaningRecogReview
   reviewType = const ReviewTypeRecogReview
   initState _ = RecogReview (These NotAnswered NotAnswered)
 
@@ -85,7 +85,7 @@ data SrsWidgetState rt = SrsWidgetState
 makeLenses ''SrsWidgetState
 
 data ReviewStateEvent rt
-  = DoReviewEv (SrsEntryId, ReviewResult rt, Bool)
+  = DoReviewEv (SrsEntryId, ActualReviewType rt, Bool)
   | AddItemsEv [ReviewItem]
   | UndoReview
 
