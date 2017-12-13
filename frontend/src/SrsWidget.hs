@@ -488,8 +488,6 @@ reviewWidget p = do
     syncResultWithServer rt addResEv
 
     refreshEv <- button "refresh"
-  -- toss <- liftIO $ randomIO
-  --   rt = if toss then RecogReadingReview else RecogMeaningReview
     (closeEv, reviewResultEv) <- elAttr "div" attr $ divClass "" $ do
       closeEv <- divClass "" $
         button "Close Review"
@@ -630,8 +628,19 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
         divClass "" $ do
           textInput tiAttr
 
-    showResult res = do
-      divClass "" $ text $ "Result: " <> res
+    showResult b = divClass "" $ do
+      let s = if b then "Correct: " else "Incorrect: "
+          ans = getAnswer ri rt
+      text $ s <> (fold $ case ans of
+        (Left m) -> NE.intersperse ", " $ fmap unMeaning m
+        (Right r) -> NE.intersperse ", " $ fmap unReading r)
+      divClass "" $ do
+        text "Notes:"
+        case ans of
+          (Left _) -> forMOf_ (reviewItemMeaning . _2 . _Just . to unMeaningNotes) ri
+            $ \mn -> text $ "> " <> mn
+          (Right _) -> forMOf_ (reviewItemReading . _2 . _Just . to unReadingNotes) ri
+            $ \mn -> text $ "> " <> mn
 
   rec
     inpField <- inputField inpTxtEv
@@ -650,7 +659,7 @@ reviewInputFieldHandler
  => TextInput t
  -> ActualReviewType rt
  -> ReviewItem
- -> m (Event t (ReviewStateEvent rt), Event t Text, Event t Text)
+ -> m (Event t (ReviewStateEvent rt), Event t Text, Event t Bool)
 reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
   let enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
       correct = checkAnswer n <$> value ti
@@ -660,8 +669,6 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
       h _ _ = NewReview
   dyn <- foldDyn h NewReview enterPress
   let
-    sendResult = ffilter (== NextReview) (tagDyn dyn enterPress)
-    dr = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
 
     hiragana = never
     -- case rt of
@@ -669,13 +676,12 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
     --   -- TODO Implement proper kana writing support
     -- Wanakana or make reflex IME
     --   RecogReadingReview -> toHiragana <$> (ti ^. textInput_input)
-    correctEv = tagDyn correct enterPress
+
   -- the dr event will fire after the correctEv (on second enter press)
-  let resEv b = (if b
-        then "Correct : "
-        else "Incorrect : ") <> ans
-      ans = show n
-  return (dr, hiragana, resEv <$> correctEv)
+    correctEv = tagDyn correct enterPress
+    sendResult = ffilter (== NextReview) (tagDyn dyn enterPress)
+    dr = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
+  return (dr, hiragana, correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
 checkAnswer :: (Either (NonEmpty Meaning) (NonEmpty Reading))
