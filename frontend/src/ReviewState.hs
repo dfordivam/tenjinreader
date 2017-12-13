@@ -6,7 +6,15 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE TemplateHaskell #-}
-module ReviewState where
+module ReviewState
+  (SrsReviewType(..)
+  , syncResultWithServer
+  , RecogReview
+  , ProdReview
+  , ReviewStateEvent(..)
+  , SrsWidgetState(..)
+  , widgetStateFun)
+  where
 
 import FrontendCommon
 import Control.Lens
