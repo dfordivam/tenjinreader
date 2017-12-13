@@ -90,29 +90,21 @@ getBrowseSrsItems (BrowseSrsItems rt brws) = do
   today <- liftIO $ utctDay <$> getCurrentTime
 
   let
-    selRT :: _ -> _
-    selRT l = case rt of
-      ReviewTypeRecogReview ->
-        these (preview (_1 . l)) (const Nothing)
-          (\a b -> preview (_1 . l) a)
-      ReviewTypeProdReview ->
-        these (const Nothing) (preview (_1 . l))
-          (\a b -> preview (_1 . l) b)
-
     filF (k,r) = (k,r) <$ case brws of
-      (BrowseDueItems l) -> g =<<
-        (r ^. reviewState . to (selRT _NextReviewDate))
+      (BrowseDueItems l) -> g =<< r ^? (reviewStateL rt)
+          . _Just . _1 . _NextReviewDate
         where g (d, interval) = if d <= today
                 then checkInterval l interval
                 else Nothing
 
-      (BrowseNewItems) -> r ^. reviewState . to (selRT _NewReview)
+      (BrowseNewItems) ->
+        (r ^? (reviewStateL rt) . _Just . _1 . _NewReview)
 
       (BrowseSuspItems l) -> checkInterval l =<<
-        (r ^. reviewState . to (selRT _Suspended))
+        (r ^? (reviewStateL rt) . _Just . _1 . _Suspended)
 
-      (BrowseOtherItems l) -> g =<<
-        (r ^. reviewState . to (selRT _NextReviewDate))
+      (BrowseOtherItems l) -> g =<< r ^? (reviewStateL rt)
+          . _Just . _1 . _NextReviewDate
         where g (d, interval) = if d > today
                 then checkInterval l interval
                 else Nothing
