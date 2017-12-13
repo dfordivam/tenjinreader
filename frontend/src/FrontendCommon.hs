@@ -15,8 +15,8 @@ import Common as X
 import Radicals as X
 
 import Protolude as X hiding (link, (&), list, Alt, to)
-import Control.Lens as X ((.~), (^.), (?~), (^?), _1, _2
-  , _Just, view, over, views, preview, (^..), to)
+import Control.Lens as X ((.~), (^.), (?~), (^?), (%~), _1, _2
+  , _Just, view, over, views, preview, (^..), to, mapped)
 import Control.Monad.Fix as X
 
 import Reflex.Dom as X

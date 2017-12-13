@@ -134,7 +134,7 @@ instance Default AdditionalFilter where
 data ReadingType = OnYomi | KunYomi | Nanori
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
-type SrsEntryField = NonEmpty (Either Text Vocab)
+type SrsEntryField = NonEmpty Text
 
 -- Used in Srs browse widget to show list of items
 data SrsItem = SrsItem

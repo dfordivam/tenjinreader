@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
--- {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE TemplateHaskell #-}
 module ReviewState where
 
@@ -36,6 +36,11 @@ class SrsReviewType rt where
   updateReviewState :: ActualReviewType rt -> Bool -> rt -> Either Bool rt
   getAnswer :: ReviewItem -> (ActualReviewType rt) -> Either
     (NonEmpty Meaning) (NonEmpty Reading)
+  getField :: ReviewItem -> (ActualReviewType rt) -> (NonEmpty Text)
+  getInputFieldStyle :: ActualReviewType rt -> Text
+
+  -- Get the pending item based on the review state
+  getRandomRT :: rt -> Bool -> ActualReviewType rt
 
 instance SrsReviewType ProdReview where
   data ActualReviewType ProdReview = ReadingProdReview
@@ -46,14 +51,33 @@ instance SrsReviewType ProdReview where
   updateReviewState _ False _ = Right (ProdReview AnsweredWrong)
   updateReviewState _ _ _ = error "updateReviewState: Invalid state"
   getAnswer ri _ = Right $ ri ^. reviewItemReading . _1
+  getField ri _ = fmap unMeaning . fst $ ri ^. reviewItemMeaning
+  getInputFieldStyle _ = "background-color: antiquewhite;"
+  getRandomRT _ _ = ReadingProdReview
 
 instance SrsReviewType RecogReview where
   data ActualReviewType RecogReview = ReadingRecogReview | MeaningRecogReview
   reviewType = const ReviewTypeRecogReview
   initState _ = RecogReview (These NotAnswered NotAnswered)
+  getField ri _ = ri ^. reviewItemField
 
   getAnswer ri ReadingRecogReview = Right $ ri ^. reviewItemReading . _1
   getAnswer ri MeaningRecogReview = Left $ ri ^. reviewItemMeaning . _1
+
+  getInputFieldStyle ReadingRecogReview = "background-color: palegreen;"
+  getInputFieldStyle MeaningRecogReview = "background-color: aliceblue;"
+
+  getRandomRT rs b = case rs of
+    (RecogReview (This _)) -> ReadingRecogReview
+    (RecogReview (That _)) -> MeaningRecogReview
+    (RecogReview (These s1 s2))
+      | f s1 && f s2 -> if b then ReadingRecogReview else MeaningRecogReview
+      | f s1 -> ReadingRecogReview
+      | f s2 -> MeaningRecogReview
+      | otherwise -> error "Both reviews done?"
+    where f NotAnswered = True
+          f AnsweredWrong = True
+          f _ = False
 
   updateReviewState rt b (RecogReview ths) = if bothDone
     then Left $ result
@@ -90,7 +114,8 @@ data ReviewStateEvent rt
   | UndoReview
 
 
-widgetStateFun :: (SrsReviewType rt) => SrsWidgetState rt -> ReviewStateEvent rt -> SrsWidgetState rt
+widgetStateFun :: (SrsReviewType rt)
+  => SrsWidgetState rt -> ReviewStateEvent rt -> SrsWidgetState rt
 widgetStateFun st (AddItemsEv ri) = st
   & reviewQueue %~ Map.union
      (Map.fromList $ map (\r@(ReviewItem i _ _ _) -> (i,(r, initState r))) ri)
@@ -109,19 +134,50 @@ widgetStateFun st (UndoReview) = st
 
 -- Result Synchronise with server
 -- TODO implement feature to re-send result if no response recieved
-data ResultsSyncState =
-  ReadyToSend
+data ResultsSyncState
+  = ReadyToSend
   | WaitingForResp [Result] [Result]
+  | SendResults [Result]
 
-sendResultEvFun (ReadyToSend) = Nothing
-sendResultEvFun (WaitingForResp r _) = Just (DoReview undefined r)
+data ResultSyncEvent
+  = AddResult Result
+  | SendingResult
+  | RespRecieved
+  | RetrySendResult
 
-handlerSendResultEv :: ResultsSyncState -> (These Result ()) -> ResultsSyncState
-handlerSendResultEv ReadyToSend (This r) = WaitingForResp [r] []
-handlerSendResultEv ReadyToSend (That _) = error "Got result resp, when not expecting"
-handlerSendResultEv ReadyToSend (These r _) = error "Got result resp, when not expecting"
-handlerSendResultEv (WaitingForResp r rs) (This rn) = WaitingForResp r (rs ++ [rn])
-handlerSendResultEv (WaitingForResp _ rs) (That _) = WaitingForResp rs []
-handlerSendResultEv (WaitingForResp _ []) (That _) = ReadyToSend
-handlerSendResultEv (WaitingForResp _ (rs)) (These rn _) = WaitingForResp (rs ++ [rn]) []
-handlerSendResultEv (WaitingForResp _ []) (These rn _) = WaitingForResp [rn] []
+syncResultWithServer :: AppMonad t m
+  => ReviewType
+  -> Event t Result
+  -> AppMonadT t m ()
+syncResultWithServer rt addEv = do
+  rec
+    let
+      sendResultEv = traceEvent "sendResEv" $
+        fmapMaybe sendResultEvFun (updated sendResultDyn)
+
+      sendResultEvFun (SendResults r) = Just (DoReview rt r)
+      sendResultEvFun _ = Nothing
+
+    sendResultDyn <- foldDyn (flip $ foldl (flip handlerSendResultEv)) ReadyToSend
+      $ mergeList [ SendingResult <$ sendResultEv
+      , RespRecieved <$ sendResResp
+      , AddResult <$> addEv
+      , RetrySendResult <$ never ]
+
+    sendResResp <- getWebSocketResponse sendResultEv
+  return ()
+
+handlerSendResultEv :: ResultSyncEvent -> ResultsSyncState -> ResultsSyncState
+handlerSendResultEv (AddResult r) ReadyToSend = SendResults [r]
+handlerSendResultEv (AddResult r) (WaitingForResp r' rs) = WaitingForResp r' (r : rs)
+handlerSendResultEv (AddResult r) (SendResults rs) = SendResults (r : rs)
+
+handlerSendResultEv (SendingResult) (SendResults rs) = WaitingForResp rs []
+handlerSendResultEv (SendingResult) _ = error "handlerSendResultEv"
+
+handlerSendResultEv (RespRecieved) (WaitingForResp _ []) = ReadyToSend
+handlerSendResultEv (RespRecieved) (WaitingForResp _ rs) = SendResults rs
+handlerSendResultEv (RespRecieved) _ = error "handlerSendResultEv"
+
+handlerSendResultEv (RetrySendResult) (WaitingForResp r rs) = SendResults (r ++ rs)
+handlerSendResultEv (RetrySendResult) s = s

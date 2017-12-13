@@ -15,8 +15,10 @@ import ReviewState
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import qualified Data.List.NonEmpty as NE
 import NLP.Romkan (toHiragana)
 import Data.List.NonEmpty (NonEmpty)
+import System.Random
 
 data SrsWidgetView =
   ShowStatsWindow | ShowReviewWindow | ShowBrowseSrsItemsWindow
@@ -465,27 +467,33 @@ reviewWidget p = do
       (SrsWidgetState Map.empty Nothing def)
       (mergeList [addItemEv, reviewResultEv])
 
-    let sendResultEv = fmapMaybe sendResultEvFun (updated sendResultDyn)
-        addResEv = fmapMaybe (_resultQueue) (updated widgetStateDyn)
+    let
         fetchMoreReviews = GetNextReviewItems rt <$> ffilter ((< 5) . length)
           ((Map.keys . _reviewQueue) <$> (updated widgetStateDyn))
 
+        newReviewEv = leftmost [() <$ reviewResultEv
+                               , () <$ refreshEv
+                               , () <$ initEv]
+
     dEv <- debounce 120 fetchMoreReviews
     fetchMoreReviewsResp <- getWebSocketResponse dEv
-    sendResultDyn <- foldDyn (flip handlerSendResultEv) ReadyToSend
-      (align addResEv (() <$ sendResResp))
-    sendResResp <- getWebSocketResponse sendResultEv
 
+    let
+        addResEv = traceEvent "addResEv" $ fmapMaybe (_resultQueue)
+          (updated widgetStateDyn)
+    syncResultWithServer rt addResEv
+
+    refreshEv <- button "refresh"
   -- toss <- liftIO $ randomIO
   --   rt = if toss then RecogReadingReview else RecogMeaningReview
     (closeEv, reviewResultEv) <- elAttr "div" attr $ divClass "" $ do
       closeEv <- divClass "" $
         button "Close Review"
 
-      -- Show refresh button if no review available
+
       reviewResultEv <- reviewWidgetView
         (_reviewStats <$> widgetStateDyn)
-        =<< getRevItemDyn widgetStateDyn never
+        =<< getRevItemDyn widgetStateDyn newReviewEv
 
       return (closeEv, reviewResultEv)
 
@@ -498,8 +506,35 @@ getRevItemDyn :: _
   -> Event t ()
   -> m (Dynamic t (Maybe (ReviewItem, ActualReviewType rt)))
 getRevItemDyn widgetStateDyn ev = do
-  return $ constDyn Nothing
+  v <- performEvent $ ffor (tagDyn widgetStateDyn ev) $ \st -> do
+    rss <- liftIO $ getRandomItems (Map.toList (_reviewQueue st)) 1
+    toss <- liftIO $ randomIO
+    return $ (\(_,(ri,rt)) -> (ri, getRandomRT rt toss)) <$> (headMay rss)
 
+  holdDyn Nothing v
+
+
+getRandomItems :: [a] -> Int -> IO [a]
+getRandomItems inp s = do
+  let l = length inp
+      idMap = Map.fromList $ zip [1..l] inp
+
+      loop set = do
+        r <- randomRIO (1,l)
+        let setN = Set.insert r set
+        if Set.size setN >= s
+          then return setN
+          else loop setN
+
+  set <- loop Set.empty
+  return $ catMaybes $
+    fmap (\k -> Map.lookup k idMap) $ Set.toList set
+
+-- Required inputs for working of review widget
+-- 1. Field (What to display to user as question)
+-- 2. Field Tags (?)
+-- 3. Answer
+-- 4. Additional notes (Shown after answering question)
 reviewWidgetView
   :: (AppMonad t m, SrsReviewType rt)
   => Dynamic t SrsReviewStats
@@ -531,7 +566,9 @@ reviewWidgetView statsDyn dyn2 = do
   elAttr "div" kanjiRowAttr $
     elAttr "span" kanjiTextAttr $ do
       let
-      dynText $ showReviewItemField <$> (preview (_Just . _1 . reviewItemField) <$> dyn2)
+        showNE (Just ne) = mapM_ text (NE.intersperse ", " ne)
+        showNE Nothing = text "No Reviews!"
+      dyn $ showNE <$> (dyn2 & mapped . mapped %~ (uncurry getField))
 
   dr <- dyn $ ffor dyn2 $ \case
     (Nothing) -> return never
@@ -572,18 +609,14 @@ reviewWidgetView statsDyn dyn2 = do
   return evReview
     --leftmost [evB, dr, drSpeech]
 
-showReviewItemField t = "review item here"
-
 inputFieldWidget
   :: _
   => (ReviewItem, ActualReviewType rt)
   -> m (Event t (ReviewStateEvent rt))
 inputFieldWidget (ri, rt) = do
   let
-    style = "text-align: center;" -- <> color
-    -- color = if rt == RecogMeaningReview
-    --   then "background-color: palegreen;"
-    --   else "background-color: aliceblue;"
+    style = "text-align: center;" <> color
+    color = getInputFieldStyle rt
     inputField ev = do
       let tiAttr = def
             & textInputConfig_setValue .~ ev
@@ -628,6 +661,7 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
     -- case rt of
     --   RecogMeaningReview -> never
     --   -- TODO Implement proper kana writing support
+    -- Wanakana or make reflex IME
     --   RecogReadingReview -> toHiragana <$> (ti ^. textInput_input)
     correctEv = tagDyn correct enterPress
   -- the dr event will fire after the correctEv (on second enter press)

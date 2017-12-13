@@ -51,13 +51,10 @@ getSrsStats _ = do
 -- ( _2 %%~ (here (\x -> print x))) (3, This 4)
 -- view (_2 . (to (here pure ))) (3, These 4 7)
 
-getRecogReviewState r =
-  case (r ^? reviewState . _This) of
-    (Just s) -> Just s
-    Nothing ->
-      case (r ^? reviewState . _These) of
-        (Just (s,_)) -> Just s
-        Nothing -> Nothing
+recogReviewState :: (Profunctor p, Contravariant f)
+  => Optic' p f SrsEntry (Maybe (SrsEntryState, SrsEntryStats))
+recogReviewState = to (\r -> (r ^? reviewState . _This)
+  <|> (r ^? reviewState . _These . _1))
 
 getAllPendingReviews :: WsHandlerM [(SrsEntryId, SrsEntry)]
 getAllPendingReviews = do
@@ -68,8 +65,10 @@ getAllPendingReviews = do
     rd <- Tree.lookupTree uId $ db ^. userReviews
     rs <- mapM Tree.toList (_reviews <$> rd)
     let
-      f (k,r) = g =<< (getRecogReviewState r) ^? _Just .
-          _1 . _NextReviewDate
+      f (k,r) = (k,r) <$
+        (r ^? recogReviewState . _Just . _1 . _NewReview)
+        <|> (g =<< r ^? recogReviewState . _Just .
+            _1 . _NextReviewDate)
         where g (d,_) = if d <= today
                 then Just (k,r)
                 else Nothing
@@ -236,21 +235,6 @@ getReviewItem (i,s) =
     r = (s ^. readings)
     rn = (s ^. readingNotes)
 
-getRandomItems :: [a] -> Int -> IO [a]
-getRandomItems inp s = do
-  let l = length inp
-      idMap = Map.fromList $ zip [1..l] inp
-
-      loop set = do
-        r <- randomRIO (1,l)
-        let setN = Set.insert r set
-        if Set.size setN >= s
-          then return setN
-          else loop setN
-
-  set <- loop Set.empty
-  return $ catMaybes $
-    fmap (\k -> Map.lookup k idMap) $ Set.toList set
 
 getNextReviewDate
   :: Day
@@ -370,7 +354,7 @@ makeSrsEntry v = do
             <*> k ^? _Just . kanjiDetails . kanjiKunyomi
           m = nonEmpty =<< k ^? _Just . kanjiDetails . kanjiMeanings
           f = k ^? _Just . kanjiDetails . kanjiCharacter . to unKanji
-            . to Left . to (:|[])
+            . to (:|[])
       return $ TRM <$> f <*> r <*> m
 
     (Right vId) -> do
@@ -381,7 +365,7 @@ makeSrsEntry v = do
           m = nonEmpty $ v ^.. _Just . vocabEntry . entrySenses
             . traverse . senseGlosses . traverse . glossDefinition . to (Meaning)
           f = v ^? _Just . vocabDetails . vocab
-            . to Right . to (:|[])
+            . to vocabToKana . to (:|[])
       return $ TRM <$> f <*> r <*> m
 
   let get (TRM f r m) = SrsEntry
