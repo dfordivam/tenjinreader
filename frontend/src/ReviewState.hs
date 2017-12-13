@@ -162,14 +162,14 @@ syncResultWithServer rt addEv = do
     let
       sendResultEv = traceEvent "sendResEv" $
         fmapMaybeCheap sendResultEvFun $
-        tagDyn sendResultDyn $ leftmost [void addEv, void sendResResp]
+        updated sendResultDyn
 
-      sendResultEvFun (SendResults r) = DoReview rt <$> Nothing
+      sendResultEvFun (SendResults r) = Just $ DoReview rt r
       sendResultEvFun _ = Nothing
 
     sendResResp <- getWebSocketResponse sendResultEv
 
-    sendResDelayedEv <- delay 0.5 sendResultEv
+    sendResDelayedEv <- delay 0.001 sendResultEv
     sendResultDyn <- foldDyn (flip $ foldl (flip handlerSendResultEv)) ReadyToSend
       $ mergeList [
         SendingResult <$ sendResDelayedEv
@@ -184,11 +184,11 @@ handlerSendResultEv (AddResult r) (WaitingForResp r' rs) = WaitingForResp r' (r 
 handlerSendResultEv (AddResult r) (SendResults rs) = SendResults (r : rs)
 
 handlerSendResultEv (SendingResult) (SendResults rs) = WaitingForResp rs []
-handlerSendResultEv (SendingResult) _ = error "handlerSendResultEv"
+handlerSendResultEv (SendingResult) _ = error "handlerSendResultEv 1"
 
 handlerSendResultEv (RespRecieved) (WaitingForResp _ []) = ReadyToSend
 handlerSendResultEv (RespRecieved) (WaitingForResp _ rs) = SendResults rs
-handlerSendResultEv (RespRecieved) _ = error "handlerSendResultEv"
+handlerSendResultEv (RespRecieved) _ = error "handlerSendResultEv 2"
 
 handlerSendResultEv (RetrySendResult) (WaitingForResp r rs) = SendResults (r ++ rs)
 handlerSendResultEv (RetrySendResult) s = s

@@ -613,7 +613,7 @@ inputFieldWidget
   :: _
   => (ReviewItem, ActualReviewType rt)
   -> m (Event t (ReviewStateEvent rt))
-inputFieldWidget (ri, rt) = do
+inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
   let
     style = "text-align: center;" <> color
     color = getInputFieldStyle rt
@@ -634,7 +634,9 @@ inputFieldWidget (ri, rt) = do
     (dr, inpTxtEv, resEv) <-
       reviewInputFieldHandler inpField rt ri
   widgetHold (return ()) (showResult <$> resEv)
-  return (dr)
+  drForced <- button "分かる"
+  return $ leftmost [DoReviewEv (i, rt, True) <$ drForced
+                    , dr]
 
 reviewInputFieldHandler
  :: (MonadFix m,

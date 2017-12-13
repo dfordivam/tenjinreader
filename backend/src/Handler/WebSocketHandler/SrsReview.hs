@@ -210,6 +210,8 @@ updateSrsEntry b today rt r = r
       ReviewTypeProdReview -> there
     modifyState (NextReviewDate d i) =
       getNextReviewDate today d i b
+    modifyState (NewReview) =
+      getNextReviewDate today today (SrsInterval 1) b
     modifyState s = s -- error
 
     modifyStats s = if b
