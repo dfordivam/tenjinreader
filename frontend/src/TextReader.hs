@@ -158,8 +158,8 @@ orderElements
   :: Entry
   -> [(Either KanjiElement ReadingElement)]
 orderElements e = sortBy (comparing f)
-  (e ^.. entryKanjiElements . traverse . to (Left)) ++
-  readingWithoutRes
+  ((e ^.. entryKanjiElements . traverse . to (Left)) ++
+  readingWithoutRes)
 
   where
     f (Left ke)

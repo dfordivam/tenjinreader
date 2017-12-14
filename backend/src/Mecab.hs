@@ -40,8 +40,9 @@ parseAndSearch es se m t = do
   let
     fun ("", _) = Nothing
     fun (surf, Nothing) = Just (Left surf)
-    fun (surf, Just feat) = Just $ (\v -> (v, eIds, True))
-      <$> getVocabFurigana (surf,reading)
+    fun (surf, Just feat) = Just $ Right $
+      (\v -> (v, eIds, True))
+      (getVocabFurigana (surf,reading))
       where
         term = (_mecabNodeFeat7 feat)
         reading = (_mecabNodeFeat8 feat)
@@ -60,10 +61,10 @@ isKanaOnly = (all f) . T.unpack
           -- isKana c || (elem c ['、', '〜', 'ー'])
 
 getVocabFurigana (surf, reading)
-  | isKanaOnly surf = Left surf
+  | isKanaOnly surf = Vocab [Kana surf]
   | otherwise = case makeFurigana (KanjiPhrase surf) (ReadingPhrase reading) of
-    (Left _) -> Left surf
-    (Right v) -> Right v
+    (Left _) -> Vocab [Kana surf]
+    (Right v) -> v
 
 parseMecab :: MeCab -> Text -> IO ([(Text, Maybe MecabNodeFeatures)])
 parseMecab m t = do
