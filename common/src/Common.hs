@@ -172,7 +172,7 @@ data ReviewType =
   | ReviewTypeProdReview
   deriving (Eq, Ord, Enum, Bounded, Generic, Show, ToJSON, FromJSON)
 
-type AnnotatedText = [(Either Text (Vocab, [VocabId], Bool))]
+type AnnotatedText = [[(Either Text (Vocab, [VocabId], Bool))]]
 
 -- APIs -- may be move from here
 

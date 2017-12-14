@@ -36,7 +36,7 @@ parseAndSearch :: Map EntryId VocabData
   -> Text
   -> IO AnnotatedText
 parseAndSearch es se m t = do
-  feats <- liftIO $ parseMecab m t
+  feats <- liftIO $ mapM (parseMecab m) (T.lines t)
   let
     fun ("", _) = Nothing
     fun (surf, Nothing) = Just (Left surf)
@@ -52,10 +52,16 @@ parseAndSearch es se m t = do
                     . entrySenses . traverse
                     . senseGlosses . traverse
                     . glossDefinition)
-  return $ catMaybes $ fmap fun feats
+  return $ map (catMaybes . (fmap fun)) feats
 
-getVocabFurigana (surf, reading) =
-  case makeFurigana (KanjiPhrase surf) (ReadingPhrase reading) of
+isKanaOnly :: T.Text -> Bool
+isKanaOnly = (all f) . T.unpack
+  where f = not . isKanji
+          -- isKana c || (elem c ['、', '〜', 'ー'])
+
+getVocabFurigana (surf, reading)
+  | isKanaOnly surf = Left surf
+  | otherwise = case makeFurigana (KanjiPhrase surf) (ReadingPhrase reading) of
     (Left _) -> Left surf
     (Right v) -> Right v
 
