@@ -348,6 +348,11 @@ makeSrsEntry
   -> Handler (Maybe SrsEntry)
 makeSrsEntry v = do
   today <- liftIO $ utctDay <$> getCurrentTime
+  let
+    vocabToText (Vocab ks) = mconcat $ map f ks
+      where f (KanjiWithReading (Kanji k) _) = k
+            f (Kana k) = k
+
   tmp <- case v of
     (Left kId) -> do
       kanjiDb <- asks appKanjiDb
@@ -368,7 +373,7 @@ makeSrsEntry v = do
           m = nonEmpty $ v ^.. _Just . vocabEntry . entrySenses
             . traverse . senseGlosses . traverse . glossDefinition . to (Meaning)
           f = v ^? _Just . vocabDetails . vocab
-            . to vocabToKana . to (:|[])
+            . to vocabToText . to (:|[])
       return $ TRM <$> f <*> r <*> m
 
   let get (TRM f r m) = SrsEntry

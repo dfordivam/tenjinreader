@@ -62,7 +62,7 @@ createDBs ::
   -> IO (KanjiDb, VocabDb, RadicalDb)
 createDBs mecab = do
   let kanjibin = "kanjidb.bin"
-      jmDictFilePath = "/home/divam/nobup/jmdict/JMdict"
+      jmDictFilePath = "/home/divam/nobup/jmdict/JMdict_e"
   ex <- doesFileExist kanjibin
   if ex
     then do

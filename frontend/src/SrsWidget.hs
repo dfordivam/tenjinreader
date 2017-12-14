@@ -209,7 +209,7 @@ browseSrsItemsWidget = do
         el "label" $ text "Select Items to do bulk edit"
         evs <- elAttr "div" (("class" =: "")
                              <> ("style" =: "height: 400px; overflow-y: scroll")) $
-          forM es $ checkBoxListEl selAllEv
+          el "table" $ el "tbody" $ forM es $ checkBoxListEl selAllEv
 
         let f (v, True) s = Set.insert v s
             f (v, False) s = Set.delete v s
@@ -219,15 +219,14 @@ browseSrsItemsWidget = do
 
     checkBoxListEl :: Event t Bool -> SrsItem
       -> AppMonadT t m (Event t (SrsEntryId, Bool))
-    checkBoxListEl selAllEv (SrsItem i t) = divClass "" $ do
-      let
-      c1 <- do
-        divClass "" $ do
-          text $ (tshow t)
-          ev <- button "edit"
-          openEditSrsItemWidget $ i <$ ev
-        divClass "" $
-          checkbox False $ def & setValue .~ selAllEv
+    checkBoxListEl selAllEv (SrsItem i t) = el "tr" $ do
+      c1 <- el "td" $
+        checkbox False $ def & setValue .~ selAllEv
+      el "td" $
+        text $ fold $ NE.intersperse ", " $ t
+      ev <- el "td" $
+        button "edit"
+      openEditSrsItemWidget $ i <$ ev
       return $ (,) i <$> updated (value c1)
 
   -- UI
