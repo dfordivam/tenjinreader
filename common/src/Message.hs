@@ -198,10 +198,11 @@ data GetSrsItem = GetSrsItem SrsEntryId
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest GetSrsItem where
-  type ResponseT AppRequest GetSrsItem = Maybe SrsItemFull
+  type ResponseT AppRequest GetSrsItem
+    = Maybe (SrsEntryId, SrsEntry)
 
 ----------------------------------------------------------------
-data EditSrsItem = EditSrsItem SrsItemFull
+data EditSrsItem = EditSrsItem SrsEntryId SrsEntry
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest EditSrsItem where

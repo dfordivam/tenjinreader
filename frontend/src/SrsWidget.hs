@@ -324,122 +324,161 @@ openEditSrsItemWidget ev = do
   srsItEv <- getWebSocketResponse $ GetSrsItem <$> ev
 
   let
-      modalWidget :: (AppMonad t m) => Maybe SrsItemFull -> AppMonadT t m ()
+      modalWidget :: (AppMonad t m)
+        => Maybe (SrsEntryId, SrsEntry)
+        -> AppMonadT t m ()
       modalWidget (Just s) = do
-        editWidget s
+        rec
+          d <- widgetHold (editWidget s)
+            ((return never) <$ switchPromptlyDyn d)
+        return ()
+
       modalWidget Nothing = do
         text $ "Some Error"
 
-
-      f (Left (Vocab ((Kana k):_))) = k
-      f (Right (Kanji k)) = k
-
-      editWidget :: AppMonad t m => SrsItemFull -> AppMonadT t m ()
-      editWidget s = do
+      editWidget :: AppMonad t m
+        => (SrsEntryId, SrsEntry)
+        -> AppMonadT t m (Event t ())
+      editWidget (sId, s) = do
         rec
-          (sNew, saveEv) <- editWidgetView s ev
-          ev <- getWebSocketResponse $ EditSrsItem <$> tagDyn sNew saveEv
-        return ()
-
-      editWidgetView
-        :: MonadWidget t m
-        => SrsItemFull
-        -> Event t ()
-        -> m (Dynamic t SrsItemFull, Event t ())
-      editWidgetView s savedEv = divClass "" $ do
-        elClass "h3" "" $ do
-          text $ "Edit " <> (f $ srsItemFullVocabOrKanji s)
-
-        reviewDateDyn <- divClass "" $ do
-          reviewDataPicker (srsReviewDate s)
-
-        (m,r) <- divClass "" $ do
-          meaningTxtInp <- divClass "" $ divClass "" $ do
-            divClass "" $ text "Meaning"
-            textInput $ def &
-              textInputConfig_initialValue .~ (srsMeanings s)
-
-          readingTxtInp <- divClass "" $ divClass "" $ do
-            divClass "" $ text "Reading"
-            textInput $ def &
-              textInputConfig_initialValue .~ (srsReadings s)
-
-          return (meaningTxtInp, readingTxtInp)
-
-        (mn,rn) <- divClass "" $ do
-          meaningNotesTxtInp <- divClass "" $ do
-            divClass "" $ text "Meaning Notes"
-            divClass "" $ divClass "" $ do
-              textArea $ def &
-                textAreaConfig_initialValue .~
-                  (maybe "" identity (srsMeaningNote s))
-
-          readingNotesTxtInp <- divClass "" $ do
-            divClass "" $ text "Reading Notes"
-            divClass "" $ divClass "" $ do
-              textArea $ def &
-                textAreaConfig_initialValue .~
-                  (maybe "" identity (srsReadingNote s))
-
-          return (meaningNotesTxtInp, readingNotesTxtInp)
-
-        tagsTxtInp <- divClass "" $ do
-          divClass "" $ divClass "" $ do
-            divClass "" $ text "Tags"
-            textInput $ def &
-              textInputConfig_initialValue .~
-                (maybe "" identity (srsTags s))
-
-        saveEv <- divClass "" $ do
-          let savedIcon = elClass "i" "" $ return ()
-          ev <- button "Save"
-          widgetHold (return ()) (savedIcon <$ savedEv)
-          return ev
-
-        let ret = SrsItemFull (srsItemFullId s) (srsItemFullVocabOrKanji s)
-                    <$> reviewDateDyn <*> (value m) <*> (value r)
-                    <*> pure (srsCurrentGrade s) <*> g mn <*> g rn
-                    <*> g tagsTxtInp
-            g v = gg <$> value v
-            gg t
-              | T.null t = Nothing
-              | otherwise = Just t
-
-        return (ret, saveEv)
-
-      reviewDataPicker :: (MonadWidget t m) =>
-        Maybe Day -> m (Dynamic t (Maybe Day))
-      reviewDataPicker inp = do
-        today <- liftIO $ utctDay <$> getCurrentTime
-
-        let
-          addDateW = do
-            button "Add Next Review Date"
-
-          selectDateW = do
-            divClass "" $ do
-              newDateDyn <- divClass "" $ datePicker defDate
-              removeDate <- divClass "" $
-                button "Remove Review Date"
-              return (removeDate, newDateDyn)
-
-          defDate = maybe today identity inp
-
-        rec
-          vDyn <- holdDyn (isJust inp) (leftmost [False <$ r, True <$ a])
-          a <- handleVisibility False vDyn addDateW
-          (r,d) <- handleVisibility True vDyn selectDateW
-        let
-            f :: Reflex t => (Dynamic t a) -> Bool -> Dynamic t (Maybe a)
-            f d True = Just <$> d
-            f _ _ = pure Nothing
-        return $ join $ f d <$> vDyn
+          (sNew, saveEv, closeEv) <- editWidgetView s ev
+          ev <- getWebSocketResponse $ EditSrsItem sId
+            <$> tagDyn sNew saveEv
+        return closeEv
 
   void $ widgetHold (return ()) (modalWidget <$> srsItEv)
 
+modalDiv m = do
+  divClass "modal-backdrop fade in" $ return ()
+  elAttr "div" attr $ divClass "modal-dialog"
+    $ divClass "modal-content" m
+  where attr = ("class" =: "modal")
+          <> ("style" =: "display: block;")
+
+editWidgetView
+  :: MonadWidget t m
+  => SrsEntry
+  -> Event t ()
+  -> m (Dynamic t SrsEntry
+       , Event t (), Event t ())
+editWidgetView s savedEv = modalDiv $ do
+  divClass "modal-header" $ el "h3" $ do
+    text $ "Edit " <> (s ^. field . to (NE.head))
+
+  let bodyAttr = ("class" =: "modal-body")
+          <> ("style" =: "height: 400px;\
+              \overflow-y: scroll")
+
+  ret <- elAttr "div" bodyAttr $ do
+
+    r <- divClass "" $
+      editNonEmptyList (s ^. readings) Reading
+        $ \r x -> text (unReading r) >> x
+
+    m <- divClass "" $
+      editNonEmptyList (s ^. meaning) Meaning
+        $ \m x -> el "p" $ do
+             text "> "
+             text (unMeaning m)
+             x
+
+    rn <- divClass "" $ do
+      text "Reading Notes"
+      divClass "" $
+        textArea $ def &
+          textAreaConfig_initialValue .~
+            (maybe "" unReadingNotes
+             $ s ^. readingNotes)
+
+    mn <- divClass "" $ do
+      text "Meaning Notes"
+      divClass "" $
+        textArea $ def &
+          textAreaConfig_initialValue .~
+            (maybe "" unMeaningNotes
+             $ s ^. meaningNotes)
+
+    let
+        g c v = gg c <$> value v
+        gg c t
+          | T.null t = Nothing
+          | otherwise = Just $ c t
+
+    return $ SrsEntry (_reviewState s)
+              <$> r <*> m
+              <*> (g ReadingNotes rn)
+              <*> (g MeaningNotes mn)
+              <*> pure (s ^. field)
+
+  divClass "modal-footer" $ do
+    let savedIcon = elClass "i" "" $ return ()
+    saveEv <- button "Save"
+    closeEv <- button "Close"
+    widgetHold (return ()) (savedIcon <$ savedEv)
+    return (ret, saveEv, closeEv)
+
+reviewDataPicker :: (MonadWidget t m) =>
+  Maybe Day -> m (Dynamic t (Maybe Day))
+reviewDataPicker inp = do
+  today <- liftIO $ utctDay <$> getCurrentTime
+
+  let
+    addDateW = do
+      button "Add Next Review Date"
+
+    selectDateW = do
+      divClass "" $ do
+        newDateDyn <- divClass "" $ datePicker defDate
+        removeDate <- divClass "" $
+          button "Remove Review Date"
+        return (removeDate, newDateDyn)
+
+    defDate = maybe today identity inp
+
+  rec
+    vDyn <- holdDyn (isJust inp) (leftmost [False <$ r, True <$ a])
+    a <- handleVisibility False vDyn addDateW
+    (r,d) <- handleVisibility True vDyn selectDateW
+  let
+      f :: Reflex t => (Dynamic t a) -> Bool -> Dynamic t (Maybe a)
+      f d True = Just <$> d
+      f _ _ = pure Nothing
+  return $ join $ f d <$> vDyn
+
+  -- <!-- Modal -->
+  -- <div class="modal fade" id="myModal" role="dialog">
+  --   <div class="modal-dialog">
+
+  --     <!-- Modal content-->
+  --     <div class="modal-content">
+  --       <div class="modal-header">
+  --         <button type="button" class="close" data-dismiss="modal">&times;</button>
+  --         <h3 class="">Edit 変</h3>
+  --       </div>
+  --       <div class="modal-body">
+  --         <div class="">へん<a>(X)
+  --   </a><input type="text"><button>Add</button>
+  --   </div>
+  --   <div class=""><p>&gt; strange<a>(X)</a></p>
+  --       <p>&gt; odd<a>(X)</a></p>
+  --       <input type="text"><button>Add</button></div>
+  --      <div class="">Reading Notes<div class=""><textarea></textarea></div></div><div class="">Meaning Notes<div class=""><textarea></textarea></div></div><div class=""></div>
+  -- --       </div>
+  --       <div class="modal-footer">
+  --       <button>Save</button>
+  --         <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+  --       </div>
+  --     </div>
+
+  --   </div>
+  -- </div>
+
 editNonEmptyList :: (_)
-  => NonEmpty Text -> m (Dynamic t (NonEmpty Text))
-editNonEmptyList ne = do
+  => NonEmpty v
+  -> (Text -> v)
+  -> (forall a . v -> m a -> m a)
+  -> m (Dynamic t (NonEmpty v))
+editNonEmptyList ne conT renderFun = do
   let
     rem = do
       -- (e,_) <- elClass' "span" "glyphicon glyphicon-remove" $ return ()
@@ -448,16 +487,13 @@ editNonEmptyList ne = do
 
     initMap = Map.fromList $ zip [1..] (NE.toList ne)
     showItem k t = do
-      text t
-      text " "
-      ev <- rem
-      text " "
+      ev <- renderFun t rem
       return (t, (k,Nothing) <$ ev)
 
   rec
     let
       remAddEv = Map.fromList . NE.toList <$> mergeList [addEv, remEv]
-      addEv = attachDyn newKeyDyn (tagDyn (Just <$> value ti) aEv)
+      addEv = attachDyn newKeyDyn (tagDyn (Just . conT <$> value ti) aEv)
       remEv1 = switchPromptlyDyn $
         (leftmost . (fmap snd) . Map.elems) <$> d
       remEv = fmapMaybe g (attachDyn d remEv1)
@@ -698,10 +734,10 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
   let enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
       correct = checkAnswer n <$> value ti
       n = getAnswer ri rt
-      h _ NewReview = ShowAnswer
+      h _ ReviewStart = ShowAnswer
       h _ ShowAnswer = NextReview
-      h _ _ = NewReview
-  dyn <- foldDyn h NewReview enterPress
+      h _ _ = ReviewStart
+  dyn <- foldDyn h ReviewStart enterPress
   let
 
     hiragana = never
@@ -726,5 +762,5 @@ checkAnswer (Left m) t = elem t answers
 checkAnswer (Right r) t = elem t answers
   where answers = map unReading r
 
-data AnswerBoxState = NewReview | ShowAnswer | NextReview
+data AnswerBoxState = ReviewStart | ShowAnswer | NextReview
   deriving (Eq)

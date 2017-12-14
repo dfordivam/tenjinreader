@@ -168,13 +168,22 @@ getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
   return Nothing
 
 getSrsItem :: GetSrsItem
-  -> WsHandlerM (Maybe SrsItemFull)
+  -> WsHandlerM (Maybe (SrsEntryId, SrsEntry))
 getSrsItem (GetSrsItem i) = do
-  return Nothing
+  uId <- asks currentUserId
+  s <- lift $ transactReadOnlySrsDB $ \db ->
+    Tree.lookupTree uId (db ^. userReviews)
+      >>= mapM (\rd ->
+        Tree.lookupTree i (rd ^. reviews))
+  return $ (,) i <$> join s
 
 getEditSrsItem :: EditSrsItem
   -> WsHandlerM ()
-getEditSrsItem (EditSrsItem sItm)= return ()
+getEditSrsItem (EditSrsItem sId sItm) = do
+  uId <- asks currentUserId
+  lift $ transactSrsDB_ $
+    userReviews %%~ updateTreeM uId
+      (reviews %%~ Tree.insertTree sId sItm)
 
 getGetNextReviewItem :: GetNextReviewItems
   -> WsHandlerM [ReviewItem]

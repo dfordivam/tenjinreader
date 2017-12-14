@@ -39,57 +39,18 @@ import Data.Time.Calendar (Day)
 
 instance Value Day
 instance Value a => Value (NonEmpty a)
-
-newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }
-  deriving (Generic, Show, Typeable, Binary, Value)
-
--- If the user suspends a card and then resume later
--- 1. It was due when suspended -> make immediately available for review
--- 2. not due -> no suspend?
-
-data SrsEntryState = NewReview |
-  Suspended SrsInterval | NextReviewDate Day SrsInterval
-  deriving (Generic, Show, Typeable, Binary, Value)
-
-makePrisms ''SrsEntryState
--- SRS algo
--- Correct Answer ->
---   (answer date - due date + last interval) * ease factor
--- Wrong Answer ->
---   last interval * ease factor
-
--- ease factor depends on SrsEntryStats
-
-data SrsEntryStats = SrsEntryStats
-  { _failureCount :: Int
-  , _successCount :: Int
-  } deriving (Generic, Show, Typeable, Binary, Value)
-
-makeLenses ''SrsEntryStats
-
 instance (Value a, Value b) => Value (Either a b)
 instance (Value a, Value b) => Value (These a b)
 
--- By Default do
--- Prod + Recog(M + R) for Vocab with kanji in reading (Can be decided on FE)
--- Prod + Recog(M) for Vocab with only kana reading
--- Recog - for Kanji review
---
--- The default field will be chosen
--- 1. From user entered text
--- 2. Vocab with maximum kanjis
-data SrsEntry = SrsEntry
-  {  _reviewState :: These (SrsEntryState, SrsEntryStats) (SrsEntryState, SrsEntryStats)
-  -- XXX Does this require grouping
-  -- readings also contain other/alternate readings
-   , _readings :: NonEmpty Reading
-   , _meaning :: NonEmpty Meaning
-   , _readingNotes :: Maybe ReadingNotes
-   , _meaningNotes :: Maybe MeaningNotes
-   , _field :: SrsEntryField
-  } deriving (Generic, Show, Typeable, Binary, Value)
 
-makeLenses ''SrsEntry
+instance Binary SrsEntryState
+instance Value SrsEntryState
+instance Binary SrsEntryStats
+instance Value SrsEntryStats
+instance Binary SrsEntry
+instance Value SrsEntry
+instance Binary SrsInterval
+instance Value SrsInterval
 
 instance Key SrsEntryId
 instance Key KanjiId

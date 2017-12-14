@@ -25,6 +25,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import DerivingInstances ()
 import qualified Data.Text as T
 import NLP.Japanese.Utils
+import Data.These
 
 instance Value Int
 instance Value a => Value (Maybe a)
@@ -144,19 +145,6 @@ data SrsItem = SrsItem
  }
   deriving (Generic, Show, ToJSON, FromJSON)
 
-data SrsItemFull = SrsItemFull
-  { srsItemFullId :: SrsEntryId
-  , srsItemFullVocabOrKanji :: Either Vocab Kanji
-  , srsReviewDate :: (Maybe Day)
-  , srsMeanings :: (Text)
-  , srsReadings :: (Text)
-  , srsCurrentGrade :: (Int)
-  , srsMeaningNote :: (Maybe Text)
-  , srsReadingNote :: (Maybe Text)
-  , srsTags :: (Maybe Text)
-  }
-  deriving (Generic, Show, ToJSON, FromJSON)
-
 data SrsReviewStats = SrsReviewStats
   { _srsReviewStats_pendingCount :: Int
   , _srsReviewStats_correctCount :: Int
@@ -173,6 +161,51 @@ data ReviewType =
   deriving (Eq, Ord, Enum, Bounded, Generic, Show, ToJSON, FromJSON)
 
 type AnnotatedText = [[(Either Text (Vocab, [VocabId], Bool))]]
+
+-- SrsEntry
+
+newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }
+  deriving (Generic, Show, Typeable, ToJSON, FromJSON)
+
+-- If the user suspends a card and then resume later
+-- 1. It was due when suspended -> make immediately available for review
+-- 2. not due -> no suspend?
+
+data SrsEntryState = NewReview |
+  Suspended SrsInterval | NextReviewDate Day SrsInterval
+  deriving (Generic, Show, Typeable, ToJSON, FromJSON)
+
+-- SRS algo
+-- Correct Answer ->
+--   (answer date - due date + last interval) * ease factor
+-- Wrong Answer ->
+--   last interval * ease factor
+
+-- ease factor depends on SrsEntryStats
+
+data SrsEntryStats = SrsEntryStats
+  { _failureCount :: Int
+  , _successCount :: Int
+  } deriving (Generic, Show, Typeable, ToJSON, FromJSON)
+
+-- By Default do
+-- Prod + Recog(M + R) for Vocab with kanji in reading (Can be decided on FE)
+-- Prod + Recog(M) for Vocab with only kana reading
+-- Recog - for Kanji review
+--
+-- The default field will be chosen
+-- 1. From user entered text
+-- 2. Vocab with maximum kanjis
+data SrsEntry = SrsEntry
+  {  _reviewState :: These (SrsEntryState, SrsEntryStats) (SrsEntryState, SrsEntryStats)
+  -- XXX Does this require grouping
+  -- readings also contain other/alternate readings
+   , _readings :: NonEmpty Reading
+   , _meaning :: NonEmpty Meaning
+   , _readingNotes :: Maybe ReadingNotes
+   , _meaningNotes :: Maybe MeaningNotes
+   , _field :: SrsEntryField
+  } deriving (Generic, Show, Typeable, ToJSON, FromJSON)
 
 -- APIs -- may be move from here
 
@@ -239,3 +272,7 @@ testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b)
 makeLenses ''SrsReviewStats
 makeLenses ''VocabDetails
 makeLenses ''KanjiDetails
+
+makePrisms ''SrsEntryState
+makeLenses ''SrsEntryStats
+makeLenses ''SrsEntry
