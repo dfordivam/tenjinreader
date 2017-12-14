@@ -437,6 +437,41 @@ openEditSrsItemWidget ev = do
 
   void $ widgetHold (return ()) (modalWidget <$> srsItEv)
 
+editNonEmptyList :: (_)
+  => NonEmpty Text -> m (Dynamic t (NonEmpty Text))
+editNonEmptyList ne = do
+  let
+    rem = do
+      -- (e,_) <- elClass' "span" "glyphicon glyphicon-remove" $ return ()
+      (e,_) <- el' "a" $ text "(X)"
+      return $ domEvent Click e
+
+    initMap = Map.fromList $ zip [1..] (NE.toList ne)
+    showItem k t = do
+      text t
+      text " "
+      ev <- rem
+      text " "
+      return (t, (k,Nothing) <$ ev)
+
+  rec
+    let
+      remAddEv = Map.fromList . NE.toList <$> mergeList [addEv, remEv]
+      addEv = attachDyn newKeyDyn (tagDyn (Just <$> value ti) aEv)
+      remEv1 = switchPromptlyDyn $
+        (leftmost . (fmap snd) . Map.elems) <$> d
+      remEv = fmapMaybe g (attachDyn d remEv1)
+      g (m,e) = if Map.size m > 1
+        then Just e
+        else Nothing
+      newKeyDyn = ((+ 1) . fst . Map.findMax) <$> d
+
+    d <- listHoldWithKey initMap remAddEv showItem
+    ti <- textInput def
+    aEv <- button "Add"
+
+  return $ (NE.fromList . (fmap fst) . Map.elems) <$> d
+
 reviewWidget
   :: forall t m rt proxy . (AppMonad t m, SrsReviewType rt)
   => proxy rt
