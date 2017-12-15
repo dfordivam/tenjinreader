@@ -50,9 +50,10 @@ tshow = (T.pack . show)
 -- Controls to add/edit related srs items
 addEditSrsEntryWidget :: AppMonad t m
   => (Either KanjiId VocabId)
+  -> Maybe Text -- Surface
   -> Maybe SrsEntryId
   -> AppMonadT t m ()
-addEditSrsEntryWidget i s = do
+addEditSrsEntryWidget i t s = do
   let
     widget s = case s of
       (Just sId) -> do
@@ -61,7 +62,7 @@ addEditSrsEntryWidget i s = do
 
       (Nothing) -> do
         ev <- button "Add to Srs"
-        getWebSocketResponse $ QuickAddSrsItem i <$ ev
+        getWebSocketResponse $ QuickAddSrsItem i t <$ ev
   rec
     sDyn <- holdDyn s resp
     resp <- switchPromptly never

@@ -260,7 +260,7 @@ vocabListWindow req listEv = do
         el "tr" $ do
           el "td" $ text $ T.intercalate "," $ map unMeaning
             $ v ^. vocabMeanings
-          el "td" $ addEditSrsEntryWidget (Right $ v ^. vocabId) s
+          el "td" $ addEditSrsEntryWidget (Right $ v ^. vocabId) Nothing s
 
         el "tr" $ do
           el "td" $ textMay (tshow <$> (unRank <$> v ^. vocabFreqRank))

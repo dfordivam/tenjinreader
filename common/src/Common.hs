@@ -94,6 +94,10 @@ vocabToKana (Vocab ks) = mconcat $ map getFur ks
     getFur (KanjiWithReading _ t) = t
     getFur (Kana t) = t
 
+vocabToText (Vocab ks) = mconcat $ map f ks
+  where f (KanjiWithReading (Kanji k) _) = k
+        f (Kana k) = k
+
 getVocabField:: Vocab -> Text
 getVocabField (Vocab ks) = mconcat $ map f ks
   where f (Kana t) = t

@@ -311,10 +311,10 @@ checkAnswerInt readings kanaAlts =
     kanas = mconcat $ map (map snd) kanaAlts
 
 getQuickAddSrsItem :: QuickAddSrsItem -> WsHandlerM (Maybe SrsEntryId)
-getQuickAddSrsItem (QuickAddSrsItem v) = do
+getQuickAddSrsItem (QuickAddSrsItem v t) = do
   uId <- asks currentUserId
 
-  srsItm <- lift $ makeSrsEntry v
+  srsItm <- lift $ makeSrsEntry v t
   let
     upFun :: _ => SrsEntry
       -> SrsReviewData -> m SrsReviewData
@@ -348,14 +348,11 @@ data TRM = TRM SrsEntryField (NonEmpty Reading) (NonEmpty Meaning)
 
 makeSrsEntry
   :: (Either KanjiId VocabId)
+  -> Maybe Text
   -> Handler (Maybe SrsEntry)
-makeSrsEntry v = do
+makeSrsEntry v surface = do
   today <- liftIO $ utctDay <$> getCurrentTime
   let
-    vocabToText (Vocab ks) = mconcat $ map f ks
-      where f (KanjiWithReading (Kanji k) _) = k
-            f (Kana k) = k
-
   tmp <- case v of
     (Left kId) -> do
       kanjiDb <- asks appKanjiDb
@@ -375,8 +372,16 @@ makeSrsEntry v = do
             . traverse . readingPhrase . to (Reading . unReadingPhrase)
           m = nonEmpty $ v ^.. _Just . vocabEntry . entrySenses
             . traverse . senseGlosses . traverse . glossDefinition . to (Meaning)
-          f = v ^? _Just . vocabDetails . vocab
-            . to vocabToText . to (:|[])
+          f = (:|[]) <$> (unKanjiPhrase <$> (matchingSurface ks =<< surface)
+                         <|> vocabField)
+
+          vocabField = v ^? _Just . vocabDetails . vocab
+            . to vocabToText
+
+          ks = v ^.. _Just . vocabEntry . entryKanjiElements
+            . traverse . kanjiPhrase
+
+
       return $ TRM <$> f <*> r <*> m
 
   let get (TRM f r m) = SrsEntry
@@ -389,6 +394,12 @@ makeSrsEntry v = do
         }
       state = (NewReview, SrsEntryStats 0 0)
   return (get <$> tmp)
+
+matchingSurface :: [KanjiPhrase] -> Text -> Maybe KanjiPhrase
+matchingSurface ks surf = fmap fst $ headMay $ reverse (sortF comPrefixes)
+  where
+    comPrefixes = map (\k -> (k, T.commonPrefixes surf (unKanjiPhrase k))) ks
+    sortF = sortBy (comparing (preview (_2 . _Just . _1 . to (T.length))))
 
 initSrsDb :: Handler ()
 initSrsDb = do

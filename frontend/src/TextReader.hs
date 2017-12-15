@@ -70,7 +70,7 @@ readingPane showAllFurigana annText = do
               let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
               visDyn <- holdDyn vis evVis
               (ek, eme, eml) <- vocabRuby (value rubySizeDD) visDyn v
-            return $ vId <$ ek
+            return $ (vId, vocabToText v) <$ ek
           onlyKana (Vocab ks) = (flip all) ks $ \case
             (Kana _) -> True
             _ -> False
@@ -85,23 +85,25 @@ readingPane showAllFurigana annText = do
       leftmost <$> mapM f (annTextPara)
 
   divClass "" $ do
+    let ev = leftmost vIdEv
     detailsEv <- getWebSocketResponse $ GetVocabDetails
-      <$> (leftmost vIdEv)
-    showVocabDetailsWidget detailsEv
+      <$> fmap fst ev
+    surfDyn <- holdDyn "" (fmap snd ev)
+    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
   return ()
 
 showVocabDetailsWidget :: (AppMonad t m)
-  => Event t [(Entry, Maybe SrsEntryId)]
+  => Event t (Text, [(Entry, Maybe SrsEntryId)])
   -> AppMonadT t m ()
 showVocabDetailsWidget detailsEv = do
   let
-    showEntry (e, sId) = do
+    showEntry surface (e, sId) = do
       divClass "" $ do
         elClass "span" "" $ do
           entryKanjiAndReading e
         elClass "span" "" $ do
           text $ "Entry other properties"
-        addEditSrsEntryWidget (Right $ e ^. entryUniqueId) sId
+        addEditSrsEntryWidget (Right $ e ^. entryUniqueId) (Just surface) sId
 
       divClass "" $ do
         let
@@ -123,8 +125,8 @@ showVocabDetailsWidget detailsEv = do
     wd :: AppMonad t m
       => Maybe _
       -> AppMonadT t m (Event t ())
-    wd (Just es) = wrapper
-      (mapM_ showEntry (orderEntries es))
+    wd (Just (s,es)) = wrapper
+      (mapM_ (showEntry s) (orderEntries (fst) es))
     wd Nothing = return never
 
   rec
@@ -155,10 +157,10 @@ restrictedKanjiPhrases e = Map.fromList $ concat $
 -- Entry with priority elements
 -- Entry normal
 -- Entry with Info elements
-orderEntries :: [(Entry,a)] -> [(Entry,a)]
-orderEntries es = sortBy (comparing f) es
+orderEntries :: (a -> Entry) -> [a] -> [a]
+orderEntries g es = sortBy (comparing (f . g)) es
   where
-    f (e,_)
+    f e
       | any (not . null) $
         (ke ^.. traverse . kanjiPriority) ++
         (re ^.. traverse . readingPriority)

@@ -118,6 +118,7 @@ instance WebSocketMessage AppRequest LoadMoreVocabSearchResult where
 
 ----------------------------------------------------------------
 data QuickAddSrsItem = QuickAddSrsItem (Either KanjiId VocabId)
+  (Maybe Text)
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest QuickAddSrsItem where
