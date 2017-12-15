@@ -212,8 +212,15 @@ getAnnTextInt t = do
 getVocabDetails :: GetVocabDetails
   -> WsHandlerM [(Entry, Maybe SrsEntryId)]
 getVocabDetails (GetVocabDetails eIds) = do
+  uId <- asks currentUserId
   vocabDb <- lift $ asks appVocabDb
-  let
-    e = catMaybes $
-        fmap ((flip Map.lookup) vocabDb) eIds
-  return $ e ^.. traverse . vocabEntry . to (flip (,) Nothing)
+  es <- lift $ transactReadOnlySrsDB $ \db -> do
+    rd <- Tree.lookupTree uId $ db ^. userReviews
+    let findAll vmap = do
+          mapM (findOne vmap) eIds
+        findOne vmap eId = do
+          srsId <- Tree.lookupTree eId vmap
+          let e = _vocabEntry <$> Map.lookup eId vocabDb
+          return $ (,) <$> e <*> (pure srsId)
+    mapM findAll (_vocabSrsMap <$> rd)
+  return $ maybe [] catMaybes es
