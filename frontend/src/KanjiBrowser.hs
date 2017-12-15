@@ -132,7 +132,11 @@ radicalMatrix evValid = do
   validRadicals <- holdDyn (Map.keysSet radicalTable) (Set.fromList <$> evDelayed)
 
   rec
+    -- disableAll <- holdDyn False $ leftmost
+    --   [True <$ (leftmost ev)
+    --   , False <$ updated validRadicals]
     let
+      disableAll = constDyn False
       renderMatrix = do
         divClass "row" $ mapM showRadical (Map.toList radicalTable)
 
@@ -155,9 +159,11 @@ radicalMatrix evValid = do
 
         (e,_) <- elDynAttr' "button" attr $
           elAttr "span" spanAttr $ text r
-        let ev = attachDynWithMaybe f valid
+        let ev = attachDynWithMaybe f
+                   (zipDyn valid disableAll)
                    (domEvent Click e)
-            f True _ = Just ()
+            f (_,True) _ = Nothing
+            f (True,_) _ = Just ()
             f _ _ = Nothing
         return (i <$ ev)
 
@@ -167,7 +173,6 @@ radicalMatrix evValid = do
       h :: RadicalId -> Set RadicalId -> Set RadicalId
       h i s = if Set.member i s then Set.delete i s else Set.insert i s
     selectedRadicals <- foldDyn h Set.empty (leftmost ev)
-
   return $ Set.toList <$> selectedRadicals
 
 
