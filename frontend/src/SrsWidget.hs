@@ -368,30 +368,58 @@ editWidgetView s savedEv = modalDiv $ do
   let bodyAttr = ("class" =: "modal-body")
           <> ("style" =: "height: 400px;\
               \overflow-y: scroll")
+      formAttr = ("class" =: "form-horizontal")
+        <> ("onsubmit" =: "return false;")
+      bodyForm m = elAttr "div" bodyAttr $
+        elAttr "form" formAttr m
 
-  ret <- elAttr "div" bodyAttr $ do
+  ret <- bodyForm $ do
 
-    r <- divClass "" $
+    f <- divClass "form-group" $ do
+      elClass "label" "control-label col-sm-1" $
+        text "Field:"
+      editNonEmptyList (s ^. field) identity
+        $ \t x -> do
+             text t
+             e <- x
+             text ", "
+             return e
+
+    r <- divClass "form-group" $ do
+      elClass "label" "control-label col-sm-2" $
+        text "Reading:"
       editNonEmptyList (s ^. readings) Reading
-        $ \r x -> text (unReading r) >> x
+        $ \t x -> do
+             text $ unReading t
+             e <- x
+             text ", "
+             return e
 
-    m <- divClass "" $
+    -- m <- elAttr "div" (("class" =: "form-group")
+    --       <> ("style" =: "height: 100px;\
+    --           \overflow-y: scroll")) $ do
+    m <- divClass "form-group" $ do
+      elClass "label" "control-label col-sm-2" $
+        text "Meanings:"
       editNonEmptyList (s ^. meaning) Meaning
-        $ \m x -> el "p" $ do
-             text "> "
-             text (unMeaning m)
-             x
+        $ \t x -> do
+             text $ unMeaning t
+             e <- x
+             text ", "
+             return e
 
-    rn <- divClass "" $ do
-      text "Reading Notes"
+    rn <- divClass "form-group" $ do
+      elClass "label" "control-label col-sm-2" $
+        text "Reading Notes:"
       divClass "" $
         textArea $ def &
           textAreaConfig_initialValue .~
             (maybe "" unReadingNotes
              $ s ^. readingNotes)
 
-    mn <- divClass "" $ do
-      text "Meaning Notes"
+    mn <- divClass "form-group" $ do
+      elClass "label" "control-label col-sm-2" $
+        text "Meaning Notes:"
       divClass "" $
         textArea $ def &
           textAreaConfig_initialValue .~
@@ -408,7 +436,7 @@ editWidgetView s savedEv = modalDiv $ do
               <$> r <*> m
               <*> (g ReadingNotes rn)
               <*> (g MeaningNotes mn)
-              <*> pure (s ^. field)
+              <*> f
 
   divClass "modal-footer" $ do
     let savedIcon = elClass "i" "" $ return ()
@@ -493,7 +521,7 @@ editNonEmptyList ne conT renderFun = do
   rec
     let
       remAddEv = Map.fromList . NE.toList <$> mergeList [addEv, remEv]
-      addEv = attachDyn newKeyDyn (tagDyn (Just . conT <$> value ti) aEv)
+      addEv = attachDyn newKeyDyn (tagDyn (Just . conT <$> value ti) enterPress)
       remEv1 = switchPromptlyDyn $
         (leftmost . (fmap snd) . Map.elems) <$> d
       remEv = fmapMaybe g (attachDyn d remEv1)
@@ -502,9 +530,15 @@ editNonEmptyList ne conT renderFun = do
         else Nothing
       newKeyDyn = ((+ 1) . fst . Map.findMax) <$> d
 
-    d <- listHoldWithKey initMap remAddEv showItem
-    ti <- textInput def
-    aEv <- button "Add"
+      enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
+      tiAttr = constDyn $ ("style" =: "width: 100%;")
+
+    ti <- divClass "col-sm-2" $ textInput $ def
+      & textInputConfig_attributes .~ tiAttr
+      & textInputConfig_setValue .~ ("" <$ enterPress)
+    d <- divClass "col-sm-6" $
+      elClass "p" "form-control-static" $
+        listHoldWithKey initMap remAddEv showItem
 
   return $ (NE.fromList . (fmap fst) . Map.elems) <$> d
 
