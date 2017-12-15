@@ -12,9 +12,10 @@ module Common
   , module Data.JMDict.AST)
   where
 
-import Protolude
+import Protolude hiding (to)
 -- import GHC.Generics
 import Control.Lens.TH
+import Control.Lens hiding (reviews)
 import Data.Aeson hiding (Value)
 import Data.Default
 import Data.Binary
@@ -276,3 +277,15 @@ makeLenses ''KanjiDetails
 makePrisms ''SrsEntryState
 makeLenses ''SrsEntryStats
 makeLenses ''SrsEntry
+
+
+reviewStateL :: (Profunctor p, Contravariant f)
+  => ReviewType
+  -> Optic' p f SrsEntry (Maybe (SrsEntryState, SrsEntryStats))
+reviewStateL ReviewTypeRecogReview
+  = to (\r -> (r ^? reviewState . _This)
+    <|> (r ^? reviewState . _These . _1))
+
+reviewStateL ReviewTypeProdReview
+  = to (\r -> (r ^? reviewState . _That)
+    <|> (r ^? reviewState . _These . _2))

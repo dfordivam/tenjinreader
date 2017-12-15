@@ -258,6 +258,12 @@ browseSrsItemsWidget = do
 
   return $ ShowStatsWindow <$ closeEv
 
+buttonWithDisable t active = do
+  let attr True = ("type" =: "button") <> ("class" =: "btn btn-primary active")
+      attr False = ("type" =: "button") <> ("class" =: "btn btn-primary disabled")
+  (e, _) <- elDynAttr' "button" (attr <$> active) $ text t
+  return $ domEvent Click e
+
 bulkEditWidgetActionButtons
   :: AppMonad t m
   => Dynamic t BrowseSrsItemsOptions
@@ -267,12 +273,9 @@ bulkEditWidgetActionButtons
 bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "" $ do
   today <- liftIO $ utctDay <$> getCurrentTime
 
-  let btn t active = do
-        let attr True = ("type" =: "button") <> ("class" =: "btn btn-primary active")
-            attr False = ("type" =: "button") <> ("class" =: "btn btn-primary disabled")
-        (e, _) <- elDynAttr' "button" (attr <$> active) $ text t
-        return $ domEvent Click e
+  let
       felem = flip elem
+      btn = buttonWithDisable
 
   el "table" $ el "tbody" $ do
     suspendEv <-

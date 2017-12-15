@@ -19,7 +19,7 @@ import Data.Time.Calendar
 import Text.Pretty.Simple
 import System.Random
 import Data.Aeson
-
+import Data.Foldable (foldrM)
 import qualified Data.BTree.Impure as Tree
 import Control.Monad.Haskey
 import Data.BTree.Alloc (AllocM, AllocReaderM)
@@ -51,17 +51,6 @@ getSrsStats _ = do
 
 -- ( _2 %%~ (here (\x -> print x))) (3, This 4)
 -- view (_2 . (to (here pure ))) (3, These 4 7)
-
-reviewStateL :: (Profunctor p, Contravariant f)
-  => ReviewType
-  -> Optic' p f SrsEntry (Maybe (SrsEntryState, SrsEntryStats))
-reviewStateL ReviewTypeRecogReview
-  = to (\r -> (r ^? reviewState . _This)
-    <|> (r ^? reviewState . _These . _1))
-
-reviewStateL ReviewTypeProdReview
-  = to (\r -> (r ^? reviewState . _That)
-    <|> (r ^? reviewState . _These . _2))
 
 getAllPendingReviews
   :: ReviewType
@@ -128,7 +117,12 @@ getBulkEditSrsItems :: BulkEditSrsItems
   -> WsHandlerM (Maybe ())
 getBulkEditSrsItems
   (BulkEditSrsItems _ ss DeleteSrsItems) = do
-  return Nothing
+  uId <- asks currentUserId
+  lift $ transactSrsDB_ $
+    userReviews %%~ updateTreeM uId
+      (reviews %%~ (\rt -> foldrM Tree.deleteTree rt ss))
+
+  return $ Just ()
 
 getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
   today <- liftIO $ utctDay <$> getCurrentTime
@@ -165,7 +159,7 @@ getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
     userReviews %%~ updateTreeM uId
       (reviews %%~ (\rt -> foldlM doUp rt ss))
 
-  return Nothing
+  return $ Just ()
 
 getSrsItem :: GetSrsItem
   -> WsHandlerM (Maybe (SrsEntryId, SrsEntry))
