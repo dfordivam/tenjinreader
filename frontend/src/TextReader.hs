@@ -84,15 +84,18 @@ readingPane showAllFurigana annText = do
 
       leftmost <$> mapM f (annTextPara)
 
-  el "div" $ do
+  divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
       <$> (leftmost vIdEv)
     showVocabDetailsWidget detailsEv
   return ()
 
+showVocabDetailsWidget :: (AppMonad t m)
+  => Event t [(Entry, Maybe SrsEntryId)]
+  -> AppMonadT t m ()
 showVocabDetailsWidget detailsEv = do
   let
-    showEntry (e, sId) = divClass "" $ do
+    showEntry (e, sId) = do
       divClass "" $ do
         elClass "span" "" $ do
           entryKanjiAndReading e
@@ -105,8 +108,32 @@ showVocabDetailsWidget detailsEv = do
           showGloss m = divClass "" $ text $ "-> " <> m
         mapM showGloss $ take 5 $
           e ^.. entrySenses . traverse . senseGlosses . traverse . glossDefinition
-  widgetHold (return ())
-    ((mapM_ showEntry) <$> (orderEntries <$> detailsEv))
+
+
+    wrapper :: (_) => m a -> m (Event t ())
+    wrapper m = divClass "nav navbar-fixed-bottom" $
+      divClass "container-fluid" $
+        elAttr "div" (("class" =: "panel panel-default")
+          <> ("style" =: "max-height: 200px;\
+                         \overflow-y: auto;")) $ do
+          (e,_) <- elClass' "button" "close" $ text "Close"
+          m
+          return $ domEvent Click e
+
+    wd :: AppMonad t m
+      => Maybe _
+      -> AppMonadT t m (Event t ())
+    wd (Just es) = wrapper
+      (mapM_ showEntry (orderEntries es))
+    wd Nothing = return never
+
+  rec
+    let ev = leftmost [Just <$> detailsEv
+             , Nothing <$ (switchPromptlyDyn closeEv)]
+    closeEv <- widgetHold (return never)
+      (wd <$> ev)
+
+  return ()
 
 entryKanjiAndReading :: (_) => Entry -> m ()
 entryKanjiAndReading e = do
