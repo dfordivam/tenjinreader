@@ -23,8 +23,12 @@ import Mecab
 
 searchResultCount = 20
 
-mostUsedKanjis kanjiDb = take 20 $ map _kanjiId $ sortWith _kanjiMostUsedRank
-  $ map _kanjiDetails $ Map.elems kanjiDb
+mostUsedKanjis kanjiDb = take 1000 $ map _kanjiId
+  $ sortBy (comparing f) $ map _kanjiDetails
+  $ Map.elems kanjiDb
+  where f k = case (_kanjiMostUsedRank k) of
+          (Just r) -> r
+          Nothing -> Rank $ 1000000
 
 -- Pagination,
 getKanjiFilterResult :: KanjiFilter -> WsHandlerM KanjiFilterResult
@@ -44,6 +48,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
   -- 2. Reading filter
   -- 3. Radicals
   let
+    kanjiFullSet = Map.keysSet kanjiDb
     fun :: [KanjiId]
     fun
       | (T.null inpTxt) && (T.null filtTxt)
@@ -52,7 +57,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
 
       | (T.null inpTxt) && (T.null filtTxt) =
         Set.toList
-          $ foldl Set.intersection Set.empty
+          $ foldl Set.intersection kanjiFullSet
           $ catMaybes $ map (flip Map.lookup radicalDb) rads
 
       | (T.null inpTxt) && (null rads) =
@@ -69,7 +74,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
       | (T.null filtTxt) = do
         Set.toList $ Set.intersection
           (Set.fromList $ query kanjiSearchEng uniqKanji)
-          (foldl Set.intersection Set.empty
+          (foldl Set.intersection kanjiFullSet
             $ catMaybes $ map (flip Map.lookup radicalDb) rads)
 
       | otherwise = do
@@ -83,6 +88,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
   let
       kanjisFilteredIds = fun
 
+  liftIO $ pPrint (length kanjisFilteredIds)
   asks kanjiSearchResult >>= \ref ->
     liftIO $ writeIORef ref (kanjisFilteredIds, searchResultCount)
 
@@ -91,8 +97,8 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
 
     kanjisFiltered = catMaybes $
         (flip Map.lookup) kanjiDb <$> kanjisFilteredIds
-    validRadicals = Set.toList $ foldl Set.intersection
-      (Map.keysSet radicalDb) (map _kanjiRadicalSet kanjisFiltered)
+    validRadicals = Set.toList $ Set.unions
+      (map _kanjiRadicalSet kanjisFiltered)
 
   return $ KanjiFilterResult kanjiList validRadicals
 

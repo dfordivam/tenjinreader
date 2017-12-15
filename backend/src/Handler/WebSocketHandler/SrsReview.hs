@@ -27,30 +27,30 @@ import Database.Persist.Sql
 import Data.These
 import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 
-getSrsStats :: GetSrsStats -> WsHandlerM SrsStats
-getSrsStats _ = do
+getSrsStats :: GetSrsStats
+  -> WsHandlerM (SrsStats,SrsStats)
+getSrsStats _ =
+  (,) <$> getReviewStats ReviewTypeRecogReview
+    <*> getReviewStats ReviewTypeProdReview
+
+getReviewStats rt = do
   uId <- asks currentUserId
-  -- TODO Fix this
-  rs <- getAllPendingReviews ReviewTypeRecogReview
+  pend <- getAllPendingReviews rt
+
   allRs <- lift $ transactReadOnlySrsDB $ \db -> do
     rd <- Tree.lookupTree uId $ db ^. userReviews
     mapM Tree.toList (_reviews <$> rd)
-  -- { reviewsToday :: Int
-  -- , totalItems :: Int
-  -- , totalReviews :: Int
-  -- , averageSuccess :: Int
-  let total = maybe 0 length allRs
-      succ = sumOf (folded . _2 . reviewState . (to mergeSucF)) <$> allRs
-      fail = sumOf (folded . _2 . reviewState . (to mergeFailF)) <$> allRs
-      mergeSucF = mergeTheseWith getSucF getSucF (+)
-      getSucF = (view (_2 . successCount))
-      mergeFailF = mergeTheseWith getFailF getFailF (+)
-      getFailF = (view (_2 . failureCount))
-      totalR = maybe 0 id $ (+) <$> succ <*> fail
-  return $ SrsStats (length rs) total totalR 0
 
--- ( _2 %%~ (here (\x -> print x))) (3, This 4)
--- view (_2 . (to (here pure ))) (3, These 4 7)
+  let total = maybe 0 length allRs
+
+      succ = sumOf (folded . _2 . reviewStateL rt . _Just . _2 . successCount) <$> allRs
+      fail = sumOf (folded . _2 . reviewStateL rt . _Just . _2 . failureCount) <$> allRs
+      totalR = maybe 0 id $ (+) <$> succ <*> fail
+
+      s = maybe 0 id succ
+      avgSucc = floor $ ((fromIntegral s) * 100) /
+                  (fromIntegral totalR)
+  return $ SrsStats (length pend) total totalR avgSucc
 
 getAllPendingReviews
   :: ReviewType

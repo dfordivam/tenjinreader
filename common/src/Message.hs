@@ -129,7 +129,8 @@ data GetSrsStats = GetSrsStats ()
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest GetSrsStats where
-  type ResponseT AppRequest GetSrsStats = SrsStats
+  type ResponseT AppRequest GetSrsStats =
+    (SrsStats, SrsStats)
 
 data SrsStats = SrsStats
   { reviewsToday :: Int

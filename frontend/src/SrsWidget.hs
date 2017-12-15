@@ -59,48 +59,32 @@ showStats = do
 
 showStatsWidget
   :: (MonadWidget t m)
-  => SrsStats -> m (Event t SrsWidgetView)
-showStatsWidget s = do
-  divClass "" $ do
-    divClass "" $ do
-      divClass "" $
-        divClass "" $
-          text $ tshow s
-      divClass "" $ do
-        divClass "" $
-          divClass "" $
-            text ""
+  => (SrsStats, SrsStats) -> m (Event t SrsWidgetView)
+showStatsWidget (recog, prod) = do
+  let
+    w lbl rs = divClass "panel panel-default" $ do
+      ev <- divClass "panel-heading" $ divClass "row" $ do
+        divClass "col-sm-2" $ text lbl
+        divClass "col-sm-4" $
+          button "Start Review"
 
+      divClass "panel-body" $ divClass "row" $ do
+        divClass "col-sm-1" $ text "Pending:"
+        divClass "col-sm-2" $ text $ tshow (reviewsToday rs)
+        divClass "col-sm-1" $ text "Total Reviews:"
+        divClass "col-sm-2" $ text $ tshow (totalReviews rs)
+        divClass "col-sm-1" $ text "Average Success"
+        divClass "col-sm-2" $ text $ tshow (averageSuccess rs) <> "%"
 
-  --   statsCard "Reviews Today" (reviewsToday s)
-  --   statsCard "Total Items" (totalItems s)
-  --   statsCard "Total Reviews" (totalReviews s)
-  --   statsCard "Average Success" (averageSuccess s)
-  --   return ev
+      return ev
 
-  -- divClass "" $ do
-  --   progressStatsCard "Discovering" "D1" "D2"
-  --     (discoveringCount s)
-  --   progressStatsCard "Committing" "C1" "C2"
-  --     (committingCount s)
-  --   progressStatsCard "Bolstering" "B1" "B2"
-  --     (bolsteringCount s)
-  --   progressStatsCard "Assimilating" "A1" "A2"
-  --     (assimilatingCount s)
-  --   divClass "" $ do
-  --     divClass "" $
-  --       divClass "" $
-  --         text $ tshow (setInStone s)
-  --     divClass "" $
-  --       divClass "" $
-  --         text "Set in Stone"
-
-  ev1 <- button "Recog Review"
-  ev2 <- button "Prod Review"
+  ev1 <- w "Recognition Review" recog
+  ev2 <- w "Production Review" prod
   browseEv <- button "Browse Srs Items"
-  return $ leftmost [ShowReviewWindow ReviewTypeRecogReview <$ ev1
-                    , ShowReviewWindow ReviewTypeProdReview <$ ev2
-                    , ShowBrowseSrsItemsWindow <$ browseEv]
+  return $ leftmost
+    [ShowReviewWindow ReviewTypeRecogReview <$ ev1
+    , ShowReviewWindow ReviewTypeProdReview <$ ev2
+    , ShowBrowseSrsItemsWindow <$ browseEv]
 
 statsCard t val = divClass "" $ do
   divClass "" $

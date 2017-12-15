@@ -71,8 +71,12 @@ kanjiBrowseWidget = divClass "row" $ do
       return filterEv
 
     -- NW 1.2
+
+    let listAttr = ("class" =: "col-sm-4")
+          <> ("style" =: "height: 1000px;\
+                         \overflow-y: auto;")
     kanjiSelectionEv <-
-      divClass "col-sm-4" $ do
+      elAttr "div" listAttr $ do
         kanjiListWidget kanjiListEv
 
   return ()
@@ -140,14 +144,17 @@ radicalMatrix evValid = do
               -- pure False
               Set.member i <$> selectedRadicals
             -- (Valid, Selected)
-            cl (_,True) = "green"
-            cl (True, False) = ""
-            cl (False,False) = ""
-            attr = (\c -> ("class" =: c)) <$>
-                     (cl <$> zipDyn valid sel)
+            cl (_,True) = " btn-success "
+            cl (True, False) = " btn-default "
+            cl (False,False) = " btn-default disabled "
+            attr = (\c -> ("class" =: (c <> "btn btn-sm" )))
+                     <$> (cl <$> zipDyn valid sel)
 
-        (e,_) <- elAttr' "div" ("class" =: "col-sm-1") $
-          elDynAttr "button" attr $ text r
+            spanAttr = ("class" =: "badge")
+              <> ("style" =: "color: black;")
+
+        (e,_) <- elDynAttr' "button" attr $
+          elAttr "span" spanAttr $ text r
         let ev = attachDynWithMaybe f valid
                    (domEvent Click e)
             f True _ = Just ()
@@ -173,7 +180,7 @@ kanjiListWidget listEv = do
           (e, _) <- el' "tr" $ do
             el "td" $ text $ (unKanji k)
             el "td" $ text $ maybe ""
-              (\r1 -> "Rank: " <> show r1) (unRank <$> r)
+              (\r1 -> show r1) (unRank <$> r)
             el "td" $ text $ T.intercalate "," $ map unMeaning m
           return (i <$ domEvent Click e)
 
@@ -186,15 +193,21 @@ kanjiListWidget listEv = do
     fun (These l _) _ = l
 
   -- NW 1
-  elClass "table" "table" $ el "tbody" $  do
-    rec
-      lmEv <- getWebSocketResponse $ LoadMoreKanjiResults <$ ev
-      dyn <- foldDyn fun [] (align listEv lmEv)
-      -- NW 1.1
-      d <- simpleList dyn liWrap
-      -- NW 1.2
-      ev <- el "td" $ button "Load More"
-    return $ switchPromptlyDyn $ leftmost <$> d
+  elClass "table" "table table-striped" $ do
+    el "thead" $ do
+      el "tr" $ do
+        el "th" $ text "Kanji"
+        el "th" $ text "Rank"
+        el "th" $ text "Meanings"
+    el "tbody" $  do
+      rec
+        lmEv <- getWebSocketResponse $ LoadMoreKanjiResults <$ ev
+        dyn <- foldDyn fun [] (align listEv lmEv)
+        -- NW 1.1
+        d <- simpleList dyn liWrap
+        -- NW 1.2
+        ev <- el "tr" $ button "Load More"
+      return $ switchPromptlyDyn $ leftmost <$> d
 
 kanjiDetailsWidget
   :: AppMonad t m
@@ -262,7 +275,7 @@ vocabListWindow req listEv = do
       -- NW 1.1
       simpleList dyn liWrap
       -- NW 1.2
-      ev <- el "td" $ button "Load More"
+      ev <- el "tr" $ button "Load More"
     return ()
 
 textMay (Just v) = text v
