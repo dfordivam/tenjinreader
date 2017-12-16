@@ -26,8 +26,9 @@ import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Text.MeCab
-import NLP.Romkan
-import NLP.Snowball
+import NLP.Romkan as NLP
+import NLP.Snowball as NLP
+import NLP.Tokenize.Text as NLP
 import NLP.Japanese.Utils as Utils
 import System.Directory
 import qualified Data.ByteString.Lazy
@@ -148,7 +149,8 @@ getKanjiSE kDb = insertDocs docs init
       KanjiOnReading -> unReading <$> ks ^. kanjiOnyomi
       KanjiKuReading -> unReading <$> ks ^. kanjiKunyomi
       KanjiNaReading -> unReading <$> ks ^. kanjiNanori
-      KanjiMeanings -> unMeaning <$> ks ^. kanjiMeanings
+      KanjiMeanings ->  ks ^.. kanjiMeanings . traverse . to unMeaning
+          . to extractMeaningTerms . traverse
 
     transformQry :: Term -> KanjiSearchFields -> Term
     transformQry t _ = t
@@ -179,8 +181,7 @@ kanjiSearchRankParams =
     paramFieldWeights _ = 1
 
 
-type VocabSearchEngine = SearchEngine Entry EntryId VocabSearchFields NoFeatures
-
+type VocabSearchEngine = SearchEngine Entry EntryId VocabSearchFields VocabFeatures
 
 data VocabSearchFields
   = VocabReadings
@@ -192,26 +193,63 @@ getVocabSE vDb = insertDocs docs init
   where
     docs = vDb ^.. traverse . vocabEntry
     init = initSearchEngine conf vocabSearchRankParams
-    conf = SearchConfig _entryUniqueId extractTerms transformQry (const noFeatures)
+    conf = SearchConfig _entryUniqueId extractTerms transformQry featureFun
     extractTerms :: Entry -> VocabSearchFields -> [Term]
     extractTerms e sf = case sf of
       VocabReadings ->
         (e ^.. entryKanjiElements . traverse . kanjiPhrase . to unKanjiPhrase)
         ++ (e ^.. entryReadingElements . traverse . readingPhrase . to unReadingPhrase)
       VocabGloss -> e ^..
-        (entrySenses . traverse . senseGlosses . traverse . glossDefinition)
+        (entrySenses . traverse . senseGlosses . traverse .
+         glossDefinition . to extractMeaningTerms . traverse)
 
     transformQry :: Term -> VocabSearchFields -> Term
-    transformQry t _ = t
+    transformQry t VocabReadings = t
+    transformQry t VocabGloss = maybe "" identity $ headMay $ extractMeaningTerms t
 
-vocabSearchRankParams :: SearchRankParameters VocabSearchFields NoFeatures
+extractMeaningTerms :: Text -> [Text]
+extractMeaningTerms =
+      NLP.stems NLP.English
+    . filter (`Set.notMember` stopWords)
+    . map (T.toCaseFold)
+    -- . concatMap splitTok
+    -- . filter (not . ignoreTok)
+    . NLP.tokenize
+
+stopWords :: Set Term
+stopWords =
+  Set.fromList ["a","the","to","of","an","on","as","by","is"]
+
+data VocabFeatures
+  = VocabPriority
+  | VocabInfo
+  deriving (Eq, Ord, Enum, Bounded, Ix, Show)
+
+featureFun :: Entry -> VocabFeatures -> Float
+featureFun e VocabPriority = sum $ map f allPr
+  where allPr = e ^.. entryKanjiElements . traverse . kanjiPriority . traverse
+          ++ e ^.. entryReadingElements . traverse . readingPriority . traverse
+        f (FreqOfUse r) = 1000 /(5 + fromIntegral r)
+        f p
+          | p == News1 || p == Ichi1 || p == Spec1 = 50
+          | p == News2 || p == Ichi2 || p == Spec2 = 20
+          | otherwise = 10
+
+featureFun e VocabInfo = case (ki,ri) of
+  ([],[]) -> 10
+  ([],ri) -> 5
+  (_,_) -> 1
+  where ki = e ^.. entryKanjiElements . traverse . kanjiInfo . traverse
+        ri = e ^.. entryReadingElements . traverse . readingInfo . traverse
+
+vocabSearchRankParams :: SearchRankParameters VocabSearchFields VocabFeatures
 vocabSearchRankParams =
     SearchRankParameters {
       paramK1,
       paramB,
       paramFieldWeights,
-      paramFeatureWeights     = noFeatures,
-      paramFeatureFunctions   = noFeatures,
+      paramFeatureWeights     = featWeights,
+      paramFeatureFunctions   = featFun,
       paramResultsetSoftLimit = 200,
       paramResultsetHardLimit = 400,
       paramAutosuggestPrefilterLimit  = 500,
@@ -222,9 +260,14 @@ vocabSearchRankParams =
     paramK1 = 1.5
 
     paramB :: VocabSearchFields -> Float
-    paramB VocabReadings   = 0.9
+    -- paramB VocabReadings   = 0.9
     paramB _    = 0.5
 
     paramFieldWeights :: VocabSearchFields -> Float
-    paramFieldWeights VocabReadings        = 20
+    -- paramFieldWeights VocabReadings        = 20
     paramFieldWeights _ = 1
+
+    featWeights VocabPriority = 5
+    featWeights VocabInfo = 1
+    featFun VocabPriority = LogarithmicFunction 1
+    featFun VocabInfo = LogarithmicFunction 1

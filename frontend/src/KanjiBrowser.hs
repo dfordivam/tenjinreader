@@ -29,7 +29,8 @@ kanjiBrowseWidget = divClass "row" $ do
       filterEvWithPostBuild = leftmost [def <$ ev,
                                         filterEv]
 
-    filterResultEv <- getWebSocketResponse filterEvWithPostBuild
+    searchEv <- debounce 1 filterEvWithPostBuild
+    filterResultEv <- getWebSocketResponse searchEv
 
     let
       (kanjiListEv, validRadicalsEv)
@@ -299,6 +300,7 @@ vocabSearchWidget = divClass "" $ divClass "" $ do
                   <$> value reading
                   <*> pure KunYomi
                   <*> value meaning)
-    getWebSocketResponse (updated vsDyn)
+    searchEv <- debounce 1 (updated vsDyn)
+    getWebSocketResponse searchEv
 
   vocabListWindow LoadMoreVocabSearchResult vocabResEv

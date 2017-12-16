@@ -97,8 +97,7 @@ makeVocabDetails e = VocabDetails
   (makeVocab e)
   False -- TODO
   Nothing -- TODO
-  []
-  -- (getMeanings (DB._vocabMeaningMeaning <$> ms))
+  (e ^.. entrySenses . traverse . senseGlosses . traverse . glossDefinition . to Meaning)
 
 -- Furigana reading for vocab item
 -- Pick first KanjiElement and first ReadingElement as its reading

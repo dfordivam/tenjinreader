@@ -79,6 +79,7 @@ library
     , kanjidbreader
     , jmdict-ast
     , hs-nlp-jp-utils
+    , tokenize
     , these
     , common
   if (flag(dev)) || (flag(library-only))
