@@ -19,6 +19,8 @@ import Text.Pretty.Simple
 import Data.SearchEngine
 import qualified Data.BTree.Impure as Tree
 import NLP.Japanese.Utils
+import Control.Monad.State hiding (foldM)
+import Data.BTree.Alloc (AllocM, AllocReaderM)
 import Mecab
 
 searchResultCount = 20
@@ -231,16 +233,87 @@ getLoadMoreVocabSearchResult _ = do
     liftIO $ writeIORef ref (keys, count + (length vs))
   return $ maybe [] id vs
 
-getAnnotatedText :: GetAnnotatedText
-  -> WsHandlerM AnnotatedText
-getAnnotatedText (GetAnnotatedText t) = do
-  lift $ getAnnTextInt t
-
-getAnnTextInt t = do
+makeReaderDocumentContent t = do
   vocabDb <- asks appVocabDb
   mec <- asks appMecabPtr
   se <- asks appVocabSearchEngNoGloss
   liftIO $ parseAndSearch vocabDb se mec t
+
+getAddDocument :: AddDocument
+  -> WsHandlerM (Maybe ReaderDocument)
+getAddDocument (AddDocument title t) = do
+  uId <- asks currentUserId
+  c <- lift $ makeReaderDocumentContent t
+
+  let
+    upFun :: (AllocM m)
+      => SrsReviewData
+      -> StateT (Maybe ReaderDocument) m SrsReviewData
+    upFun rd = do
+      mx <- lift $
+        Tree.lookupMaxTree (rd ^. readerDocuments)
+      let newk = maybe zerokey nextKey mx
+          zerokey = ReaderDocumentId 0
+          nextKey (ReaderDocumentId k, _)
+            = ReaderDocumentId (k + 1)
+          nd = ReaderDocument newk title c
+
+      put $ Just nd
+      lift $ rd &
+        readerDocuments %%~ Tree.insertTree newk nd
+
+  lift $ transactSrsDB $ runStateWithNothing $
+    userReviews %%~ updateTreeLiftedM uId upFun
+
+getEditDocument :: EditDocument
+  -> WsHandlerM (Maybe ReaderDocument)
+getEditDocument (EditDocument dId title t) = do
+  uId <- asks currentUserId
+  c <- lift $ makeReaderDocumentContent t
+
+  let
+    nd = ReaderDocument dId title c
+
+  lift $ transactSrsDB_ $
+    userReviews %%~ updateTreeM uId
+      (readerDocuments %%~ Tree.insertTree dId nd)
+  return $ Just nd
+
+getListDocuments :: ListDocuments
+  -> WsHandlerM [(ReaderDocumentId, Text, Text)]
+getListDocuments _ = do
+  uId <- asks currentUserId
+
+  ds <- lift $ transactReadOnlySrsDB $ \db -> do
+    rd <- Tree.lookupTree uId $ db ^. userReviews
+    mapM Tree.toList (rd ^? _Just . readerDocuments)
+
+  let f (ReaderDocument i t c) = (i,t,p c)
+      p c = T.take 50 (foldl' fol "" c)
+      fol t ap = t <> (mconcat $ map getT ap)
+      getT (Left t) = t
+      getT (Right (v,_,_)) = vocabToText v
+
+  return $ maybe [] (map (f . snd)) ds
+
+getViewDocument :: ViewDocument
+  -> WsHandlerM (Maybe ReaderDocument)
+getViewDocument (ViewDocument i) = do
+  uId <- asks currentUserId
+  s <- lift $ transactReadOnlySrsDB $ \db ->
+    Tree.lookupTree uId (db ^. userReviews)
+      >>= mapM (\rd ->
+        Tree.lookupTree i (rd ^. readerDocuments))
+  return $ join s
+
+getDeleteDocument :: DeleteDocument
+  -> WsHandlerM [(ReaderDocumentId, Text, Text)]
+getDeleteDocument (DeleteDocument dId) = do
+  uId <- asks currentUserId
+  lift $ transactSrsDB_ $
+    userReviews %%~ updateTreeM uId
+      (readerDocuments %%~ Tree.deleteTree dId)
+  getListDocuments ListDocuments
 
 
 getVocabDetails :: GetVocabDetails

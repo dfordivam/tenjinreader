@@ -51,9 +51,35 @@ type AppRequest
   :<|> EditSrsItem
   :<|> BulkEditSrsItems
 
-  :<|> GetAnnotatedText
+  :<|> AddDocument
+  :<|> EditDocument
+  :<|> ListDocuments
+  :<|> ViewDocument
+  :<|> DeleteDocument
+
+  -- :<|> CreateT ReaderDocument
+  -- :<|> EditT ReaderDocument
+  -- :<|> ReadT ReaderDocument
+  -- :<|> ListT ReaderDocument
+  -- :<|> DeleteT ReaderDocument
+
   :<|> GetVocabDetails
 
+------------------------------------------------------------
+-- class CRUD t where
+--   data KeyT t
+--   data CreateT t
+--   createT :: CreateT t -> t
+--   readT :: KeyT t -> t
+--   updateT :: KeyT t -> t -> ()
+--   deleteT :: KeyT t -> ()
+--   listT :: [t]
+
+-- instance WebSocketMessage AppRequest (CreateT t) where
+--   type ResponseT AppRequest (CreateT t) = (Maybe (KeyT t))
+
+-- instance WebSocketMessage AppRequest (EditT t) where
+--   type ResponseT AppRequest (CreateT t) = (Maybe (KeyT t))
 ----------------------------------------------------------------
 data KanjiFilter = KanjiFilter
   { textContent :: Text
@@ -227,11 +253,41 @@ instance WebSocketMessage AppRequest BulkEditSrsItems where
   type ResponseT AppRequest BulkEditSrsItems = Maybe ()
 
 ----------------------------------------------------------------
-data GetAnnotatedText = GetAnnotatedText Text
+data AddDocument = AddDocument Text Text
   deriving (Generic, Show, ToJSON, FromJSON)
 
-instance WebSocketMessage AppRequest GetAnnotatedText where
-  type ResponseT AppRequest GetAnnotatedText = AnnotatedText
+instance WebSocketMessage AppRequest AddDocument where
+  type ResponseT AppRequest AddDocument = (Maybe ReaderDocument)
+
+----------------------------------------------------------------
+data EditDocument = EditDocument ReaderDocumentId Text Text
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest EditDocument where
+  type ResponseT AppRequest EditDocument = (Maybe ReaderDocument)
+
+----------------------------------------------------------------
+data ListDocuments = ListDocuments
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest ListDocuments where
+  type ResponseT AppRequest ListDocuments
+    = [(ReaderDocumentId, Text, Text)]
+
+----------------------------------------------------------------
+data ViewDocument = ViewDocument ReaderDocumentId
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest ViewDocument where
+  type ResponseT AppRequest ViewDocument = (Maybe ReaderDocument)
+
+----------------------------------------------------------------
+data DeleteDocument = DeleteDocument ReaderDocumentId
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest DeleteDocument where
+  type ResponseT AppRequest DeleteDocument
+    = [(ReaderDocumentId, Text, Text)]
 
 ----------------------------------------------------------------
 data GetVocabDetails = GetVocabDetails [VocabId]

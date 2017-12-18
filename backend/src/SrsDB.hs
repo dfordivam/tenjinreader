@@ -51,13 +51,19 @@ instance Binary SrsEntry
 instance Value SrsEntry
 instance Binary SrsInterval
 instance Value SrsInterval
+instance Binary ReaderDocumentId
+instance Value ReaderDocumentId
+instance Binary ReaderDocument
+instance Value ReaderDocument
 
 instance Key SrsEntryId
+instance Key ReaderDocumentId
 instance Key KanjiId
 instance Key VocabId
 
 data SrsReviewData = SrsReviewData
   { _reviews :: Tree SrsEntryId SrsEntry
+  , _readerDocuments :: Tree ReaderDocumentId ReaderDocument
   , _kanjiSrsMap :: Tree KanjiId SrsEntryId
   , _vocabSrsMap :: Tree VocabId SrsEntryId
   -- An Srs Item may not have an entry in this map

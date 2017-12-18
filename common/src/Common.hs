@@ -23,10 +23,11 @@ import Data.Time.Calendar
 import Data.BTree.Primitives (Value)
 import Data.JMDict.AST
 import Data.List.NonEmpty (NonEmpty(..))
-import DerivingInstances ()
+import DerivingInstances
 import qualified Data.Text as T
 import NLP.Japanese.Utils
 import Data.These
+import Data.Vector (Vector)
 
 instance Value Int
 instance Value a => Value (Maybe a)
@@ -165,7 +166,19 @@ data ReviewType =
   | ReviewTypeProdReview
   deriving (Eq, Ord, Enum, Bounded, Generic, Show, ToJSON, FromJSON)
 
-type AnnotatedText = [[(Either Text (Vocab, [VocabId], Bool))]]
+type AnnotatedPara = [(Either Text (Vocab, [VocabId], Bool))]
+
+type AnnotatedDocument = Vector AnnotatedPara
+
+newtype ReaderDocumentId = ReaderDocumentId { unReaderDocumentId :: Int }
+  deriving (Eq, Ord, Generic, Show, Typeable, ToJSON, FromJSON)
+
+data ReaderDocument = ReaderDocument
+  { _readerDocId :: ReaderDocumentId
+  , _readerDocTitle :: Text
+  , _readerDocContent :: AnnotatedDocument
+  }
+  deriving (Generic, Show, ToJSON, FromJSON)
 
 -- SrsEntry
 
@@ -277,6 +290,7 @@ testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b)
 makeLenses ''SrsReviewStats
 makeLenses ''VocabDetails
 makeLenses ''KanjiDetails
+makeLenses ''ReaderDocument
 
 makePrisms ''SrsEntryState
 makeLenses ''SrsEntryStats

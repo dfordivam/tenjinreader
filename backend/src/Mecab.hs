@@ -29,12 +29,13 @@ import KanjiDB.JMDict
 import Data.Ix
 import Text.MeCab
 import Data.SearchEngine
+import qualified Data.Vector as V
 
 parseAndSearch :: Map EntryId VocabData
   -> VocabSearchEngineNoGloss
   -> MeCab
   -> Text
-  -> IO AnnotatedText
+  -> IO AnnotatedDocument
 parseAndSearch es se m t = do
   feats <- liftIO $ mapM (parseMecab m) (T.lines t)
   let
@@ -53,7 +54,7 @@ parseAndSearch es se m t = do
                     . entrySenses . traverse
                     . senseGlosses . traverse
                     . glossDefinition)
-  return $ map (catMaybes . (fmap fun)) feats
+  return $ V.fromList $ map (catMaybes . (fmap fun)) feats
 
 isKanaOnly :: T.Text -> Bool
 isKanaOnly = (all f) . T.unpack
