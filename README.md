@@ -1,3 +1,7 @@
+# Details coming soon...
+
+Meanwhile some build instructions here...
+
 Multi-package Reflex example
 ---
 
@@ -6,7 +10,7 @@ This repo is an example of combining `cabal.project`, Nix,
 developer experience.
 
 First, run `./reflex-platform/try-reflex` at least once. We won't use
-it at all in this project, but it does some extra work to setup your
+it at all in this project, but it does some extra work to setup yourA
 system requirements automatically, namely installing Nix and
 configuring the Reflex binary cache.
 
