@@ -317,32 +317,31 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
   srsItm <- lift $ makeSrsEntry v t
   let
     upFun :: _ => SrsEntry
-      -> SrsReviewData -> m SrsReviewData
+      -> SrsReviewData -> m (SrsReviewData, SrsEntryId)
     upFun itm rd = do
       mx <- Tree.lookupMaxTree (rd ^. reviews)
       let newk = maybe zerokey nextKey mx
           zerokey = SrsEntryId 0
           nextKey (SrsEntryId k, _) = SrsEntryId (k + 1)
 
-      rd & reviews %%~ Tree.insertTree newk itm
+      nrd <- rd & reviews %%~ Tree.insertTree newk itm
          >>= srsKanjiVocabMap %%~ Tree.insertTree newk v
          >>= case v of
          (Left k) ->
            kanjiSrsMap %%~ Tree.insertTree k newk
          (Right v) ->
            vocabSrsMap %%~ Tree.insertTree v newk
+      return (nrd, newk)
 
-  forM srsItm $ \itm -> do
-    lift $ transactSrsDB_ $
-      userReviews %%~ updateTreeM uId (upFun itm)
-
-  s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userReviews) >>= mapM (\rd ->
-      case v of
-        (Left k) -> Tree.lookupTree k (rd ^. kanjiSrsMap)
-        (Right v) -> Tree.lookupTree v (rd ^. vocabSrsMap))
-  return $ join s
-
+  ret <- forM srsItm $ \itm -> do
+    lift $ transactSrsDB $ \st -> do
+      rd <- Tree.lookupTree uId $ st ^. userReviews
+      maybeRd <- mapM (upFun itm) rd
+      nst <- forM maybeRd (\(nrd,ret)
+        -> st & userReviews %%~ Tree.insertTree uId nrd
+        >>= (\st -> return (st, Just ret)))
+      return $ maybe (st, Nothing) id nst
+  return $ join ret
 
 data TRM = TRM SrsEntryField (NonEmpty Reading) (NonEmpty Meaning)
 
