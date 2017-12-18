@@ -254,17 +254,17 @@ vocabListWindow
 vocabListWindow req listEv = do
   let
     listItem (v,s) = el "tr" $ do
-      el "td" $ do
+      elClass "td" "col-sm-2" $ do
         displayVocabT $ v ^. vocab
 
-      el "td" $ elClass "table" "table" $ el "tbody" $ do
+      elClass "td" "col-sm-10" $ elClass "table" "table" $ el "tbody" $ do
         el "tr" $ do
-          el "td" $ text $ T.intercalate "," $ map unMeaning
-            $ v ^. vocabMeanings
-          el "td" $ addEditSrsEntryWidget (Right $ v ^. vocabId) Nothing s
-
-        el "tr" $ do
-          el "td" $ textMay (tshow <$> (unRank <$> v ^. vocabFreqRank))
+          elClass "td" "col-sm-8" $
+            text $ T.intercalate "," $ map unMeaning
+              $ v ^. vocabMeanings
+          elClass "td" "col-sm-2" $
+            addEditSrsEntryWidget (Right $ v ^. vocabId)
+              Nothing s
 
     liWrap i = do
       dyn $ listItem <$> i

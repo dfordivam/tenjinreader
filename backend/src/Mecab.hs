@@ -31,7 +31,7 @@ import Text.MeCab
 import Data.SearchEngine
 
 parseAndSearch :: Map EntryId VocabData
-  -> VocabSearchEngine
+  -> VocabSearchEngineNoGloss
   -> MeCab
   -> Text
   -> IO AnnotatedText

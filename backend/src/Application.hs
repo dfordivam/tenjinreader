@@ -75,6 +75,7 @@ makeFoundation appSettings = do
 
     let appKanjiSearchEng = getKanjiSE appKanjiDb
         appVocabSearchEng = getVocabSE appVocabDb
+        appVocabSearchEngNoGloss = getVocabSENG appVocabDb
 
     appSrsReviewState <- openSrsDB (unpack $ appSrsDatabaseDir appSettings)
 

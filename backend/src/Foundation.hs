@@ -52,6 +52,7 @@ data App = App
     , appMecabPtr    :: MeCab
     , appKanjiSearchEng :: KanjiSearchEngine
     , appVocabSearchEng :: VocabSearchEngine
+    , appVocabSearchEngNoGloss :: VocabSearchEngineNoGloss
     , appSrsReviewState :: ConcurrentDb AppSrsReviewState
     }
 

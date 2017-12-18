@@ -205,7 +205,7 @@ getAnnotatedText (GetAnnotatedText t) = do
 getAnnTextInt t = do
   vocabDb <- asks appVocabDb
   mec <- asks appMecabPtr
-  se <- asks appVocabSearchEng
+  se <- asks appVocabSearchEngNoGloss
   liftIO $ parseAndSearch vocabDb se mec t
 
 

@@ -181,7 +181,14 @@ kanjiSearchRankParams =
     paramFieldWeights _ = 1
 
 
+type VocabSearchEngineNoGloss = SearchEngine Entry EntryId VocabElements VocabFeatures
+
 type VocabSearchEngine = SearchEngine Entry EntryId VocabSearchFields VocabFeatures
+
+data VocabElements
+  = VocabReadingElem
+  | VocabKanjiElem
+  deriving (Eq, Ord, Enum, Bounded, Ix, Show)
 
 data VocabSearchFields
   = VocabReadings
@@ -206,6 +213,22 @@ getVocabSE vDb = insertDocs docs init
     transformQry :: Term -> VocabSearchFields -> Term
     transformQry t VocabReadings = t
     transformQry t VocabGloss = maybe "" identity $ headMay $ extractMeaningTerms t
+
+getVocabSENG :: VocabDb -> VocabSearchEngineNoGloss
+getVocabSENG vDb = insertDocs docs init
+  where
+    docs = vDb ^.. traverse . vocabEntry
+    init = initSearchEngine conf vocabSearchRankParamsNG
+    conf = SearchConfig _entryUniqueId extractTerms transformQry featureFun
+    extractTerms :: Entry -> VocabElements -> [Term]
+    extractTerms e sf = case sf of
+      VocabReadingElem ->
+        (e ^.. entryReadingElements . traverse . readingPhrase . to unReadingPhrase)
+      VocabKanjiElem ->
+        (e ^.. entryKanjiElements . traverse . kanjiPhrase . to unKanjiPhrase)
+
+    transformQry :: Term -> VocabElements -> Term
+    transformQry t _ = t
 
 extractMeaningTerms :: Text -> [Text]
 extractMeaningTerms =
@@ -264,6 +287,36 @@ vocabSearchRankParams =
     paramB _    = 0.5
 
     paramFieldWeights :: VocabSearchFields -> Float
+    -- paramFieldWeights VocabReadings        = 20
+    paramFieldWeights _ = 1
+
+    featWeights VocabPriority = 5
+    featWeights VocabInfo = 1
+    featFun VocabPriority = LogarithmicFunction 1
+    featFun VocabInfo = LogarithmicFunction 1
+
+vocabSearchRankParamsNG :: SearchRankParameters VocabElements VocabFeatures
+vocabSearchRankParamsNG =
+    SearchRankParameters {
+      paramK1,
+      paramB,
+      paramFieldWeights,
+      paramFeatureWeights     = featWeights,
+      paramFeatureFunctions   = featFun,
+      paramResultsetSoftLimit = 200,
+      paramResultsetHardLimit = 400,
+      paramAutosuggestPrefilterLimit  = 500,
+      paramAutosuggestPostfilterLimit = 500
+    }
+  where
+    paramK1 :: Float
+    paramK1 = 1.5
+
+    paramB :: VocabElements -> Float
+    -- paramB VocabReadings   = 0.9
+    paramB _    = 0.5
+
+    paramFieldWeights :: VocabElements -> Float
     -- paramFieldWeights VocabReadings        = 20
     paramFieldWeights _ = 1
 

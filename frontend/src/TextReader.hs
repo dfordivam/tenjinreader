@@ -146,6 +146,7 @@ showEntry surface (e, sId) = do
     mapM showSense $ take 3 $ e ^.. entrySenses . traverse
 
 capitalize t
+  | T.head t == ('-') = t
   | elem t ignoreList = t
   | otherwise = T.toTitle t
   where ignoreList = ["to"]
