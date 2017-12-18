@@ -26,6 +26,7 @@ import Data.BTree.Alloc (AllocM, AllocReaderM)
 import Database.Persist.Sql
 import Data.These
 import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
+import Control.Monad.State hiding (foldM)
 
 getSrsStats :: GetSrsStats
   -> WsHandlerM (SrsStats,SrsStats)
@@ -230,6 +231,14 @@ updateTreeM k fun tree = do
   >>= mapM (\v -> Tree.insertTree k v tree)
   >>= (\t -> return $ maybe tree id t)
 
+updateTreeLiftedM :: (AllocM m, _)
+  => k -> (v -> t m v) -> Tree.Tree k v -> t m (Tree.Tree k v)
+updateTreeLiftedM k fun tree = do
+  lift $ Tree.lookupTree k tree
+  >>= mapM fun
+  >>= mapM (\v -> lift $ Tree.insertTree k v tree)
+  >>= (\t -> return $ maybe tree id t)
+
 getReviewItem
   :: (SrsEntryId, SrsEntry)
   -> ReviewItem
@@ -316,31 +325,29 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
 
   srsItm <- lift $ makeSrsEntry v t
   let
-    upFun :: _ => SrsEntry
-      -> SrsReviewData -> m (SrsReviewData, SrsEntryId)
+    upFun :: (AllocM m) => SrsEntry
+      -> SrsReviewData
+      -> StateT (Maybe SrsEntryId) m SrsReviewData
     upFun itm rd = do
-      mx <- Tree.lookupMaxTree (rd ^. reviews)
+      mx <- lift $ Tree.lookupMaxTree (rd ^. reviews)
       let newk = maybe zerokey nextKey mx
           zerokey = SrsEntryId 0
           nextKey (SrsEntryId k, _) = SrsEntryId (k + 1)
 
-      nrd <- rd & reviews %%~ Tree.insertTree newk itm
+      put (Just newk)
+      lift $ rd & reviews %%~ Tree.insertTree newk itm
          >>= srsKanjiVocabMap %%~ Tree.insertTree newk v
          >>= case v of
          (Left k) ->
            kanjiSrsMap %%~ Tree.insertTree k newk
          (Right v) ->
            vocabSrsMap %%~ Tree.insertTree v newk
-      return (nrd, newk)
 
   ret <- forM srsItm $ \itm -> do
-    lift $ transactSrsDB $ \st -> do
-      rd <- Tree.lookupTree uId $ st ^. userReviews
-      maybeRd <- mapM (upFun itm) rd
-      nst <- forM maybeRd (\(nrd,ret)
-        -> st & userReviews %%~ Tree.insertTree uId nrd
-        >>= (\st -> return (st, Just ret)))
-      return $ maybe (st, Nothing) id nst
+    lift $ transactSrsDB $ \st ->
+      (flip runStateT Nothing) $
+        st & userReviews %%~ updateTreeLiftedM uId (upFun itm)
+
   return $ join ret
 
 data TRM = TRM SrsEntryField (NonEmpty Reading) (NonEmpty Meaning)
