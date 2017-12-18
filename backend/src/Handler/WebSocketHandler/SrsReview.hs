@@ -223,22 +223,6 @@ updateSrsEntry b today rt r = r
       then s & successCount +~ 1
       else s & failureCount +~ 1
 
-updateTreeM :: _
-  => k -> (v -> m v) -> Tree.Tree k v -> m (Tree.Tree k v)
-updateTreeM k fun tree = do
-  Tree.lookupTree k tree
-  >>= mapM fun
-  >>= mapM (\v -> Tree.insertTree k v tree)
-  >>= (\t -> return $ maybe tree id t)
-
-updateTreeLiftedM :: (AllocM m, _)
-  => k -> (v -> t m v) -> Tree.Tree k v -> t m (Tree.Tree k v)
-updateTreeLiftedM k fun tree = do
-  lift $ Tree.lookupTree k tree
-  >>= mapM fun
-  >>= mapM (\v -> lift $ Tree.insertTree k v tree)
-  >>= (\t -> return $ maybe tree id t)
-
 getReviewItem
   :: (SrsEntryId, SrsEntry)
   -> ReviewItem
@@ -349,8 +333,6 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
         userReviews %%~ updateTreeLiftedM uId (upFun itm)
 
   return $ join ret
-
-runStateWithNothing m s = (flip runStateT Nothing) $ m s
 
 data TRM = TRM SrsEntryField (NonEmpty Reading) (NonEmpty Meaning)
 

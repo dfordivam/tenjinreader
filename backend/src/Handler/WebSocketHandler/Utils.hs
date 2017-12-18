@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Handler.WebSocketHandler.Utils where
@@ -15,6 +16,9 @@ import Text.MeCab
 import KanjiDB
 import NLP.Romkan
 import NLP.Japanese.Utils
+import qualified Data.BTree.Impure as Tree
+import Data.BTree.Alloc (AllocM, AllocReaderM)
+import Control.Monad.State hiding (foldM)
 
 type WsHandlerM = ReaderT WsHandlerEnv Handler
 
@@ -38,3 +42,22 @@ getKana t = do
       f = map katakanaToHiragana $ filter hasKanaOrKanji readings
 
   return $ mconcat f
+
+
+updateTreeM :: _
+  => k -> (v -> m v) -> Tree.Tree k v -> m (Tree.Tree k v)
+updateTreeM k fun tree = do
+  Tree.lookupTree k tree
+  >>= mapM fun
+  >>= mapM (\v -> Tree.insertTree k v tree)
+  >>= (\t -> return $ maybe tree id t)
+
+updateTreeLiftedM :: (AllocM m, _)
+  => k -> (v -> t m v) -> Tree.Tree k v -> t m (Tree.Tree k v)
+updateTreeLiftedM k fun tree = do
+  lift $ Tree.lookupTree k tree
+  >>= mapM fun
+  >>= mapM (\v -> lift $ Tree.insertTree k v tree)
+  >>= (\t -> return $ maybe tree id t)
+
+runStateWithNothing m s = (flip runStateT Nothing) $ m s
