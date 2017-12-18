@@ -293,13 +293,17 @@ vocabSearchWidget
 vocabSearchWidget = divClass "" $ divClass "" $ do
 
   vocabResEv <- divClass "" $ do
-    reading <- textInput def
-    meaning <- textInput def
+    ti <- textInput def
+    filt <- dropdown Nothing
+      (constDyn ((Nothing =: "All")
+      <> ((Just PosNoun) =: "Noun Only")
+      <> ((Just (PosVerb (Regular Ichidan) NotSpecified))
+          =: "Verb Only")
+      <> ((Just (PosAdjective NaAdjective)) =: "Adj or Adv only")))
+      def
 
-    let vsDyn = VocabSearch <$> (AdditionalFilter
-                  <$> value reading
-                  <*> pure KunYomi
-                  <*> value meaning)
+    let vsDyn = VocabSearch <$> (value ti)
+                  <*> (value filt)
     searchEv <- debounce 1 (updated vsDyn)
     getWebSocketResponse searchEv
 

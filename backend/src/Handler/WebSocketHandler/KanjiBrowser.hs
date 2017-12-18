@@ -173,16 +173,50 @@ getLoadMoreKanjiVocab _ = do
   return $ maybe [] id vs
 
 getVocabSearch :: VocabSearch -> WsHandlerM VocabList
-getVocabSearch (VocabSearch (AdditionalFilter r _ m)) = do
+getVocabSearch (VocabSearch m filt) = do
   vocabDb <- lift $ asks appVocabDb
   vocabSearchEng <- lift $ asks appVocabSearchEng
   let
-      keys = query vocabSearchEng terms
+      keys1 = map snd expl
+      expl = queryExplain vocabSearchEng terms
       terms = (T.words m)
+  pPrint $ take 5 expl
+
+  let
+      es = map _vocabEntry $
+        catMaybes ((flip Map.lookup) vocabDb <$> keys1)
+      allVs = filter (filterPOS filt) es
+      keys = map _entryUniqueId allVs
+      vs = (take searchResultCount allVs)
+
   vs <- loadVocabList (take searchResultCount keys)
   asks vocabSearchResult >>= \ref ->
     liftIO $ writeIORef ref (keys, searchResultCount)
   return $ maybe [] id vs
+
+filterPOS :: Maybe PartOfSpeech -> Entry -> Bool
+filterPOS Nothing _ = True
+filterPOS (Just pf) e = any f ePs
+  where
+    ePs = e ^.. entrySenses . traverse . sensePartOfSpeech . traverse
+    f p = case pf of
+      (PosNoun) -> case p of
+        (PosNoun) -> True
+        (PosNounType _) -> True
+        (PosPronoun) -> True
+        _ -> False
+
+      (PosVerb _ _) -> case p of
+        (PosVerb _ _) -> True
+        _ -> False
+
+      (PosAdjective _) -> case p of
+        (PosAdverb _) -> True
+        (PosAdjective _) -> True
+        (PosAdverb _) -> True
+        _ -> False
+
+      _ -> True
 
 getLoadMoreVocabSearchResult :: LoadMoreVocabSearchResult -> WsHandlerM VocabList
 getLoadMoreVocabSearchResult _ = do

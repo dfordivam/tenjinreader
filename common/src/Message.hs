@@ -104,7 +104,7 @@ instance WebSocketMessage AppRequest LoadMoreKanjiResults where
   type ResponseT AppRequest LoadMoreKanjiResults = KanjiList
 
 ----------------------------------------------------------------
-data VocabSearch = VocabSearch AdditionalFilter
+data VocabSearch = VocabSearch Text (Maybe PartOfSpeech)
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest VocabSearch where
