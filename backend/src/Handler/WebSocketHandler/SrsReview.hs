@@ -344,11 +344,13 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
            vocabSrsMap %%~ Tree.insertTree v newk
 
   ret <- forM srsItm $ \itm -> do
-    lift $ transactSrsDB $ \st ->
-      (flip runStateT Nothing) $
-        st & userReviews %%~ updateTreeLiftedM uId (upFun itm)
+    lift $ transactSrsDB $
+      runStateWithNothing $
+        userReviews %%~ updateTreeLiftedM uId (upFun itm)
 
   return $ join ret
+
+runStateWithNothing m s = (flip runStateT Nothing) $ m s
 
 data TRM = TRM SrsEntryField (NonEmpty Reading) (NonEmpty Meaning)
 
