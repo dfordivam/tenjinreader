@@ -31,26 +31,21 @@ import qualified JSDOM.Generated.IntersectionObserver as DOM
 --   let h = 0
 --   text $ "Coords: " <> (tshow y) <> ", " <> (tshow h)
 
-setupInterObs :: (DOM.MonadDOM m) => m DOM.IntersectionObserver
-setupInterObs = do
+setupInterObs :: (DOM.MonadDOM m)
+  => Int
+  -> ((Int, Bool) -> IO ())
+  -> m DOM.IntersectionObserver
+setupInterObs ind action = do
   cb <- DOM.newIntersectionObserverCallback
-    (intersectionObsCallback "val for debug")
+    (intersectionObsCallback ind action)
   DOM.newIntersectionObserver cb Nothing
 
---   observe io target
-
--- newIntersectionObserver :: MonadDOM m => IntersectionObserverCallback -> Maybe IntersectionObserverInit -> m IntersectionObserver
-
--- newIntersectionObserverCallback :: MonadDOM m => ([IntersectionObserverEntry] -> IntersectionObserver -> JSM ()) -> m IntersectionObserverCallback
-
--- observe :: (MonadDOM m, IsElement target) => IntersectionObserver -> target -> m ()
-
--- getIntersectionRatio :: MonadDOM m => IntersectionObserverEntry -> m Double
-
--- getTarget :: MonadDOM m => IntersectionObserverEntry -> m Element
-
-intersectionObsCallback val _ _ = do
-  liftIO $ print val
+intersectionObsCallback ind action [] _ = return ()
+intersectionObsCallback ind action (e:es) _ = do
+  r <- DOM.getIntersectionRatio e
+  if (r > 0.9)
+    then liftIO $ action (ind, True)
+    else liftIO $ action (ind, False)
 
 
 readingPane :: AppMonad t m
@@ -78,18 +73,19 @@ readingPaneView (ReaderDocument _ title annText) = do
 
   vIdEv <- elDynAttr "div" divAttr $ do
     el "h3" $ text title
-    forM (V.toList annText) $
-      renderOnePara rubySizeDD
+    V.imapM (renderOnePara rubySizeDD) annText
 
-  --------------------------------
-  io <- setupInterObs
-  (e,_) <- el' "div" $ text "Towards the end"
+  let
+    evVis = mergeList $ map fst $ V.toList vIdEv
+    hVis :: Set Int -> (Int, Bool) -> Set Int
+    hVis s (ind, True) = Set.insert ind s
+    hVis s (ind, False) = Set.delete ind s
 
-  DOM.observe io (_element_raw e)
+  visDyn <- foldDyn (flip $ foldl (hVis)) Set.empty evVis
+  display (tshow <$> visDyn)
 
-  --------------------------------
   divClass "" $ do
-    let ev = leftmost vIdEv
+    let ev = leftmost $ map snd $ V.toList vIdEv
     detailsEv <- getWebSocketResponse $ GetVocabDetails
       <$> fmap fst ev
     surfDyn <- holdDyn "" (fmap snd ev)
@@ -116,8 +112,9 @@ lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
 fontSizeOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
   <$> ([80,85..200]  :: [Int])
 
-renderOnePara rubySizeDD annTextPara = do
+renderOnePara rubySizeDD ind annTextPara = do
   let showAllFurigana = constDyn True
+  el "div" $ text (tshow ind)
   (e,ret) <- el' "p" $ do
     let f (Left t) = never <$ text t
         f (Right (v, vId, vis)) = do
@@ -142,7 +139,13 @@ renderOnePara rubySizeDD annTextPara = do
   -- widgetHold (return ())
   --   (checkIntersection e <$ check)
 
-  return ret
+  --------------------------------
+
+  (evVisible, action) <- newTriggerEvent
+  io <- setupInterObs ind action
+  DOM.observe io (_element_raw e)
+  --------------------------------
+  return (evVisible, ret)
 
 showVocabDetailsWidget :: (AppMonad t m)
   => Event t (Text, [(Entry, Maybe SrsEntryId)])
