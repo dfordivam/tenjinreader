@@ -456,15 +456,15 @@ reviewWidgetView statsDyn dyn2 = do
       showStats
 
   let kanjiRowAttr = ("class" =: "")
-         <> ("style" =: "height: 10rem; text-align: center;")
-      kanjiTextAttr = ("style" =: "font-size: 5rem;")
+         <> ("style" =: "height: 15rem; text-align: center;")
 
-  elAttr "div" kanjiRowAttr $
-    elAttr "span" kanjiTextAttr $ do
-      let
-        showNE (Just ne) = mapM_ text (NE.intersperse ", " ne)
-        showNE Nothing = text "No Reviews!"
-      dyn $ showNE <$> (dyn2 & mapped . mapped %~ (uncurry getField))
+  elAttr "div" kanjiRowAttr $ do
+    let
+      showNE (Just (ne, stl)) = elAttr "span" kanjiTextAttr $ do
+          mapM_ text (NE.intersperse ", " ne)
+        where kanjiTextAttr = ("style" =: stl)
+      showNE Nothing = text "No Reviews!"
+    dyn $ showNE <$> (dyn2 & mapped . mapped %~ (uncurry getField))
 
   dr <- dyn $ ffor dyn2 $ \case
     (Nothing) -> return never

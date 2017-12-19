@@ -46,7 +46,7 @@ class SrsReviewType rt where
   updateReviewState :: ActualReviewType rt -> Bool -> rt -> Either Bool rt
   getAnswer :: ReviewItem -> (ActualReviewType rt) -> Either
     (NonEmpty Meaning) (NonEmpty Reading)
-  getField :: ReviewItem -> (ActualReviewType rt) -> (NonEmpty Text)
+  getField :: ReviewItem -> (ActualReviewType rt) -> (NonEmpty Text, Text)
   getInputFieldStyle :: ActualReviewType rt -> Text
   getInputFieldPlaceHolder :: ActualReviewType rt -> Text
 
@@ -62,13 +62,14 @@ instance SrsReviewType ProdReview where
   updateReviewState _ False _ = Right (ProdReview AnsweredWrong)
   updateReviewState _ _ _ = error "updateReviewState: Invalid state"
   getAnswer ri _ = Right $ ri ^. reviewItemReading . _1
-  getField ri _ = fmap unMeaning . fst $ ri ^. reviewItemMeaning
+  getField ri _ = (,) (fmap unMeaning . fst $ ri ^. reviewItemMeaning)
+    ("font-size: 2rem;")
   getInputFieldStyle _ = "background-color: antiquewhite;"
   getInputFieldPlaceHolder _ = "日本語で"
   getRandomRT _ _ _ = ReadingProdReview
 
 hasKanaInField ri = any (not . (any isKanji) . T.unpack)
-  (NE.toList $ getField ri ReadingRecogReview)
+  (NE.toList $ fst $ getField ri ReadingRecogReview)
 
 instance SrsReviewType RecogReview where
   data ActualReviewType RecogReview = ReadingRecogReview | MeaningRecogReview
@@ -76,7 +77,8 @@ instance SrsReviewType RecogReview where
   initState ri
     | hasKanaInField ri = RecogReview (That NotAnswered)
     | otherwise = RecogReview (These NotAnswered NotAnswered)
-  getField ri _ = ri ^. reviewItemField
+  getField ri _ = (,) (ri ^. reviewItemField)
+    ("font-size: 5rem;")
 
   getAnswer ri ReadingRecogReview = Right $ ri ^. reviewItemReading . _1
   getAnswer ri MeaningRecogReview = Left $ ri ^. reviewItemMeaning . _1
