@@ -24,6 +24,7 @@ executable frontend
                        ReviewState
                        FrontendCommon
                        TextReader
+                       ReadingPane
   -- other-extensions:
   build-depends:       base >=4.9 && <4.11
                      , common
