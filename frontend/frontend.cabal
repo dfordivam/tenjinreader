@@ -45,6 +45,7 @@ executable frontend
                      , these
                      , random
                      , vector
+                     , hs-nlp-jp-utils
 
                      , jsaddle-warp
 

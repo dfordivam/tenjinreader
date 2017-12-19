@@ -24,6 +24,8 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import System.Random
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
+import NLP.Japanese.Utils
 
 data ReviewStatus =
   NotAnswered | AnsweredWrong
@@ -46,9 +48,10 @@ class SrsReviewType rt where
     (NonEmpty Meaning) (NonEmpty Reading)
   getField :: ReviewItem -> (ActualReviewType rt) -> (NonEmpty Text)
   getInputFieldStyle :: ActualReviewType rt -> Text
+  getInputFieldPlaceHolder :: ActualReviewType rt -> Text
 
   -- Get the pending item based on the review state
-  getRandomRT :: rt -> Bool -> ActualReviewType rt
+  getRandomRT :: ReviewItem -> rt -> Bool -> ActualReviewType rt
 
 instance SrsReviewType ProdReview where
   data ActualReviewType ProdReview = ReadingProdReview
@@ -61,12 +64,18 @@ instance SrsReviewType ProdReview where
   getAnswer ri _ = Right $ ri ^. reviewItemReading . _1
   getField ri _ = fmap unMeaning . fst $ ri ^. reviewItemMeaning
   getInputFieldStyle _ = "background-color: antiquewhite;"
-  getRandomRT _ _ = ReadingProdReview
+  getInputFieldPlaceHolder _ = "日本語で"
+  getRandomRT _ _ _ = ReadingProdReview
+
+hasKanaInField ri = any (not . (any isKanji) . T.unpack)
+  (NE.toList $ getField ri ReadingRecogReview)
 
 instance SrsReviewType RecogReview where
   data ActualReviewType RecogReview = ReadingRecogReview | MeaningRecogReview
   reviewType = const ReviewTypeRecogReview
-  initState _ = RecogReview (These NotAnswered NotAnswered)
+  initState ri
+    | hasKanaInField ri = RecogReview (That NotAnswered)
+    | otherwise = RecogReview (These NotAnswered NotAnswered)
   getField ri _ = ri ^. reviewItemField
 
   getAnswer ri ReadingRecogReview = Right $ ri ^. reviewItemReading . _1
@@ -75,7 +84,12 @@ instance SrsReviewType RecogReview where
   getInputFieldStyle ReadingRecogReview = "background-color: palegreen;"
   getInputFieldStyle MeaningRecogReview = "background-color: aliceblue;"
 
-  getRandomRT rs b = case rs of
+  getInputFieldPlaceHolder ReadingRecogReview = "かな"
+  getInputFieldPlaceHolder MeaningRecogReview = "意味（英語で）"
+
+  getRandomRT ri rs b
+    | hasKanaInField ri = MeaningRecogReview
+    | otherwise = case rs of
     (RecogReview (This _)) -> ReadingRecogReview
     (RecogReview (That _)) -> MeaningRecogReview
     (RecogReview (These s1 s2))

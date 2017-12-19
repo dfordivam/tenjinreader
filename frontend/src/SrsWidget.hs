@@ -405,7 +405,7 @@ getRevItemDyn widgetStateDyn ev = do
   v <- performEvent $ ffor (tagDyn widgetStateDyn ev) $ \st -> do
     rss <- liftIO $ getRandomItems (Map.toList (_reviewQueue st)) 1
     toss <- liftIO $ randomIO
-    return $ (\(_,(ri,rt)) -> (ri, getRandomRT rt toss)) <$> (headMay rss)
+    return $ (\(_,(ri,rt)) -> (ri, getRandomRT ri rt toss)) <$> (headMay rss)
 
   holdDyn Nothing v
 
@@ -513,11 +513,13 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
   let
     style = "text-align: center; width: 100%;" <> color
     color = getInputFieldStyle rt
+    ph = getInputFieldPlaceHolder rt
     inputField ev = do
       let tiAttr = def
             & textInputConfig_setValue .~ ev
             & textInputConfig_attributes
-            .~ constDyn ("style" =: style)
+            .~ constDyn (("style" =: style)
+                        <> ("placeholder" =: ph))
       divClass "" $
         divClass "" $ do
           textInput tiAttr
