@@ -239,9 +239,9 @@ makeReaderDocumentContent t = do
   se <- asks appVocabSearchEngNoGloss
   liftIO $ parseAndSearch vocabDb se mec t
 
-getAddDocument :: AddDocument
+getAddOrEditDocument :: AddOrEditDocument
   -> WsHandlerM (Maybe ReaderDocument)
-getAddDocument (AddDocument title t) = do
+getAddOrEditDocument (AddOrEditDocument dId title t) = do
   uId <- asks currentUserId
   c <- lift $ makeReaderDocumentContent t
 
@@ -256,28 +256,16 @@ getAddDocument (AddDocument title t) = do
           zerokey = ReaderDocumentId 0
           nextKey (ReaderDocumentId k, _)
             = ReaderDocumentId (k + 1)
-          nd = ReaderDocument newk title c
+
+          docId = maybe newk id dId
+          nd = ReaderDocument docId title c
 
       put $ Just nd
       lift $ rd &
-        readerDocuments %%~ Tree.insertTree newk nd
+        readerDocuments %%~ Tree.insertTree docId nd
 
   lift $ transactSrsDB $ runStateWithNothing $
     userReviews %%~ updateTreeLiftedM uId upFun
-
-getEditDocument :: EditDocument
-  -> WsHandlerM (Maybe ReaderDocument)
-getEditDocument (EditDocument dId title t) = do
-  uId <- asks currentUserId
-  c <- lift $ makeReaderDocumentContent t
-
-  let
-    nd = ReaderDocument dId title c
-
-  lift $ transactSrsDB_ $
-    userReviews %%~ updateTreeM uId
-      (readerDocuments %%~ Tree.insertTree dId nd)
-  return $ Just nd
 
 getListDocuments :: ListDocuments
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]

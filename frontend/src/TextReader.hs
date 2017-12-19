@@ -17,22 +17,110 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Vector as V
 
-textReaderWidget
+data TextReaderWidgetView
+  = ListOfDocumentsView
+  | EditDocumentView
+  | ReadingView
+  deriving (Eq)
+
+textReaderTop
   :: AppMonad t m
   => AppMonadT t m ()
-textReaderWidget = divClass "" $ do
-  ti <- textInput def
-  ta <- textArea def
+textReaderTop = do
+  rec
+    let visEv = leftmost
+          [ListOfDocumentsView <$ closeEv
+          , EditDocumentView <$ editEv
+          , ReadingView <$ viewEv]
+        viewEv = leftmost [viewEv1, viewEv2]
+        editEv = leftmost [Nothing <$ newDocEv
+                          , Just <$> editEv2]
 
-  send <- button "send"
+    vis <- holdDyn ListOfDocumentsView visEv
 
-  annTextEv <- getWebSocketResponse $ tagDyn
-    (AddDocument <$> (value ti) <*> (value ta)) send
+    (viewEv1, newDocEv) <- handleVisibility ListOfDocumentsView vis $
+      (documentListViewer (closeEv))
 
-  widgetHold (return ())
-    (readingPane (constDyn False) <$>
-     (fmapMaybe identity annTextEv))
+    (viewEv2) <- handleVisibility EditDocumentView vis $
+      documentEditor editEv
+
+    (closeEv, editEv2) <- handleVisibility ReadingView vis $
+      readingPane viewEv
   return ()
+
+documentListViewer
+  :: AppMonad t m
+  => Event t () -- refresh
+  -> AppMonadT t m (Event t ReaderDocument
+                   , Event t ())
+documentListViewer refreshEv = do
+  ev <- getPostBuild
+  listEv <- getWebSocketResponse
+    (ListDocuments <$ (leftmost [ev,refreshEv]))
+
+  newDocEv <- button "New"
+  evDyn <- widgetHold (return [])
+    (viewList <$> listEv)
+  resp <- getWebSocketResponse
+    (switchPromptlyDyn (leftmost <$> evDyn))
+  return $ (fmapMaybe identity resp
+           , newDocEv)
+
+viewList lss = do
+  elClass "table" "table table-striped" $ do
+    el "thead" $ do
+      el "tr" $ do
+        el "th" $ text "Title"
+        el "th" $ text "Contents"
+    el "tbody" $  do
+      forM lss $ \(i, t, c) -> do
+        (e,_) <- el' "tr" $ do
+          el "td" $ text t
+          el "td" $ text c
+        return (ViewDocument i <$ domEvent Click e)
+
+documentEditor
+  :: AppMonad t m
+  => Event t (Maybe ReaderDocument)
+  -> AppMonadT t m (Event t ReaderDocument)
+documentEditor editEv = divClass "" $ do
+  let
+    tiAttr = constDyn $ (("style" =: "width: 100%;")
+                        <> ("placeholder" =: "Title"))
+    taAttr = constDyn $ (("style" =: "width: 100%;")
+                        <> ("rows" =: "10")
+                        <> ("placeholder" =: "Contents"))
+
+    titleSetEv = (maybe "" _readerDocTitle) <$> editEv
+    contentSetEv = (maybe "" getContentText) <$> editEv
+    getContentText (ReaderDocument _ _ c)
+      = T.unlines $ map toT (V.toList c)
+      where
+        toT ap = (mconcat $ map getT ap)
+        getT (Left t) = t
+        getT (Right (v,_,_)) = vocabToText v
+
+  rdDyn <- holdDyn Nothing editEv
+
+  ti <- textInput $ def
+    & textInputConfig_attributes .~ tiAttr
+    & textInputConfig_setValue .~ titleSetEv
+  ta <- textArea $ def
+    & textAreaConfig_attributes .~ taAttr
+    & textAreaConfig_setValue .~ contentSetEv
+
+  saveEv <- button "Save"
+  cancelEv <- button "Cancel"
+
+  let evDyn = AddOrEditDocument
+        <$> (fmap _readerDocId <$> rdDyn)
+        <*> (value ti)
+        <*> (value ta)
+  annTextEv <- getWebSocketResponse
+    $ tagDyn evDyn saveEv
+  delEv <- delay 0.1 (fmapMaybe identity $ tagDyn rdDyn cancelEv)
+  return $ leftmost [fmapMaybe identity annTextEv
+    , delEv]
 
 vocabRuby :: (_) => Dynamic t Int -> Dynamic t Bool -> Vocab -> m (_)
 vocabRuby fontSizePctDyn visDyn (Vocab ks) = do
@@ -55,18 +143,32 @@ fontSizeOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
   <$> ([80,85..200]  :: [Int])
 
 readingPane :: AppMonad t m
-  => Dynamic t Bool
-  -> ReaderDocument -- [[(Either Text (Vocab, VocabId, Bool))]]
+  => Event t ReaderDocument
+  -> AppMonadT t m (Event t (), Event t ReaderDocument)
+readingPane docEv = do
+  closeEv <- button "Close"
+  editEv <- button "Edit"
+  rdDyn <- holdDyn Nothing (Just <$> docEv)
+  widgetHold (return ())
+    (readingPaneView <$> docEv)
+  return (closeEv
+         , fmapMaybe identity $ tagDyn rdDyn editEv)
+
+readingPaneView :: AppMonad t m
+  => ReaderDocument
   -> AppMonadT t m ()
-readingPane showAllFurigana annText = do
+readingPaneView (ReaderDocument _ title annText) = do
+  let showAllFurigana = constDyn True
   fontSizeDD <- dropdown 100 (constDyn fontSizeOptions) def
   rubySizeDD <- dropdown 120 (constDyn fontSizeOptions) def
   lineHeightDD <- dropdown 150 (constDyn lineHeightOptions) def
   let divAttr = (\s l -> "style" =: ("font-size: " <> tshow s <>"%;"
-                                    <> "line-height: " <> tshow l <> "%;"))
+        <> "line-height: " <> tshow l <> "%;"))
         <$> (value fontSizeDD) <*> (value lineHeightDD)
-  vIdEv <- elDynAttr "div" divAttr $
-    forM (V.toList $ _readerDocContent annText) $ \annTextPara ->
+
+  vIdEv <- elDynAttr "div" divAttr $ do
+    el "h3" $ text title
+    forM (V.toList annText) $ \annTextPara ->
       el "p" $ do
         let f (Left t) = never <$ text t
             f (Right (v, vId, vis)) = do
@@ -102,16 +204,25 @@ showVocabDetailsWidget :: (AppMonad t m)
 showVocabDetailsWidget detailsEv = do
   let
 
+    attrBack = ("class" =: "modal")
+          <> ("style" =: "display: block;\
+              \opacity: 0%; z-index: 1050;")
+    attrFront = ("class" =: "nav navbar-fixed-bottom")
+          <> ("style" =: "z-index: 1060;")
 
     wrapper :: (_) => m a -> m (Event t ())
-    wrapper m = divClass "nav navbar-fixed-bottom" $
-      divClass "container-fluid" $
-        elAttr "div" (("class" =: "panel panel-default")
-          <> ("style" =: "max-height: 200px;\
-                         \overflow-y: auto;")) $ do
-          (e,_) <- elClass' "button" "close" $ text "Close"
-          m
-          return $ domEvent Click e
+    wrapper m = do
+      (e1,_) <- elAttr' "div" attrBack $ return ()
+      elAttr "div" attrFront $
+        divClass "container-fluid" $
+          elAttr "div" (("class" =: "panel panel-default")
+            <> ("style" =: "max-height: 200px;\
+                           \overflow-y: auto;")) $ do
+            (e,_) <- elClass' "button" "close" $ text "Close"
+            m
+            return $ leftmost
+              [domEvent Click e
+              , domEvent Click e1]
 
     wd :: AppMonad t m
       => Maybe _

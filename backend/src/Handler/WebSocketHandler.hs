@@ -69,8 +69,7 @@ wsHandler = HandlerWrapper $
   :<&> h getEditSrsItem
   :<&> h getBulkEditSrsItems
 
-  :<&> h getAddDocument
-  :<&> h getEditDocument
+  :<&> h getAddOrEditDocument
   :<&> h getListDocuments
   :<&> h getViewDocument
   :<&> h getDeleteDocument

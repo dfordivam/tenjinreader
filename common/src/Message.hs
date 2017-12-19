@@ -51,8 +51,7 @@ type AppRequest
   :<|> EditSrsItem
   :<|> BulkEditSrsItems
 
-  :<|> AddDocument
-  :<|> EditDocument
+  :<|> AddOrEditDocument
   :<|> ListDocuments
   :<|> ViewDocument
   :<|> DeleteDocument
@@ -253,18 +252,13 @@ instance WebSocketMessage AppRequest BulkEditSrsItems where
   type ResponseT AppRequest BulkEditSrsItems = Maybe ()
 
 ----------------------------------------------------------------
-data AddDocument = AddDocument Text Text
+data AddOrEditDocument =
+  AddOrEditDocument (Maybe ReaderDocumentId) Text Text
   deriving (Generic, Show, ToJSON, FromJSON)
 
-instance WebSocketMessage AppRequest AddDocument where
-  type ResponseT AppRequest AddDocument = (Maybe ReaderDocument)
-
-----------------------------------------------------------------
-data EditDocument = EditDocument ReaderDocumentId Text Text
-  deriving (Generic, Show, ToJSON, FromJSON)
-
-instance WebSocketMessage AppRequest EditDocument where
-  type ResponseT AppRequest EditDocument = (Maybe ReaderDocument)
+instance WebSocketMessage AppRequest AddOrEditDocument where
+  type ResponseT AppRequest AddOrEditDocument
+    = (Maybe ReaderDocument)
 
 ----------------------------------------------------------------
 data ListDocuments = ListDocuments
