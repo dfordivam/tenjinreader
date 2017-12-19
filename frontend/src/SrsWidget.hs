@@ -588,8 +588,13 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
 checkAnswer :: (Either (NonEmpty Meaning) (NonEmpty Reading))
             -> Text
             -> Bool
-checkAnswer (Left m) t = elem t answers
-  where answers = map unMeaning m
+checkAnswer (Left m) t = elem (T.toCaseFold $ T.strip t) (answers <> woExpl <> woDots)
+  where answers = map (T.toCaseFold . unMeaning) m
+        -- as (i.e. in the role of) -> as
+        woExpl = map (T.strip . fst . (T.breakOn "(")) answers
+        -- apart from... -> apart from
+        woDots = map (T.strip . fst . (T.breakOn "...")) answers
+
 checkAnswer (Right r) t = elem t answers
   where answers = map unReading r
 
