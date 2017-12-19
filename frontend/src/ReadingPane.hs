@@ -157,7 +157,8 @@ showVocabDetailsWidget detailsEv = do
           <> ("style" =: "display: block;\
               \opacity: 0%; z-index: 1050;")
     attrFront = ("class" =: "nav navbar-fixed-bottom")
-          <> ("style" =: "z-index: 1060;")
+          <> ("style" =: "z-index: 1060;\
+                         \padding: 10px;")
 
     wrapper :: (_) => m a -> m (Event t ())
     wrapper m = do
@@ -166,7 +167,8 @@ showVocabDetailsWidget detailsEv = do
         divClass "container-fluid" $
           elAttr "div" (("class" =: "panel panel-default")
             <> ("style" =: "max-height: 200px;\
-                           \overflow-y: auto;")) $ do
+                           \overflow-y: auto;\
+                           \padding: 15px;")) $ do
             (e,_) <- elClass' "button" "close" $ text "Close"
             m
             return $ leftmost
