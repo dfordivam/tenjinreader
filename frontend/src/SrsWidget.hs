@@ -556,6 +556,7 @@ reviewInputFieldHandler
  :: (MonadFix m,
      MonadHold t m,
      Reflex t,
+     DomBuilder t m,
      SrsReviewType rt)
  => TextInput t
  -> ActualReviewType rt
@@ -581,7 +582,13 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
   -- the dr event will fire after the correctEv (on second enter press)
     correctEv = tagDyn correct enterPress
     sendResult = ffilter (== NextReview) (tagDyn dyn enterPress)
-    dr = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
+    dr1 = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
+    incorrectEv = fmapMaybe identity $
+      (\b -> if b then Nothing else Just ()) <$> correctEv
+  mc <- widgetHold (return never)
+     ((button "Mark Correct") <$ incorrectEv)
+  let
+    dr = leftmost [dr1, (DoReviewEv (i,rt,True)) <$ switchPromptlyDyn mc ]
   return (dr, hiragana, correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
