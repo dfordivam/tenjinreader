@@ -15,20 +15,23 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Vector as V
 
 textReaderWidget
   :: AppMonad t m
   => AppMonadT t m ()
 textReaderWidget = divClass "" $ do
+  ti <- textInput def
   ta <- textArea def
 
   send <- button "send"
 
-  annTextEv <- getWebSocketResponse
-    (GetAnnotatedText <$> (tagDyn (value ta) send))
+  annTextEv <- getWebSocketResponse $ tagDyn
+    (AddDocument <$> (value ti) <*> (value ta)) send
 
   widgetHold (return ())
-    (readingPane (constDyn False) <$> annTextEv)
+    (readingPane (constDyn False) <$>
+     (fmapMaybe identity annTextEv))
   return ()
 
 vocabRuby :: (_) => Dynamic t Int -> Dynamic t Bool -> Vocab -> m (_)
@@ -53,7 +56,7 @@ fontSizeOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
 
 readingPane :: AppMonad t m
   => Dynamic t Bool
-  -> AnnotatedText -- [[(Either Text (Vocab, VocabId, Bool))]]
+  -> ReaderDocument -- [[(Either Text (Vocab, VocabId, Bool))]]
   -> AppMonadT t m ()
 readingPane showAllFurigana annText = do
   fontSizeDD <- dropdown 100 (constDyn fontSizeOptions) def
@@ -62,27 +65,28 @@ readingPane showAllFurigana annText = do
   let divAttr = (\s l -> "style" =: ("font-size: " <> tshow s <>"%;"
                                     <> "line-height: " <> tshow l <> "%;"))
         <$> (value fontSizeDD) <*> (value lineHeightDD)
-  vIdEv <- elDynAttr "div" divAttr $ forM annText $ \annTextPara ->
-    el "p" $ do
-      let f (Left t) = never <$ text t
-          f (Right (v, vId, vis)) = do
-            rec
-              let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
-              visDyn <- holdDyn vis evVis
-              (ek, eme, eml) <- vocabRuby (value rubySizeDD) visDyn v
-            return $ (vId, vocabToText v) <$ ek
-          onlyKana (Vocab ks) = (flip all) ks $ \case
-            (Kana _) -> True
-            _ -> False
-          addSpace [] = []
-          addSpace (l@(Left _):r@(Right _):rs) =
-            l : (Left "　") : (addSpace (r:rs))
-          addSpace (r1@(Right (v1,_,_)):r2@(Right _):rs)
-            | onlyKana v1 = r1 : (Left "　") : (addSpace (r2:rs))
-            | otherwise = r1:(addSpace (r2:rs))
-          addSpace (r:rs) = r : (addSpace rs)
+  vIdEv <- elDynAttr "div" divAttr $
+    forM (V.toList $ _readerDocContent annText) $ \annTextPara ->
+      el "p" $ do
+        let f (Left t) = never <$ text t
+            f (Right (v, vId, vis)) = do
+              rec
+                let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
+                visDyn <- holdDyn vis evVis
+                (ek, eme, eml) <- vocabRuby (value rubySizeDD) visDyn v
+              return $ (vId, vocabToText v) <$ ek
+            onlyKana (Vocab ks) = (flip all) ks $ \case
+              (Kana _) -> True
+              _ -> False
+            addSpace [] = []
+            addSpace (l@(Left _):r@(Right _):rs) =
+              l : (Left "　") : (addSpace (r:rs))
+            addSpace (r1@(Right (v1,_,_)):r2@(Right _):rs)
+              | onlyKana v1 = r1 : (Left "　") : (addSpace (r2:rs))
+              | otherwise = r1:(addSpace (r2:rs))
+            addSpace (r:rs) = r : (addSpace rs)
 
-      leftmost <$> mapM f (annTextPara)
+        leftmost <$> mapM f (annTextPara)
 
   divClass "" $ do
     let ev = leftmost vIdEv

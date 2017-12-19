@@ -43,6 +43,7 @@ executable frontend
                      , bytestring
                      , these
                      , random
+                     , vector
 
                      , jsaddle-warp
 
