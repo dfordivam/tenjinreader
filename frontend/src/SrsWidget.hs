@@ -19,6 +19,7 @@ import qualified Data.List.NonEmpty as NE
 import NLP.Romkan (toHiragana)
 import Data.List.NonEmpty (NonEmpty)
 import System.Random
+import qualified JSDOM.HTMLElement as DOM
 
 data SrsWidgetView =
   ShowStatsWindow | ShowReviewWindow ReviewType | ShowBrowseSrsItemsWindow
@@ -331,34 +332,6 @@ reviewDataPicker inp = do
       f _ _ = pure Nothing
   return $ join $ f d <$> vDyn
 
-  -- <!-- Modal -->
-  -- <div class="modal fade" id="myModal" role="dialog">
-  --   <div class="modal-dialog">
-
-  --     <!-- Modal content-->
-  --     <div class="modal-content">
-  --       <div class="modal-header">
-  --         <button type="button" class="close" data-dismiss="modal">&times;</button>
-  --         <h3 class="">Edit 変</h3>
-  --       </div>
-  --       <div class="modal-body">
-  --         <div class="">へん<a>(X)
-  --   </a><input type="text"><button>Add</button>
-  --   </div>
-  --   <div class=""><p>&gt; strange<a>(X)</a></p>
-  --       <p>&gt; odd<a>(X)</a></p>
-  --       <input type="text"><button>Add</button></div>
-  --      <div class="">Reading Notes<div class=""><textarea></textarea></div></div><div class="">Meaning Notes<div class=""><textarea></textarea></div></div><div class=""></div>
-  -- --       </div>
-  --       <div class="modal-footer">
-  --       <button>Save</button>
-  --         <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-  --       </div>
-  --     </div>
-
-  --   </div>
-  -- </div>
-
 reviewWidget
   :: forall t m rt proxy . (AppMonad t m, SrsReviewType rt)
   => proxy rt
@@ -483,7 +456,7 @@ reviewWidgetView statsDyn dyn2 = do
       showStats
 
   let kanjiRowAttr = ("class" =: "")
-         <> ("style" =: "height: 10rem;")
+         <> ("style" =: "height: 10rem; text-align: center;")
       kanjiTextAttr = ("style" =: "font-size: 5rem;")
 
   elAttr "div" kanjiRowAttr $
@@ -538,7 +511,7 @@ inputFieldWidget
   -> m (Event t (ReviewStateEvent rt))
 inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
   let
-    style = "text-align: center;" <> color
+    style = "text-align: center; width: 100%;" <> color
     color = getInputFieldStyle rt
     inputField ev = do
       let tiAttr = def
@@ -567,6 +540,11 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
     inpField <- inputField inpTxtEv
     (dr, inpTxtEv, resEv) <-
       reviewInputFieldHandler inpField rt ri
+
+  ev <- delay 0.1 =<< getPostBuild
+
+  widgetHold (return ()) ( DOM.focus (_textInput_element inpField) <$ ev)
+
   widgetHold (return ()) (showResult <$> resEv)
   drForced <- button "分かる"
   return $ leftmost [DoReviewEv (i, rt, True) <$ drForced
