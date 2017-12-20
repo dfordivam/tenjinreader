@@ -153,6 +153,7 @@ getKanjiSE kDb = insertDocs docs init
           . to extractMeaningTerms . traverse
 
     transformQry :: Term -> KanjiSearchFields -> Term
+    transformQry t KanjiMeanings = maybe "" identity $ headMay $ extractMeaningTerms t
     transformQry t _ = t
 
 kanjiSearchRankParams :: SearchRankParameters KanjiSearchFields NoFeatures

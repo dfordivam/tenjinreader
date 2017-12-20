@@ -90,22 +90,33 @@ kanjiFilterWidget
 kanjiFilterWidget validRadicalsEv = do
 
   -- NW 1
-  sentenceTextArea <- divClass "" $ textArea def
+  let
+    taAttr = constDyn $ (("style" =: "width: 100%;")
+                        <> ("rows" =: "4")
+                        <> ("placeholder" =: "Enter text to search all Kanjis in it"))
+  sentenceTextArea <- divClass "" $ textArea $ def
+    & textAreaConfig_attributes .~ taAttr
 
+  -- TODO Add IME and kana input separate field
   -- NW 2
-  (readingTextInput, readingSelectionDropDown, meaningTextInput)
-    <- divClass "" $ do
-    t <- textInput def
-    d <- dropdown
-      KunYomi
-      (constDyn ((KunYomi =: "Kunyomi") <> (OnYomi =: "Onyomi ")))
-      def
-    m <- textInput def
-    return (t,d,m)
+  -- (readingTextInput, readingSelectionDropDown, meaningTextInput)
+  --   <- divClass "" $ do
+  --   t <- textInput def
+  --   d <- dropdown
+  --     KunYomi
+  --     (constDyn ((KunYomi =: "Kunyomi") <> (OnYomi =: "Onyomi ")))
+  --     def
+  --   m <- textInput def
+  --   return (t,d,m)
+  let
+    tiAttr = constDyn $ (("style" =: "width: 100%;")
+                        <> ("placeholder" =: "Search by meaning or reading"))
+  t <- textInput $ def
+    & textInputConfig_attributes .~ tiAttr
 
-  let filterDyn = AdditionalFilter <$> (value readingTextInput)
-                    <*> (value readingSelectionDropDown)
-                    <*> (value meaningTextInput)
+  let filterDyn = AdditionalFilter <$> (value t)
+                    <*> pure KunYomi
+                    <*> (pure "")
 
   -- NW 3
   selectedRadicals <- radicalMatrix validRadicalsEv
@@ -139,7 +150,8 @@ radicalMatrix evValid = do
     let
       disableAll = constDyn False
       renderMatrix = do
-        divClass "row" $ mapM showRadical (Map.toList radicalTable)
+        divClass "row well-lg hidden-xs"
+          $ mapM showRadical (Map.toList radicalTable)
 
       showRadical :: (RadicalId, RadicalDetails) -> m (Event t RadicalId)
       showRadical (i,(RadicalDetails r _)) = do

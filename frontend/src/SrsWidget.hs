@@ -65,7 +65,7 @@ showStatsWidget (recog, prod) = do
   let
     w lbl rs = divClass "panel panel-default" $ do
       ev <- divClass "panel-heading" $ divClass "row" $ do
-        divClass "col-sm-2" $ text lbl
+        elClass "h4" "col-sm-3" $ text lbl
         divClass "col-sm-4" $
           button "Start Review"
 
