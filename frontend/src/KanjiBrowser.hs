@@ -93,6 +93,7 @@ kanjiFilterWidget validRadicalsEv = do
   let
     taAttr = constDyn $ (("style" =: "width: 100%;")
                         <> ("rows" =: "4")
+                        <> ("class" =: "form-control")
                         <> ("placeholder" =: "Enter text to search all Kanjis in it"))
   sentenceTextArea <- divClass "" $ textArea $ def
     & textAreaConfig_attributes .~ taAttr
@@ -110,6 +111,7 @@ kanjiFilterWidget validRadicalsEv = do
   --   return (t,d,m)
   let
     tiAttr = constDyn $ (("style" =: "width: 100%;")
+                        <> ("class" =: "form-control")
                         <> ("placeholder" =: "Search by meaning or reading"))
   t <- textInput $ def
     & textInputConfig_attributes .~ tiAttr
@@ -266,18 +268,16 @@ vocabListWindow
   => req -> Event t VocabList -> AppMonadT t m ()
 vocabListWindow req listEv = do
   let
-    listItem (v,s) = el "tr" $ do
-      elClass "td" "col-sm-2" $ do
+    listItem (v,s) = divClass "row well-sm" $ do
+      divClass "col-md-3" $ do
         displayVocabT $ v ^. vocab
 
-      elClass "td" "col-sm-10" $ elClass "table" "table" $ el "tbody" $ do
-        el "tr" $ do
-          elClass "td" "col-sm-8" $
-            text $ T.intercalate "," $ map unMeaning
-              $ v ^. vocabMeanings
-          elClass "td" "col-sm-2" $
-            addEditSrsEntryWidget (Right $ v ^. vocabId)
-              Nothing s
+      divClass "col-md-5" $
+        text $ T.intercalate ", " $ map unMeaning
+          $ v ^. vocabMeanings
+      divClass "col-md-2" $
+        addEditSrsEntryWidget (Right $ v ^. vocabId)
+          Nothing s
 
     liWrap i = do
       dyn $ listItem <$> i
@@ -288,7 +288,7 @@ vocabListWindow req listEv = do
 
   -- NW 1
   rec
-    elClass "table" "table" $ el "tbody" $  do
+    divClass "" $  do
       lmEv <- getWebSocketResponse $ req <$ ev
       dyn <- foldDyn fun [] (align listEv lmEv)
       -- NW 1.1
@@ -305,21 +305,32 @@ textMay Nothing = text ""
 vocabSearchWidget
   :: AppMonad t m
   => AppMonadT t m ()
-vocabSearchWidget = divClass "" $ divClass "" $ do
+vocabSearchWidget = divClass "" $ divClass "panel panel-default" $ do
 
-  vocabResEv <- divClass "" $ do
-    ti <- textInput def
-    filt <- dropdown Nothing
-      (constDyn ((Nothing =: "All")
-      <> ((Just PosNoun) =: "Noun Only")
-      <> ((Just (PosVerb (Regular Ichidan) NotSpecified))
-          =: "Verb Only")
-      <> ((Just (PosAdjective NaAdjective)) =: "Adj or Adv only")))
-      def
+  vocabResEv <- divClass "panel-heading"  $ do
+    let
+      tiAttr = constDyn $ (("style" =: "")
+                          <> ("class" =: "col-sm-9")
+                          <> ("placeholder" =: "Search by meaning or reading"))
+    ti <- textInput $ def
+      & textInputConfig_attributes .~ tiAttr
+
+    filt <- divClass "" $ do
+      text "|"
+
+      dropdown Nothing
+        (constDyn ((Nothing =: "All")
+        <> ((Just PosNoun) =: "Noun Only")
+        <> ((Just (PosVerb (Regular Ichidan) NotSpecified))
+            =: "Verb Only")
+        <> ((Just (PosAdjective NaAdjective)) =: "Adj or Adv only")))
+        $ def
+          & dropdownConfig_attributes .~ (constDyn ("class" =: "col-sm-2"))
 
     let vsDyn = VocabSearch <$> (value ti)
                   <*> (value filt)
     searchEv <- debounce 1 (updated vsDyn)
     getWebSocketResponse searchEv
 
-  vocabListWindow LoadMoreVocabSearchResult vocabResEv
+  divClass "panel-body" $
+    vocabListWindow LoadMoreVocabSearchResult vocabResEv

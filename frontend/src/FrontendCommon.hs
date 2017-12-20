@@ -72,12 +72,16 @@ addEditSrsEntryWidget i t s = do
   let
     widget s = case s of
       (Just sId) -> do
-        ev <- button "Edit Srs Item"
+        ev <- do
+          (e,_) <- elClass' "button" "btn btn-xs" $ text "Edit SRS"
+          return $ domEvent Click e
         openEditSrsItemWidget (sId <$ ev)
         return never
 
       (Nothing) -> do
-        ev <- button "Add to Srs"
+        ev <- do
+          (e,_) <- elClass' "button" "btn btn-xs" $ text "Add to SRS"
+          return $ domEvent Click e
         getWebSocketResponse $ QuickAddSrsItem i t <$ ev
   rec
     sDyn <- holdDyn s resp
