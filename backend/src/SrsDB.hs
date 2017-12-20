@@ -13,6 +13,7 @@
 module SrsDB where
 
 import Common
+import KanjiDB
 import Model hiding (Key)
 
 import Control.Applicative (Applicative, (<$>))
@@ -37,6 +38,32 @@ import Data.List.NonEmpty (NonEmpty)
 
 import Data.Time.Calendar (Day)
 
+data SrsReviewData = SrsReviewData
+  { _reviews :: Tree SrsEntryId SrsEntry
+  , _readerDocuments :: Tree ReaderDocumentId ReaderDocument
+  , _kanjiSrsMap :: Tree KanjiId SrsEntryId
+  , _vocabSrsMap :: Tree VocabId SrsEntryId
+  -- An Srs Item may not have an entry in this map
+  , _srsKanjiVocabMap :: Tree SrsEntryId (Either KanjiId VocabId)
+  } deriving (Generic, Show, Typeable, Binary, Value)
+
+-- Haskey based db schema
+data AppSrsReviewState = AppSrsReviewState
+  { _userReviews :: Tree Int64 SrsReviewData
+  } deriving (Generic, Show, Typeable, Binary, Value, Root)
+
+openSrsDB :: FilePath -> IO (ConcurrentDb AppSrsReviewState)
+openSrsDB fp =
+  flip runFileStoreT defFileStoreConfig $
+    openConcurrentDb hnds >>= \case
+      Nothing -> createConcurrentDb hnds (AppSrsReviewState Tree.empty)
+      Just db -> return db
+  where
+    hnds = concurrentHandles fp
+
+instance Value Int
+instance Value a => Value (Maybe a)
+
 instance Value Day
 instance Value a => Value (NonEmpty a)
 instance (Value a, Value b) => Value (Either a b)
@@ -56,34 +83,13 @@ instance Value ReaderDocumentId
 instance Binary ReaderDocument
 instance Value ReaderDocument
 
+instance Binary SrsEntryId
+instance Value SrsEntryId
+
 instance Key SrsEntryId
 instance Key ReaderDocumentId
 instance Key KanjiId
 instance Key VocabId
 
-data SrsReviewData = SrsReviewData
-  { _reviews :: Tree SrsEntryId SrsEntry
-  , _readerDocuments :: Tree ReaderDocumentId ReaderDocument
-  , _kanjiSrsMap :: Tree KanjiId SrsEntryId
-  , _vocabSrsMap :: Tree VocabId SrsEntryId
-  -- An Srs Item may not have an entry in this map
-  , _srsKanjiVocabMap :: Tree SrsEntryId (Either KanjiId VocabId)
-  } deriving (Generic, Show, Typeable, Binary, Value)
-
 makeLenses ''SrsReviewData
-
--- Haskey based db schema
-data AppSrsReviewState = AppSrsReviewState
-  { _userReviews :: Tree Int64 SrsReviewData
-  } deriving (Generic, Show, Typeable, Binary, Value, Root)
-
 makeLenses ''AppSrsReviewState
-
-openSrsDB :: FilePath -> IO (ConcurrentDb AppSrsReviewState)
-openSrsDB fp =
-  flip runFileStoreT defFileStoreConfig $
-    openConcurrentDb hnds >>= \case
-      Nothing -> createConcurrentDb hnds (AppSrsReviewState Tree.empty)
-      Just db -> return db
-  where
-    hnds = concurrentHandles fp

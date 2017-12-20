@@ -18,9 +18,7 @@ import Control.Lens.TH
 import Control.Lens hiding (reviews)
 import Data.Aeson hiding (Value)
 import Data.Default
-import Data.Binary
 import Data.Time.Calendar
-import Data.BTree.Primitives (Value)
 import Data.JMDict.AST
 import Data.List.NonEmpty (NonEmpty(..))
 import DerivingInstances
@@ -29,65 +27,62 @@ import NLP.Japanese.Utils
 import Data.These
 import Data.Vector (Vector)
 
-instance Value Int
-instance Value a => Value (Maybe a)
-
 newtype Kanji = Kanji { unKanji :: Text }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype Rank = Rank { unRank :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype Meaning = Meaning { unMeaning :: Text }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON)
 
 newtype MeaningNotes = MeaningNotes { unMeaningNotes :: Text }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON)
 
 newtype Reading = Reading { unReading :: Text }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON)
 
 newtype ReadingNotes = ReadingNotes { unReadingNotes :: Text }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON)
 
 newtype Grade = Grade { unGrade :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype StrokeCount = StrokeCount { unStrokeCount :: Int }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON)
 
 newtype JlptLevel = JlptLevel { unJlptLevel :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype WikiRank = WikiRank { unWikiRank :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype WkLevel = WkLevel { unWkLevel :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype RadicalId = RadicalId { unRadicalId :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype KanjiId = KanjiId { unKanjiId :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 type VocabId = EntryId
 -- newtype VocabId = VocabId { unVocabId :: Int }
 --   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
 
 newtype SrsEntryId = SrsEntryId { unSrsEntryId :: Int64 }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype SrsLevel = SrsLevel { unSrsLevel :: Int }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 newtype Vocab = Vocab { unVocab :: [KanjiOrKana] }
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 data KanjiOrKana
   = KanjiWithReading Kanji Text
   | Kana Text
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 vocabToKana :: Vocab -> Text
 vocabToKana (Vocab ks) = mconcat $ map getFur ks
@@ -116,7 +111,7 @@ data KanjiDetails = KanjiDetails
   , _kanjiWkLevel        :: Maybe WkLevel
   , _kanjiMeanings       :: [Meaning]
   }
-  deriving (Eq, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON)
 
 
 data VocabDetails = VocabDetails
@@ -126,7 +121,7 @@ data VocabDetails = VocabDetails
   , _vocabFreqRank       :: Maybe Rank
   , _vocabMeanings       :: [Meaning]
   }
-  deriving (Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Generic, Show, ToJSON, FromJSON)
 
 data AdditionalFilter = AdditionalFilter
   { readingKana :: Text
@@ -139,7 +134,7 @@ instance Default AdditionalFilter where
   def = AdditionalFilter "" KunYomi ""
 
 data ReadingType = OnYomi | KunYomi | Nanori
-  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 type SrsEntryField = NonEmpty Text
 

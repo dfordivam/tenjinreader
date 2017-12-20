@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -33,6 +34,8 @@ import NLP.Japanese.Utils as Utils
 import System.Directory
 import qualified Data.ByteString.Lazy
 import Data.JMDict.AST
+import Data.BTree.Primitives (Value, Key)
+import Data.List.NonEmpty (NonEmpty(..))
 
 type KanjiDb = Map KanjiId KanjiData
 
@@ -43,8 +46,6 @@ data KanjiData = KanjiData
   }
   deriving (Generic, Binary)
 
-makeLenses ''KanjiData
-
 type VocabDb = Map VocabId VocabData
 
 data VocabData = VocabData
@@ -54,9 +55,105 @@ data VocabData = VocabData
   }
   deriving (Generic, Binary)
 
-makeLenses ''VocabData
-
 type RadicalDb = Map RadicalId (Set KanjiId)
+
+
+instance Binary Kanji
+instance Value Kanji
+instance Binary Rank
+instance Value Rank
+instance Binary Meaning
+instance Value Meaning
+instance Binary MeaningNotes
+instance Value MeaningNotes
+instance Binary Reading
+instance Value Reading
+instance Binary ReadingNotes
+instance Value ReadingNotes
+instance Binary Grade
+instance Value Grade
+instance Binary StrokeCount
+instance Value StrokeCount
+instance Binary JlptLevel
+instance Value JlptLevel
+instance Binary WikiRank
+instance Value WikiRank
+instance Binary WkLevel
+instance Value WkLevel
+instance Binary RadicalId
+instance Value RadicalId
+instance Binary KanjiId
+instance Value KanjiId
+instance Binary SrsLevel
+instance Value SrsLevel
+instance Binary Vocab
+instance Value Vocab
+instance Binary KanjiOrKana
+instance Value KanjiOrKana
+instance Binary KanjiDetails
+instance Value KanjiDetails
+instance Binary VocabDetails
+instance Value VocabDetails
+instance Binary ReadingType
+instance Value ReadingType
+
+
+instance Binary Sense
+instance Value Sense
+instance Binary EntryId
+instance Value EntryId
+
+instance Binary Entry
+instance Value Entry
+instance Binary KanjiElement
+instance Value KanjiElement
+instance Binary ReadingElement
+instance Value ReadingElement
+instance Binary Priority
+instance Value Priority
+instance Binary ReadingPhrase
+instance Value ReadingPhrase
+instance Binary KanjiPhrase
+instance Value KanjiPhrase
+instance Binary KanjiInfo
+instance Value KanjiInfo
+instance Binary ReadingInfo
+instance Value ReadingInfo
+instance Binary PartOfSpeech
+instance Value PartOfSpeech
+instance Binary Auxiliary
+instance Value Auxiliary
+instance Binary NounType
+instance Value NounType
+instance Binary VerbType
+instance Value VerbType
+instance Binary Dialect
+instance Value Dialect
+instance Binary Gloss
+instance Value Gloss
+instance Binary RegularVerb
+instance Value RegularVerb
+instance Binary IrregularVerb
+instance Value IrregularVerb
+instance Binary VerbEnding
+instance Value VerbEnding
+instance Binary IsTransitive
+instance Value IsTransitive
+instance Binary SpecialVerb
+instance Value SpecialVerb
+instance Binary Adverb
+instance Value Adverb
+instance Binary Adjective
+instance Value Adjective
+instance Binary SenseMisc
+instance Value SenseMisc
+instance Binary LanguageSource
+instance Value LanguageSource
+instance Binary SenseField
+instance Value SenseField
+instance Binary (NonEmpty ReadingElement)
+makeLenses ''KanjiData
+makeLenses ''VocabData
 --
 createDBs ::
   MeCab

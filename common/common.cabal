@@ -34,8 +34,6 @@ library
                      , these
                      , vector
                      , hs-nlp-jp-utils
-                     -- TODO remove this
-                     , haskey-btree
                      , jmdict-ast
 
   hs-source-dirs:      src
