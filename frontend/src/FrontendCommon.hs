@@ -93,34 +93,35 @@ addEditSrsEntryWidget i t s = do
 openEditSrsItemWidget
   :: (AppMonad t m)
   => Event t (SrsEntryId)
-  -> AppMonadT t m ()
+  -> AppMonadT t m (Event t (SrsEntryId, SrsEntry))
 openEditSrsItemWidget ev = do
   srsItEv <- getWebSocketResponse $ GetSrsItem <$> ev
 
   let
       modalWidget :: (AppMonad t m)
         => Maybe (SrsEntryId, SrsEntry)
-        -> AppMonadT t m ()
+        -> AppMonadT t m (Event t (SrsEntryId, SrsEntry))
       modalWidget (Just s) = do
         rec
           d <- widgetHold (editWidget s)
-            ((return never) <$ switchPromptlyDyn d)
-        return ()
+            ((return (never,never)) <$ switchPromptlyDyn (fst <$> d))
+        return (switchPromptlyDyn $ snd <$> d)
 
       modalWidget Nothing = do
-        text $ "Some Error"
+        return never
 
       editWidget :: AppMonad t m
         => (SrsEntryId, SrsEntry)
-        -> AppMonadT t m (Event t ())
+        -> AppMonadT t m (Event t (), Event t (SrsEntryId, SrsEntry))
       editWidget (sId, s) = do
         rec
           (sNew, saveEv, closeEv) <- editWidgetView s ev
-          ev <- getWebSocketResponse $ EditSrsItem sId
-            <$> tagDyn sNew saveEv
-        return closeEv
+          let sEv = tagDyn sNew saveEv
+          ev <- getWebSocketResponse $ EditSrsItem sId <$> sEv
+        return (closeEv, (,) sId <$> sEv)
 
-  void $ widgetHold (return ()) (modalWidget <$> srsItEv)
+  switchPromptlyDyn
+    <$> widgetHold (return never) (modalWidget <$> srsItEv)
 
 modalDiv m = do
   divClass "modal-backdrop fade in" $ return ()

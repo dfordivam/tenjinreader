@@ -522,15 +522,17 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
     widgetHold (return ()) (showResult <$> resEv)
 
   -- Footer
-  drForced <- divClass "row" $ do
-    divClass "col-sm-2" $ do
+  (drForced, addEditEv) <- divClass "row" $ do
+    addEditEv <- divClass "col-sm-2" $ do
       ev <- button "Edit"
-      openEditSrsItemWidget (i <$ ev)
-    divClass "col-sm-2" $
+      newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
+      return $ (\s -> AddItemsEv [getReviewItem s] 0) <$> newSrsEntryEv
+    ev <- divClass "col-sm-2" $
       button "分かる"
+    return (ev, addEditEv)
 
   return $ leftmost [DoReviewEv (i, rt, True) <$ drForced
-                    , dr]
+                    , dr, addEditEv]
 
 reviewInputFieldHandler
  :: (MonadFix m,

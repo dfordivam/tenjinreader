@@ -17,6 +17,7 @@ import Data.Default
 import Data.Time.Calendar
 import Data.List.NonEmpty (NonEmpty)
 import Control.Lens.TH
+import Control.Lens
 
 import Reflex.Dom.WebSocket.Message
 
@@ -199,6 +200,17 @@ data ReviewItem = ReviewItem
   , _reviewItemReading :: (NonEmpty Reading, Maybe ReadingNotes)
   }
   deriving (Generic, Show, ToJSON, FromJSON)
+
+getReviewItem
+  :: (SrsEntryId, SrsEntry)
+  -> ReviewItem
+getReviewItem (i,s) =
+  ReviewItem i (s ^. field) (m,mn) (r,rn)
+  where
+    m = (s ^. meaning)
+    mn = (s ^. meaningNotes)
+    r = (s ^. readings)
+    rn = (s ^. readingNotes)
 
 data DoReview = DoReview ReviewType [(SrsEntryId, Bool)]
   deriving (Generic, Show, ToJSON, FromJSON)

@@ -224,17 +224,6 @@ updateSrsEntry b today rt r = r
       then s & successCount +~ 1
       else s & failureCount +~ 1
 
-getReviewItem
-  :: (SrsEntryId, SrsEntry)
-  -> ReviewItem
-getReviewItem (i,s) =
-  ReviewItem i (s ^. field) (m,mn) (r,rn)
-  where
-    m = (s ^. meaning)
-    mn = (s ^. meaningNotes)
-    r = (s ^. readings)
-    rn = (s ^. readingNotes)
-
 
 getNextReviewDate
   :: Day
