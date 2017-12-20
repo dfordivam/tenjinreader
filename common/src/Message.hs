@@ -190,7 +190,7 @@ data GetNextReviewItems =
 
 instance WebSocketMessage AppRequest GetNextReviewItems where
   type ResponseT AppRequest GetNextReviewItems
-    = [ReviewItem]
+    = ([ReviewItem], Int) -- Pending reviews
 
 data ReviewItem = ReviewItem
   { _reviewItemId ::  SrsEntryId

@@ -29,32 +29,33 @@ srsWidget
   :: AppMonad t m
   => AppMonadT t m ()
 srsWidget = divClass "" $ do
-  let
+  ev <- getPostBuild
 
   rec
     let
-      visEv = leftmost [ev1,ev2,ev3,ev4]
+      visEv = leftmost [ev1,ev2,ev3,ev4, ShowStatsWindow <$ ev]
+      refreshEv = (() <$ visEv)
     vis <- holdDyn ShowStatsWindow visEv
 
     ev1 <- handleVisibility ShowStatsWindow vis $
-      showStats
+      showStats refreshEv
 
     ev2 <- handleVisibility ShowBrowseSrsItemsWindow vis $
       browseSrsItemsWidget
 
     ev3 <- handleVisibility (ShowReviewWindow ReviewTypeRecogReview) vis $
-      reviewWidget (Proxy :: Proxy RecogReview)
+      reviewWidget (Proxy :: Proxy RecogReview) refreshEv
 
     ev4 <- handleVisibility (ShowReviewWindow ReviewTypeProdReview) vis $
-      reviewWidget (Proxy :: Proxy ProdReview)
+      reviewWidget (Proxy :: Proxy ProdReview) refreshEv
   return ()
 
 showStats
   :: AppMonad t m
-  => AppMonadT t m (Event t SrsWidgetView)
-showStats = do
-  ev <- getPostBuild
-  s <- getWebSocketResponse (GetSrsStats () <$ ev)
+  => Event t ()
+  -> AppMonadT t m (Event t SrsWidgetView)
+showStats refreshEv = do
+  s <- getWebSocketResponse (GetSrsStats () <$ refreshEv)
   retEvDyn <- widgetHold (return never) (showStatsWidget <$> s)
   return $ switchPromptlyDyn $ retEvDyn
 
@@ -336,16 +337,14 @@ reviewDataPicker inp = do
 reviewWidget
   :: forall t m rt proxy . (AppMonad t m, SrsReviewType rt)
   => proxy rt
+  -> Event t ()
   -> AppMonadT t m (Event t SrsWidgetView)
-reviewWidget p = do
+reviewWidget p refreshEv = do
   let
     rt = reviewType p
 
-  let attr = ("class" =: "")
-             <> ("style" =: "height: 50rem;")
-
-  ev <- getPostBuild
-  initEv <- getWebSocketResponse $ GetNextReviewItems rt [] <$ ev
+  -- ev <- getPostBuild
+  -- initEv <- getWebSocketResponse $ GetNextReviewItems rt [] <$ ev
 
   rec
     -- Input Events
@@ -356,7 +355,7 @@ reviewWidget p = do
     -- 5. refresh (if initEv was Nothing)
 
     let
-      addItemEv = AddItemsEv <$> leftmost [initEv, fetchMoreReviewsResp] :: Event t (ReviewStateEvent rt)
+      addItemEv = uncurry AddItemsEv <$> leftmost [fetchMoreReviewsResp] :: Event t (ReviewStateEvent rt)
 
     -- Output Events
     -- 1. Show review item
@@ -368,13 +367,13 @@ reviewWidget p = do
 
     let
         fetchMoreReviews = GetNextReviewItems rt <$> ffilter ((< 5) . length)
-          ((Map.keys . _reviewQueue) <$> (updated widgetStateDyn))
+          ((Map.keys . _reviewQueue) <$> (tagDyn widgetStateDyn newReviewEv))
 
         newReviewEv = leftmost [() <$ reviewResultEv
-                               , () <$ refreshEv
-                               , () <$ initEv]
+                               ,() <$ refreshEv]
 
-    dEv <- debounce 120 fetchMoreReviews
+    -- There is race between newReviewEv and sendResultEv
+    dEv <- debounce 2 fetchMoreReviews
     fetchMoreReviewsResp <- getWebSocketResponse dEv
 
     let
@@ -382,17 +381,9 @@ reviewWidget p = do
           (updated widgetStateDyn)
     syncResultWithServer rt addResEv
 
-    refreshEv <- button "refresh"
-    (closeEv, reviewResultEv) <- elAttr "div" attr $ divClass "" $ do
-      closeEv <- divClass "" $
-        button "Close Review"
-
-
-      reviewResultEv <- reviewWidgetView
-        (_reviewStats <$> widgetStateDyn)
-        =<< getRevItemDyn widgetStateDyn newReviewEv
-
-      return (closeEv, reviewResultEv)
+    (closeEv, reviewResultEv) <- reviewWidgetView
+      (_reviewStats <$> widgetStateDyn)
+      =<< getRevItemDyn widgetStateDyn newReviewEv
 
   return $ ShowStatsWindow <$ closeEv
 
@@ -436,12 +427,11 @@ reviewWidgetView
   :: (AppMonad t m, SrsReviewType rt)
   => Dynamic t SrsReviewStats
   -> Dynamic t (Maybe (ReviewItem, ActualReviewType rt))
-  -> AppMonadT t m (Event t (ReviewStateEvent rt))
-reviewWidgetView statsDyn dyn2 = do
+  -> AppMonadT t m (Event t (), Event t (ReviewStateEvent rt))
+reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
   let
-    statsRowAttr = ("class" =: "")
-              <> ("style" =: "height: 15rem;")
     statsTextAttr = ("style" =: "font-size: large;")
+      <> ("class" =: "center-block text-center")
 
     showStats = do
       let colour c = ("style" =: ("color: " <> c <>";" ))
@@ -452,14 +442,21 @@ reviewWidgetView statsDyn dyn2 = do
       elAttr "span" (colour "red") $
         dynText $ (tshow . _srsReviewStats_incorrectCount) <$> statsDyn
 
-  divClass "" $ elAttr "div" statsRowAttr $ do
-    elAttr "span" statsTextAttr $
-      showStats
+  closeEv <- divClass "panel-heading" $ do
+    (e,_) <- elClass' "button" "close" $ text "Close"
 
-  let kanjiRowAttr = ("class" =: "")
-         <> ("style" =: "height: 15rem; text-align: center;")
+    divClass "" $ do
+      elAttr "span" statsTextAttr $
+        showStats
+    return $ domEvent Click e
 
-  elAttr "div" kanjiRowAttr $ do
+  let kanjiRowAttr = ("class" =: "center-block")
+         <> ("style" =: "height: 15em;\
+             \display: table;")
+      kanjiCellAttr = ("style" =: "vertical-align: middle;\
+             \display: table-cell;")
+
+  elAttr "div" kanjiRowAttr $ elAttr "div" kanjiCellAttr $ do
     let
       showNE (Just (ne, stl)) = elAttr "span" kanjiTextAttr $ do
           mapM_ text (NE.intersperse ", " ne)
@@ -472,7 +469,7 @@ reviewWidgetView statsDyn dyn2 = do
     (Just v) -> inputFieldWidget v
 
   evReview <- switchPromptly never dr
-  return evReview
+  return (closeEv, evReview)
     --leftmost [evB, dr, drSpeech]
 
 inputFieldWidget

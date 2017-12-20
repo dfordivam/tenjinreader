@@ -65,7 +65,7 @@ instance SrsReviewType ProdReview where
   getField ri _ = (,) (fmap unMeaning . fst $ ri ^. reviewItemMeaning)
     ("font-size: 2rem;")
   getInputFieldStyle _ = "background-color: antiquewhite;"
-  getInputFieldPlaceHolder _ = "日本語で"
+  getInputFieldPlaceHolder _ = "日本語で（かな）"
   getRandomRT _ _ _ = ReadingProdReview
 
 hasKanaInField ri = any (not . (any isKanji) . T.unpack)
@@ -134,25 +134,36 @@ makeLenses ''SrsWidgetState
 
 data ReviewStateEvent rt
   = DoReviewEv (SrsEntryId, ActualReviewType rt, Bool)
-  | AddItemsEv [ReviewItem]
+  | AddItemsEv [ReviewItem] Int
   | UndoReview
 
 
 widgetStateFun :: (SrsReviewType rt)
   => SrsWidgetState rt -> ReviewStateEvent rt -> SrsWidgetState rt
-widgetStateFun st (AddItemsEv ri) = st
+widgetStateFun st (AddItemsEv ri pendCount) = st
   & reviewQueue %~ Map.union
      (Map.fromList $ map (\r@(ReviewItem i _ _ _) -> (i,(r, initState r))) ri)
   & resultQueue .~ Nothing
+  & reviewStats . srsReviewStats_pendingCount .~
+    (pendCount + (st ^. reviewQueue . to (Map.size)))
 
 widgetStateFun st (DoReviewEv (i,res,b)) = st
   & reviewQueue %~ (Map.update upF i)
   & resultQueue .~ ((,) <$> pure i <*> done)
+  & reviewStats %~ statsUpF
   where
     stOld = snd <$> Map.lookup i (_reviewQueue st)
     stNew = updateReviewState res b <$> stOld
     upF (ri,_) = (,) <$> pure ri <*> (stNew ^? _Just . _Right)
     done = stNew ^? _Just . _Left
+    statsUpF s = case stNew of
+      (Just (Left True)) -> s
+        & srsReviewStats_pendingCount -~ 1
+        & srsReviewStats_correctCount +~ 1
+      (Just (Left False)) -> s
+        & srsReviewStats_pendingCount -~ 1
+        & srsReviewStats_incorrectCount +~ 1
+      _ -> s
 
 widgetStateFun st (UndoReview) = st
 

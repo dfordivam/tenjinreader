@@ -181,10 +181,11 @@ getEditSrsItem (EditSrsItem sId sItm) = do
       (reviews %%~ Tree.insertTree sId sItm)
 
 getGetNextReviewItem :: GetNextReviewItems
-  -> WsHandlerM [ReviewItem]
+  -> WsHandlerM ([ReviewItem], Int)
 getGetNextReviewItem (GetNextReviewItems rt alreadyPresent) = do
-  rs <- getAllPendingReviews rt
-  return $ getReviewItem <$> (take 20 rs)
+  rsAll <- getAllPendingReviews rt
+  let rs = filter (\(i,_) -> not $ elem i alreadyPresent) rsAll
+  return $ (getReviewItem <$> (take 20 rs), length rs)
 
 getDoReview :: DoReview
   -> WsHandlerM Bool
