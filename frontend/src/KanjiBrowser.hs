@@ -211,21 +211,22 @@ kanjiListWidget listEv = do
     fun (These l _) _ = l
 
   -- NW 1
-  elClass "table" "table table-striped" $ do
-    el "thead" $ do
-      el "tr" $ do
-        el "th" $ text "Kanji"
-        el "th" $ text "Rank"
-        el "th" $ text "Meanings"
-    el "tbody" $  do
-      rec
+  rec
+    d <- elClass "table" "table table-striped" $ do
+      el "thead" $ do
+        el "tr" $ do
+          el "th" $ text "Kanji"
+          el "th" $ text "Rank"
+          el "th" $ text "Meanings"
+      el "tbody" $  do
         lmEv <- getWebSocketResponse $ LoadMoreKanjiResults <$ ev
         dyn <- foldDyn fun [] (align listEv lmEv)
         -- NW 1.1
-        d <- simpleList dyn liWrap
-        -- NW 1.2
-        ev <- el "tr" $ button "Load More"
-      return $ switchPromptlyDyn $ leftmost <$> d
+        simpleList dyn liWrap
+    ev <- do
+      (e,_) <- elClass' "button" "btn btn-block" $ text "Load More"
+      return $ domEvent Click e
+  return $ switchPromptlyDyn $ leftmost <$> d
 
 kanjiDetailsWidget
   :: AppMonad t m
@@ -286,15 +287,17 @@ vocabListWindow req listEv = do
     fun (These l _) _ = l
 
   -- NW 1
-  elClass "table" "table" $ el "tbody" $  do
-    rec
+  rec
+    elClass "table" "table" $ el "tbody" $  do
       lmEv <- getWebSocketResponse $ req <$ ev
       dyn <- foldDyn fun [] (align listEv lmEv)
       -- NW 1.1
       simpleList dyn liWrap
       -- NW 1.2
-      ev <- el "tr" $ button "Load More"
-    return ()
+    ev <- do
+      (e,_) <- elClass' "button" "btn btn-block" $ text "Load More"
+      return $ domEvent Click e
+  return ()
 
 textMay (Just v) = text v
 textMay Nothing = text ""
