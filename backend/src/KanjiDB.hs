@@ -127,7 +127,11 @@ getKanjiData vDb ks = mapM getKD ks
       return (kId, KanjiData k vSet (Set.fromList rs))
       where vSet = maybe Set.empty identity $ Map.lookup kId ksMap
 
-type KanjiSearchEngine = SearchEngine KanjiDetails KanjiId KanjiSearchFields NoFeatures
+type KanjiSearchEngine = SearchEngine KanjiDetails KanjiId KanjiSearchFields KanjiFeatures
+
+data KanjiFeatures
+  = KanjiMostUsedRank
+  deriving (Eq, Ord, Enum, Bounded, Ix, Show)
 
 data KanjiSearchFields =
   KanjiCharacter
@@ -141,7 +145,7 @@ getKanjiSE :: KanjiDb -> KanjiSearchEngine
 getKanjiSE kDb = insertDocs docs init
   where
     init = initSearchEngine conf kanjiSearchRankParams
-    conf = SearchConfig _kanjiId extractTerms transformQry (const noFeatures)
+    conf = SearchConfig _kanjiId extractTerms transformQry kanjiFeatureFun
     docs = map _kanjiDetails $ Map.elems kDb
     extractTerms :: KanjiDetails -> KanjiSearchFields -> [Term]
     extractTerms ks kf = case kf of
@@ -156,14 +160,17 @@ getKanjiSE kDb = insertDocs docs init
     transformQry t KanjiMeanings = maybe "" identity $ headMay $ extractMeaningTerms t
     transformQry t _ = t
 
-kanjiSearchRankParams :: SearchRankParameters KanjiSearchFields NoFeatures
+kanjiFeatureFun :: KanjiDetails -> KanjiFeatures -> Float
+kanjiFeatureFun k _ = 5000 - (fromIntegral $ maybe 5000 unRank (k ^. kanjiMostUsedRank))
+
+kanjiSearchRankParams :: SearchRankParameters KanjiSearchFields KanjiFeatures
 kanjiSearchRankParams =
     SearchRankParameters {
       paramK1,
       paramB,
       paramFieldWeights,
-      paramFeatureWeights     = noFeatures,
-      paramFeatureFunctions   = noFeatures,
+      paramFeatureWeights     = const 1,
+      paramFeatureFunctions   = const (LogarithmicFunction 1),
       paramResultsetSoftLimit = 200,
       paramResultsetHardLimit = 400,
       paramAutosuggestPrefilterLimit  = 500,

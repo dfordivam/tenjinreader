@@ -90,7 +90,6 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
   let
       kanjisFilteredIds = fun
 
-  liftIO $ pPrint (length kanjisFilteredIds)
   asks kanjiSearchResult >>= \ref ->
     liftIO $ writeIORef ref (kanjisFilteredIds, searchResultCount)
 
