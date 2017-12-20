@@ -71,12 +71,21 @@ readingPaneView (ReaderDocument _ title annText) = do
         <> "line-height: " <> tshow l <> "%;"))
         <$> (value fontSizeDD) <*> (value lineHeightDD)
 
-  vIdEv <- elDynAttr "div" divAttr $ do
-    el "h3" $ text title
-    V.imapM (renderOnePara rubySizeDD) annText
+  rec
+    let
+      -- vIdEv :: Event t ([VocabId], Text)
+      vIdEv = leftmost $ map snd $ V.toList vIdEvs
 
+    vIdDyn <- holdDyn [] (fmap fst vIdEv)
+
+    vIdEvs <- elDynAttr "div" divAttr $ do
+      el "h3" $ text title
+      V.imapM (renderOnePara vIdDyn (value rubySizeDD)) annText
+
+
+  -------------------------------------------------------------------
   let
-    evVis = mergeList $ map fst $ V.toList vIdEv
+    evVis = mergeList $ map fst $ V.toList vIdEvs
     hVis :: Set Int -> (Int, Bool) -> Set Int
     hVis s (ind, True) = Set.insert ind s
     hVis s (ind, False) = Set.delete ind s
@@ -85,16 +94,20 @@ readingPaneView (ReaderDocument _ title annText) = do
   display (tshow <$> visDyn)
 
   divClass "" $ do
-    let ev = leftmost $ map snd $ V.toList vIdEv
     detailsEv <- getWebSocketResponse $ GetVocabDetails
-      <$> fmap fst ev
-    surfDyn <- holdDyn "" (fmap snd ev)
+      <$> (fmap fst vIdEv)
+    surfDyn <- holdDyn "" (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
   return ()
 
-vocabRuby :: (_) => Dynamic t Int -> Dynamic t Bool -> Vocab -> m (_)
-vocabRuby fontSizePctDyn visDyn (Vocab ks) = do
+vocabRuby :: (_)
+  => Dynamic t Bool
+  -> Dynamic t Int
+  -> Dynamic t Bool
+  -> Vocab -> m (_)
+vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
   let
+    spClass = ffor markDyn $ \b -> if b then "mark" else ""
     rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <>"%;")) <$> fontSizePctDyn
     g r True = r
     g _ _ = ""
@@ -103,7 +116,7 @@ vocabRuby fontSizePctDyn visDyn (Vocab ks) = do
       = elDynAttr "ruby" rubyAttr $ do
           text k
           el "rt" $ dynText (g r <$> visDyn)
-  (e,_) <- el' "span" $ mapM f ks
+  (e,_) <- elDynClass' "span" spClass $ mapM f ks
   return $ (domEvent Click e, domEvent Mouseenter e, domEvent Mouseleave e)
 
 lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
@@ -112,7 +125,13 @@ lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
 fontSizeOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
   <$> ([80,85..200]  :: [Int])
 
-renderOnePara rubySizeDD ind annTextPara = do
+renderOnePara :: (_)
+  => Dynamic t [VocabId]
+  -> Dynamic t Int
+  -> Int
+  -> [Either Text (Vocab, [VocabId], Bool)]
+  -> m (Event t (Int, Bool), Event t ([VocabId], Text))
+renderOnePara vIdDyn rubySize ind annTextPara = do
   let showAllFurigana = constDyn True
   el "div" $ text (tshow ind)
   (e,ret) <- el' "p" $ do
@@ -120,19 +139,21 @@ renderOnePara rubySizeDD ind annTextPara = do
         f (Right (v, vId, vis)) = do
           rec
             let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
+                markDyn = (any (\eId -> (elem eId vId))) <$> vIdDyn
             visDyn <- holdDyn vis evVis
-            (ek, eme, eml) <- vocabRuby (value rubySizeDD) visDyn v
+            (ek, eme, eml) <-
+              vocabRuby markDyn rubySize visDyn v
           return $ (vId, vocabToText v) <$ ek
-        onlyKana (Vocab ks) = (flip all) ks $ \case
-          (Kana _) -> True
-          _ -> False
-        addSpace [] = []
-        addSpace (l@(Left _):r@(Right _):rs) =
-          l : (Left "　") : (addSpace (r:rs))
-        addSpace (r1@(Right (v1,_,_)):r2@(Right _):rs)
-          | onlyKana v1 = r1 : (Left "　") : (addSpace (r2:rs))
-          | otherwise = r1:(addSpace (r2:rs))
-        addSpace (r:rs) = r : (addSpace rs)
+        -- onlyKana (Vocab ks) = (flip all) ks $ \case
+        --   (Kana _) -> True
+        --   _ -> False
+        -- addSpace [] = []
+        -- addSpace (l@(Left _):r@(Right _):rs) =
+        --   l : (Left "　") : (addSpace (r:rs))
+        -- addSpace (r1@(Right (v1,_,_)):r2@(Right _):rs)
+        --   | onlyKana v1 = r1 : (Left "　") : (addSpace (r2:rs))
+        --   | otherwise = r1:(addSpace (r2:rs))
+        -- addSpace (r:rs) = r : (addSpace rs)
 
     leftmost <$> mapM f (annTextPara)
   -- check <- delay 0.1 =<< getPostBuild
