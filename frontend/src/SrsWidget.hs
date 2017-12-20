@@ -175,9 +175,9 @@ browseSrsItemsWidget = do
   let
 
     filterOptionsWidget =
-      divClass "" $ do
+      divClass "panel-heading" $ do
         -- Selection buttons
-        selectAllToggleCheckBox <- divClass "" $ do
+        selectAllToggleCheckBox <- divClass "col-sm-1" $ do
 
           checkbox False def -- & setValue .~ allSelected
 
@@ -191,33 +191,34 @@ browseSrsItemsWidget = do
 
     checkBoxList selAllEv es =
       divClass "" $ do
-        el "label" $ text "Select Items to do bulk edit"
-        evs <- elAttr "div" (("class" =: "")
-                             <> ("style" =: "height: 400px; overflow-y: scroll")) $
-          el "table" $ el "tbody" $ forM es $ checkBoxListEl selAllEv
+        -- el "label" $ text "Select Items to do bulk edit"
+        dyns <- elAttr "div" (("class" =: "")
+                <> ("style" =: "height: 400px; overflow-y: auto")) $
+          elClass "table" "table table-striped" $ el "tbody" $
+            forM es $ checkBoxListEl selAllEv
 
-        let f (v, True) s = Set.insert v s
-            f (v, False) s = Set.delete v s
-        selList <- foldDyn f Set.empty (leftmost evs)
+        let f (v, True) = Just v
+            f (v, False) = Nothing
+            ds = distributeListOverDynPure dyns
 
-        return $ Set.toList <$> selList
+        return $ (catMaybes . (map f)) <$> ds
 
     checkBoxListEl :: Event t Bool -> SrsItem
-      -> AppMonadT t m (Event t (SrsEntryId, Bool))
+      -> AppMonadT t m (Dynamic t (SrsEntryId , Bool))
     checkBoxListEl selAllEv (SrsItem i t) = el "tr" $ do
-      c1 <- el "td" $
+      c1 <- elClass "td" "col-sm-1" $
         checkbox False $ def & setValue .~ selAllEv
-      el "td" $
+      elClass "td" "el-sm-4" $
         text $ fold $ NE.intersperse ", " $ t
-      ev <- el "td" $
+      ev <- elClass "td" "el-sm-2" $
         button "edit"
       openEditSrsItemWidget $ i <$ ev
-      return $ (,) i <$> updated (value c1)
+      return $ (,) i <$> (value c1)
 
   -- UI
-  closeEv <- divClass "" $
-    button "Close Widget"
-  divClass "" $ do
+  closeEv <- divClass "panel panel-default" $ do
+    (e,_) <- elClass' "button" "close" $ text "Close"
+
     -- Filter Options
     (browseSrsFilterDyn, selectAllToggleCheckBox, filtOptsDyn, revTypeDyn) <-
       filterOptionsWidget
@@ -232,14 +233,14 @@ browseSrsItemsWidget = do
         , tagDyn browseSrsFilterDyn editDone]
 
       -- List and selection checkBox
-      selList <- divClass "" $ do
+      selList <- divClass "panel-body" $ do
         widgetHold (checkBoxList never [])
           (checkBoxList checkBoxSelAllEv <$> itemEv)
 
       -- Action buttons
       editDone <-
         bulkEditWidgetActionButtons filtOptsDyn revTypeDyn $ join selList
-    return ()
+    return (domEvent Click e)
 
   return $ ShowStatsWindow <$ closeEv
 
@@ -255,7 +256,7 @@ bulkEditWidgetActionButtons
   -> Dynamic t ReviewType
   -> Dynamic t [SrsEntryId]
   -> AppMonadT t m (Event t ())
-bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "" $ do
+bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "panel-footer" $ do
   today <- liftIO $ utctDay <$> getCurrentTime
 
   let
@@ -470,45 +471,14 @@ reviewWidgetView statsDyn dyn2 = do
     (Nothing) -> return never
     (Just v) -> inputFieldWidget v
 
-  -- drSpeech <- case rt of
-  --   RecogReadingReview ->
-  --     ((\b -> DoReviewEv (i, RecogReadingReview, b)) <$>) <$>
-  --       speechRecogWidget (fst r)
-  --   _ -> return never
-
-  -- FIXME Show notes only after answering
-  --       <> ("style" =: "height: 10rem;")
-  -- let notesRowAttr = ("class" =: "")
-  --     notesTextAttr = ("style" =: "font-size: large;")
-  --     notes = case rt of
-  --       (Left (_, MeaningNotes mn)) -> mn
-  --       (Right (_, ReadingNotes rn)) -> rn
-
-  -- divClass "" $ elAttr "div" notesRowAttr $ do
-  --   elClass "h3" "" $ text "Notes:"
-  --   elAttr "p" notesTextAttr $ text notes
-
-  -- Footer
-  -- evB <- divClass "" $ divClass "" $ do
-  --   ev1 <- divClass "" $
-  --     button "Undo"
-  --   ev2 <- divClass "" $
-  --     button "Add Meaning"
-  --   ev3 <- divClass "" $
-  --     button "Edit"
-  --   openEditSrsItemWidget (i <$ ev3)
-  --   return $ leftmost
-  --     [UndoReview <$ ev1]
-    -- TODO AddAnswer support
-      -- , AddAnswer i rt <$> tagDyn inpTextValue ev2]
   evReview <- switchPromptly never dr
   return evReview
     --leftmost [evB, dr, drSpeech]
 
 inputFieldWidget
-  :: _
+  :: (AppMonad t m, SrsReviewType rt)
   => (ReviewItem, ActualReviewType rt)
-  -> m (Event t (ReviewStateEvent rt))
+  -> AppMonadT t m (Event t (ReviewStateEvent rt))
 inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
   let
     style = "text-align: center; width: 100%;" <> color
@@ -543,12 +513,25 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
     (dr, inpTxtEv, resEv) <-
       reviewInputFieldHandler inpField rt ri
 
+  -- Need dalay, otherwise focus doesn't work
   ev <- delay 0.1 =<< getPostBuild
 
   widgetHold (return ()) ( DOM.focus (_textInput_element inpField) <$ ev)
 
-  widgetHold (return ()) (showResult <$> resEv)
-  drForced <- button "分かる"
+  let resultDisAttr = ("class" =: "")
+          <> ("style" =: "height: 6em;\
+              \overflow-y: auto")
+  elAttr "div" resultDisAttr $
+    widgetHold (return ()) (showResult <$> resEv)
+
+  -- Footer
+  drForced <- divClass "row" $ do
+    divClass "col-sm-2" $ do
+      ev <- button "Edit"
+      openEditSrsItemWidget (i <$ ev)
+    divClass "col-sm-2" $
+      button "分かる"
+
   return $ leftmost [DoReviewEv (i, rt, True) <$ drForced
                     , dr]
 
@@ -556,7 +539,6 @@ reviewInputFieldHandler
  :: (MonadFix m,
      MonadHold t m,
      Reflex t,
-     DomBuilder t m,
      SrsReviewType rt)
  => TextInput t
  -> ActualReviewType rt
@@ -582,13 +564,7 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
   -- the dr event will fire after the correctEv (on second enter press)
     correctEv = tagDyn correct enterPress
     sendResult = ffilter (== NextReview) (tagDyn dyn enterPress)
-    dr1 = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
-    incorrectEv = fmapMaybe identity $
-      (\b -> if b then Nothing else Just ()) <$> correctEv
-  mc <- widgetHold (return never)
-     ((button "Mark Correct") <$ incorrectEv)
-  let
-    dr = leftmost [dr1, (DoReviewEv (i,rt,True)) <$ switchPromptlyDyn mc ]
+    dr = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
   return (dr, hiragana, correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
