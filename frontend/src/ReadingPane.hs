@@ -108,7 +108,7 @@ vocabRuby :: (_)
 vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
   let
     spClass = ffor markDyn $ \b -> if b then "mark" else ""
-    rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <>"%;")) <$> fontSizePctDyn
+    rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
     g r True = r
     g _ _ = ""
     f (Kana k) = text k
@@ -214,7 +214,7 @@ showVocabDetailsWidget detailsEv = do
 showEntry surface (e, sId) = do
   divClass "" $ do
     elClass "span" "" $ do
-      entryKanjiAndReading e
+      entryKanjiAndReading surface e
     addEditSrsEntryWidget (Right $ e ^. entryUniqueId) (Just surface) sId
 
   let
@@ -254,11 +254,11 @@ showPos ps = do
     f PosPrefix = Just $ "Prefix"
     f _ = Nothing
 
-entryKanjiAndReading :: (_) => Entry -> m ()
-entryKanjiAndReading e = do
+entryKanjiAndReading :: (_) => Text -> Entry -> m ()
+entryKanjiAndReading surface e = do
   sequenceA_ (intersperse sep els)
   where
-  els = map (renderElement (restrictedKanjiPhrases e)
+  els = map (renderElement surface (restrictedKanjiPhrases e)
     (e ^. entryReadingElements . to (NE.head) . readingPhrase))
     (orderElements e)
   sep = text ", "
@@ -325,18 +325,25 @@ orderElements e = sortBy (comparing f)
       (e ^.. entryReadingElements . traverse)
 
 renderElement :: (_)
-  => Map KanjiPhrase ReadingElement
+  => Text
+  -> Map KanjiPhrase ReadingElement
   -> ReadingPhrase
   -> (Either KanjiElement ReadingElement)
   -> m ()
-renderElement restMap defR (Left ke) = case v of
-  (Right v) -> displayVocabT v
-  (Left _) -> text $ unKanjiPhrase $ ke ^. kanjiPhrase
+renderElement surface restMap defR (Left ke) = case v of
+  (Right v) -> dispInSpan (vocabToText v) $ displayVocabT v
+  (Left _) ->
+    (\t -> dispInSpan t $ text t) $ unKanjiPhrase $ ke ^. kanjiPhrase
   where
+    dispInSpan t = el (spanAttr t)
+    spanAttr t = if (surface == t) then "strong" else "span"
     kp = (ke ^. kanjiPhrase)
     v = case Map.lookup kp restMap of
           (Just r) -> makeFurigana kp (r ^. readingPhrase)
           Nothing -> makeFurigana kp defR
 
-renderElement _ _ (Right re) =
-  text $ unReadingPhrase $ re ^. readingPhrase
+renderElement surface _ _ (Right re) =
+  (\t -> dispInSpan t $ text t) $ unReadingPhrase $ re ^. readingPhrase
+  where
+    dispInSpan t = el (spanAttr t)
+    spanAttr t = if (surface == t) then "strong" else "span"
