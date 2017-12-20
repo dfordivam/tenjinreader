@@ -19,7 +19,7 @@ import qualified Data.List.NonEmpty as NE
 import NLP.Romkan (toHiragana)
 import Data.List.NonEmpty (NonEmpty)
 import System.Random
-import qualified JSDOM.HTMLElement as DOM
+import qualified GHCJS.DOM.HTMLElement as DOM
 
 data SrsWidgetView =
   ShowStatsWindow | ShowReviewWindow ReviewType | ShowBrowseSrsItemsWindow

@@ -46,6 +46,7 @@ executable frontend
                      , random
                      , vector
                      , hs-nlp-jp-utils
+                     , ghcjs-dom
 
                      , jsaddle-warp
 

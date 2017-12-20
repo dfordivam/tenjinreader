@@ -16,14 +16,14 @@ import qualified Data.Map as Map
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Vector as V
-import qualified JSDOM.DOMRectReadOnly as DOM
-import qualified JSDOM.Element as DOM
-import qualified JSDOM.Document as DOM
-import qualified JSDOM as DOM
-import qualified JSDOM.Types as DOM
-import qualified JSDOM.Generated.IntersectionObserverEntry as DOM
-import qualified JSDOM.Generated.IntersectionObserverCallback as DOM
-import qualified JSDOM.Generated.IntersectionObserver as DOM
+import qualified GHCJS.DOM.DOMRectReadOnly as DOM
+import qualified GHCJS.DOM.Element as DOM
+import qualified GHCJS.DOM.Document as DOM
+import qualified GHCJS.DOM as DOM
+import qualified GHCJS.DOM.Types as DOM
+import qualified GHCJS.DOM.IntersectionObserverEntry as DOM
+import qualified GHCJS.DOM.IntersectionObserverCallback as DOM
+import qualified GHCJS.DOM.IntersectionObserver as DOM
 
 -- checkIntersection e = do
 --   rect <- DOM.getBoundingClientRect (_element_raw e)
