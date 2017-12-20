@@ -499,7 +499,7 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
           ans = getAnswer ri rt
       text $ s <> (fold $ case ans of
         (Left m) -> NE.intersperse ", " $ fmap unMeaning m
-        (Right r) -> NE.intersperse ", " $ fmap unReading r)
+        (Right r) -> NE.intersperse ", " $ (fmap unReading r) <> (ri ^. reviewItemField))
       divClass "" $ do
         text "Notes:"
         case ans of
