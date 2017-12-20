@@ -336,7 +336,7 @@ renderElement surface restMap defR (Left ke) = case v of
     (\t -> dispInSpan t $ text t) $ unKanjiPhrase $ ke ^. kanjiPhrase
   where
     dispInSpan t = el (spanAttr t)
-    spanAttr t = if (surface == t) then "strong" else "span"
+    spanAttr t = if (T.isPrefixOf surface t) then "strong" else "span"
     kp = (ke ^. kanjiPhrase)
     v = case Map.lookup kp restMap of
           (Just r) -> makeFurigana kp (r ^. readingPhrase)
@@ -346,4 +346,4 @@ renderElement surface _ _ (Right re) =
   (\t -> dispInSpan t $ text t) $ unReadingPhrase $ re ^. readingPhrase
   where
     dispInSpan t = el (spanAttr t)
-    spanAttr t = if (surface == t) then "strong" else "span"
+    spanAttr t = if (T.isPrefixOf surface t) then "strong" else "span"
