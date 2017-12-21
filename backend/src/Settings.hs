@@ -64,6 +64,8 @@ data AppSettings = AppSettings
 
     , appMecabFilesDir          :: Text
     , appSrsDatabaseDir         :: Text
+    , appGithubClientId         :: Text
+    , appGithubClientSecret     :: Text
     }
 
 instance FromJSON AppSettings where
@@ -94,6 +96,8 @@ instance FromJSON AppSettings where
 
         appMecabFilesDir          <- o .:  "mecab-files-dir"
         appSrsDatabaseDir         <- o .:  "srs-database-dir"
+        appGithubClientId         <- o .:  "github-client-id"
+        appGithubClientSecret     <- o .:  "github-client-secret"
         return AppSettings {..}
 
 -- | Settings for 'widgetFile', such as which template languages to support and

@@ -175,7 +175,7 @@ instance Yesod App where
     isAuthorized (StaticR _) _ = return Authorized
 
     isAuthorized ProfileR _ = isAuthenticated
-    isAuthorized WebSocketHandlerR _ = return Authorized
+    isAuthorized WebSocketHandlerR _ = isAuthenticated
       --isAuthenticated
 
     -- This function creates static content files in the static folder
@@ -257,9 +257,6 @@ transactReadOnlySrsDB ::
 transactReadOnlySrsDB action = do
   runSrsDB $ transactReadOnly action
 
-clientId = ""
-clientSecret = ""
-
 instance YesodAuth App where
     type AuthId App = UserId
 
@@ -282,7 +279,9 @@ instance YesodAuth App where
                 }
 
     -- You can add other plugins like Google Email, email or OAuth here
-    authPlugins _ = [oauth2Github clientId clientSecret]
+    authPlugins app =
+      [oauth2Github (appGithubClientId $ appSettings app)
+        (appGithubClientSecret $ appSettings app)]
     authHttpManager = appHttpManager
 
 -- | Access function to determine if a user is logged in.

@@ -33,3 +33,6 @@ copyright: Insert copyright statement here
 
 mecab-files-dir: "/home/divam/nobup/mecab-tools/mecab-ipadic-neologd-output-files"
 srs-database-dir: "srsdb"
+
+github-client-id: "_env:GITHUB_CLIENT_ID:invalidValue" 
+github-client-secret: "_env:GITHUB_CLIENT_SECRET:invalidValue"  

@@ -2,6 +2,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE RankNTypes #-}
@@ -23,6 +24,7 @@ import qualified Data.Map as Map
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import Control.Lens.Indexed
+import Reflex.Dom.Location
 
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString as BS
@@ -30,7 +32,20 @@ import qualified Data.Text as T
 
 topWidget :: MonadWidget t m => m ()
 topWidget = do
-  let url = "ws://localhost:3000/websocket"
+  urlPath <- getLocationPath
+  urlHost <- getLocationHost
+  proto <- getLocationProtocol
+  let
+    url = ws <> host <> path
+    path = (fst $ T.breakOn "static" urlPath) <> "websocket"
+    host = if T.isPrefixOf "localhost" urlHost
+      then "localhost:3000"
+      else urlHost
+
+
+    ws = case proto of
+      "http:" -> "ws://"
+      _ -> "wss://"
   (_,ws) <- withWSConnection
     url
     never -- close event
@@ -51,14 +66,6 @@ widget = divClass "container" $ do
       , (2, ("Vocab", vocabSearchWidget))
       , (3, ("Reader", textReaderTop))]
 
--- <nav class="navbar navbar-default">
---   <div class="container-fluid">
---     <div class="navbar-header">
---       <a class="navbar-brand" href="#">WebSiteName</a>
---     </div>
---     <ul class="nav navbar-nav">
---       <li class="active"><a href="#">Home</a></li>
---       <li><a href="#">Page 1</a></li>
 wrapper m = elClass "nav" "navbar navbar-default" $
   divClass "container-fluid" $ do
     divClass "navbar-header" $
