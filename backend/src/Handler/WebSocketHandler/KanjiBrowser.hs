@@ -178,10 +178,10 @@ getVocabSearch (VocabSearch m filt) = do
   vocabDb <- lift $ asks appVocabDb
   vocabSearchEng <- lift $ asks appVocabSearchEng
   let
-      keys1 = map snd expl
-      expl = queryExplain vocabSearchEng terms
+      -- keys1 = map snd expl
+      -- expl = queryExplain vocabSearchEng terms
+      keys1 = query vocabSearchEng terms
       terms = (T.words m)
-  pPrint $ take 5 expl
 
   let
       es = map _vocabEntry $
