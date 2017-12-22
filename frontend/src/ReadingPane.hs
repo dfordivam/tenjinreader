@@ -84,14 +84,14 @@ readingPaneView (ReaderDocument _ title annText) = do
 
 
   -------------------------------------------------------------------
-  let
-    evVis = mergeList $ map fst $ V.toList vIdEvs
-    hVis :: Set Int -> (Int, Bool) -> Set Int
-    hVis s (ind, True) = Set.insert ind s
-    hVis s (ind, False) = Set.delete ind s
+  -- let
+  --   evVis = mergeList $ map fst $ V.toList vIdEvs
+  --   hVis :: Set Int -> (Int, Bool) -> Set Int
+  --   hVis s (ind, True) = Set.insert ind s
+  --   hVis s (ind, False) = Set.delete ind s
 
-  visDyn <- foldDyn (flip $ foldl (hVis)) Set.empty evVis
-  display (tshow <$> visDyn)
+  -- visDyn <- foldDyn (flip $ foldl (hVis)) Set.empty evVis
+  -- display (tshow <$> visDyn)
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
@@ -133,7 +133,6 @@ renderOnePara :: (_)
   -> m (Event t (Int, Bool), Event t ([VocabId], Text))
 renderOnePara vIdDyn rubySize ind annTextPara = do
   let showAllFurigana = constDyn True
-  el "div" $ text (tshow ind)
   (e,ret) <- el' "p" $ do
     let f (Left t) = never <$ text t
         f (Right (v, vId, vis)) = do
@@ -162,9 +161,10 @@ renderOnePara vIdDyn rubySize ind annTextPara = do
 
   --------------------------------
 
-  (evVisible, action) <- newTriggerEvent
-  io <- setupInterObs ind action
-  DOM.observe io (_element_raw e)
+  -- (evVisible, action) <- newTriggerEvent
+  -- io <- setupInterObs ind action
+  -- DOM.observe io (_element_raw e)
+  let evVisible = never
   --------------------------------
   return (evVisible, ret)
 
