@@ -30,6 +30,7 @@ import Control.Monad.Haskey
 import Database.Haskey.Store.File (defFileStoreConfig)
 import Data.BTree.Alloc (AllocM, AllocReaderM)
 
+import Common (CurrentDb, OldDb)
 import KanjiDB
 import SrsDB
 import Text.MeCab
@@ -53,7 +54,7 @@ data App = App
     , appKanjiSearchEng :: KanjiSearchEngine
     , appVocabSearchEng :: VocabSearchEngine
     , appVocabSearchEngNoGloss :: VocabSearchEngineNoGloss
-    , appSrsReviewState :: ConcurrentDb AppSrsReviewState
+    , appConcurrentDb :: ConcurrentDb AppConcurrentDb
     }
 
 data MenuItem = MenuItem
@@ -222,40 +223,40 @@ instance YesodPersist App where
 instance YesodPersistRunner App where
     getDBRunner = defaultGetDBRunner appConnPool
 
-type SrsDB = HaskeyT AppSrsReviewState Handler
+type SrsDB = HaskeyT AppConcurrentDb Handler
 
 runSrsDB
   :: SrsDB a
   -> Handler a
 runSrsDB action = do
   master <- getYesod
-  runHaskeyT action (appSrsReviewState master)
+  runHaskeyT action (appConcurrentDb master)
     defFileStoreConfig
 
 transactSrsDB_ ::
   (forall m . (AllocM m)
-    => AppSrsReviewState
-    -> m (AppSrsReviewState))
+    => DbSchema CurrentDb
+    -> m (DbSchema CurrentDb))
   -> Handler ()
 transactSrsDB_ action = transactSrsDB
   (\t -> action t >>= (\nt -> return (nt,())))
 
 transactSrsDB ::
   (forall m . (AllocM m)
-    => AppSrsReviewState
-    -> m (AppSrsReviewState, a))
+    => DbSchema CurrentDb
+    -> m (DbSchema CurrentDb, a))
   -> Handler a
 transactSrsDB action = do
-  runSrsDB $ transact $ \tree -> do
+  runSrsDB $ transact $ \(AppConcurrentDb tree) -> do
     (newTree, a) <- action tree
-    commit a newTree
+    commit a (AppConcurrentDb newTree)
 
 transactReadOnlySrsDB ::
   (forall m . (AllocReaderM m)
-    => AppSrsReviewState -> m a)
+    => DbSchema CurrentDb -> m a)
   -> Handler a
 transactReadOnlySrsDB action = do
-  runSrsDB $ transactReadOnly action
+  runSrsDB $ transactReadOnly $ \(AppConcurrentDb tree) -> action tree
 
 instance YesodAuth App where
     type AuthId App = UserId

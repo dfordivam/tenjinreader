@@ -27,6 +27,9 @@ import NLP.Japanese.Utils
 import Data.These
 import Data.Vector (Vector)
 
+data CurrentDb = CurrentDb
+data OldDb = OldDb
+
 newtype Kanji = Kanji { unKanji :: Text }
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 

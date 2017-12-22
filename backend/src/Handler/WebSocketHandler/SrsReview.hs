@@ -39,7 +39,7 @@ getReviewStats rt = do
   pend <- getAllPendingReviews rt
 
   allRs <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userReviews
+    rd <- Tree.lookupTree uId $ db ^. userData
     mapM Tree.toList (_reviews <$> rd)
 
   let total = maybe 0 length allRs
@@ -61,7 +61,7 @@ getAllPendingReviews rt = do
   today <- liftIO $ utctDay <$> getCurrentTime
 
   lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userReviews
+    rd <- Tree.lookupTree uId $ db ^. userData
     rs <- mapM Tree.toList (_reviews <$> rd)
     let
       f (k,r) = (k,r) <$
@@ -109,7 +109,7 @@ getBrowseSrsItems (BrowseSrsItems rt brws) = do
       if l > 60 then Just () else Nothing
 
   rs <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userReviews
+    rd <- Tree.lookupTree uId $ db ^. userData
     rs <- mapM Tree.toList (_reviews <$> rd)
     return $ maybe [] (mapMaybe filF) rs
   return $ map (\(i,r) -> SrsItem i (r ^. field)) rs
@@ -120,7 +120,7 @@ getBulkEditSrsItems
   (BulkEditSrsItems _ ss DeleteSrsItems) = do
   uId <- asks currentUserId
   lift $ transactSrsDB_ $
-    userReviews %%~ updateTreeM uId
+    userData %%~ updateTreeM uId
       (reviews %%~ (\rt -> foldrM Tree.deleteTree rt ss))
 
   return $ Just ()
@@ -157,7 +157,7 @@ getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
       (\r -> return $ upF r)
 
   lift $ transactSrsDB_ $
-    userReviews %%~ updateTreeM uId
+    userData %%~ updateTreeM uId
       (reviews %%~ (\rt -> foldlM doUp rt ss))
 
   return $ Just ()
@@ -167,7 +167,7 @@ getSrsItem :: GetSrsItem
 getSrsItem (GetSrsItem i) = do
   uId <- asks currentUserId
   s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userReviews)
+    Tree.lookupTree uId (db ^. userData)
       >>= mapM (\rd ->
         Tree.lookupTree i (rd ^. reviews))
   return $ (,) i <$> join s
@@ -177,7 +177,7 @@ getEditSrsItem :: EditSrsItem
 getEditSrsItem (EditSrsItem sId sItm) = do
   uId <- asks currentUserId
   lift $ transactSrsDB_ $
-    userReviews %%~ updateTreeM uId
+    userData %%~ updateTreeM uId
       (reviews %%~ Tree.insertTree sId sItm)
 
 getGetNextReviewItem :: GetNextReviewItems
@@ -201,7 +201,7 @@ getDoReview (DoReview rt results) = do
         (\r -> return $ updateSrsEntry b today rt r) t
 
   lift $ transactSrsDB_ $
-    userReviews %%~ updateTreeM uId
+    userData %%~ updateTreeM uId
       (reviews %%~ (\rt -> foldlM doUp rt results))
   return True
 
@@ -300,8 +300,9 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
   srsItm <- lift $ makeSrsEntry v t
   let
     upFun :: (AllocM m) => SrsEntry
-      -> SrsReviewData
-      -> StateT (Maybe SrsEntryId) m SrsReviewData
+      -> AppUserDataTree CurrentDb
+      -> StateT (Maybe SrsEntryId) m
+           (AppUserDataTree CurrentDb)
     upFun itm rd = do
       mx <- lift $ Tree.lookupMaxTree (rd ^. reviews)
       let newk = maybe zerokey nextKey mx
@@ -320,7 +321,7 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
   ret <- forM srsItm $ \itm -> do
     lift $ transactSrsDB $
       runStateWithNothing $
-        userReviews %%~ updateTreeLiftedM uId (upFun itm)
+        userData %%~ updateTreeLiftedM uId (upFun itm)
 
   return $ join ret
 
@@ -387,10 +388,10 @@ initSrsDb = do
   transactSrsDB_ $ \db -> do
     let f db u = do
           let uId = fromSqlKey u
-              d = SrsReviewData  Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty
-          Tree.lookupTree uId (db ^. userReviews) >>= \case
+              d = AppUserDataTree  Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty
+          Tree.lookupTree uId (db ^. userData) >>= \case
             (Just _) -> return db
-            Nothing -> db & userReviews %%~ (Tree.insertTree uId d)
+            Nothing -> db & userData %%~ (Tree.insertTree uId d)
     foldM f db users
 
   return ()

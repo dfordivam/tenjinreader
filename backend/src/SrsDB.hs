@@ -9,6 +9,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module SrsDB where
 
@@ -38,7 +39,22 @@ import Data.List.NonEmpty (NonEmpty)
 
 import Data.Time.Calendar (Day)
 
-data SrsReviewData = SrsReviewData
+-- Haskey based db schema
+newtype AppConcurrentDb = AppConcurrentDb
+  { unAppConcurrentDb :: DbSchema CurrentDb }
+  deriving (Generic, Show, Typeable, Binary, Value, Root)
+
+type family DbSchema t
+type instance DbSchema t = AppConcurrentDbTree t
+
+data AppConcurrentDbTree t = AppConcurrentDbTree
+  { _userData :: Tree Int64 (AppUserData t)
+  } deriving (Generic, Show, Typeable, Binary, Value, Root)
+
+type family AppUserData t
+type instance AppUserData t = AppUserDataTree t
+
+data AppUserDataTree t = AppUserDataTree
   { _reviews :: Tree SrsEntryId SrsEntry
   , _readerDocuments :: Tree ReaderDocumentId ReaderDocument
   , _kanjiSrsMap :: Tree KanjiId SrsEntryId
@@ -47,16 +63,11 @@ data SrsReviewData = SrsReviewData
   , _srsKanjiVocabMap :: Tree SrsEntryId (Either KanjiId VocabId)
   } deriving (Generic, Show, Typeable, Binary, Value)
 
--- Haskey based db schema
-data AppSrsReviewState = AppSrsReviewState
-  { _userReviews :: Tree Int64 SrsReviewData
-  } deriving (Generic, Show, Typeable, Binary, Value, Root)
-
-openSrsDB :: FilePath -> IO (ConcurrentDb AppSrsReviewState)
+openSrsDB :: FilePath -> IO (ConcurrentDb AppConcurrentDb)
 openSrsDB fp =
   flip runFileStoreT defFileStoreConfig $
     openConcurrentDb hnds >>= \case
-      Nothing -> createConcurrentDb hnds (AppSrsReviewState Tree.empty)
+      Nothing -> createConcurrentDb hnds (AppConcurrentDb (AppConcurrentDbTree Tree.empty))
       Just db -> return db
   where
     hnds = concurrentHandles fp
@@ -91,5 +102,5 @@ instance Key ReaderDocumentId
 instance Key KanjiId
 instance Key VocabId
 
-makeLenses ''SrsReviewData
-makeLenses ''AppSrsReviewState
+makeLenses ''AppUserDataTree
+makeLenses ''AppConcurrentDbTree

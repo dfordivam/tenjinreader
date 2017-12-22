@@ -77,7 +77,7 @@ makeFoundation appSettings = do
         appVocabSearchEng = getVocabSE appVocabDb
         appVocabSearchEngNoGloss = getVocabSENG appVocabDb
 
-    appSrsReviewState <- openSrsDB (unpack $ appSrsDatabaseDir appSettings)
+    appConcurrentDb <- openSrsDB (unpack $ appSrsDatabaseDir appSettings)
 
     -- We need a log function to create a connection pool. We need a connection
     -- pool to create our foundation. And we need our foundation to get a

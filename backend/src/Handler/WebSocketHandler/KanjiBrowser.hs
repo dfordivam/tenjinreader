@@ -137,7 +137,7 @@ getKanjiDetails (GetKanjiDetails kId _) = do
 
   uId <- asks currentUserId
   rs <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userReviews) >>= mapM (\rd ->
+    Tree.lookupTree uId (db ^. userData) >>= mapM (\rd ->
       Tree.lookupTree kId (rd ^. kanjiSrsMap))
 
   vs <- loadVocabList (take searchResultCount keys)
@@ -155,7 +155,7 @@ loadVocabList keys = do
 
   uId <- asks currentUserId
   s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userReviews) >>= mapM (\rd -> do
+    Tree.lookupTree uId (db ^. userData) >>= mapM (\rd -> do
       mapM ((flip Tree.lookupTree) (rd ^. vocabSrsMap)) keys)
   return $ zip vocabs <$> s
 
@@ -246,8 +246,9 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
 
   let
     upFun :: (AllocM m)
-      => SrsReviewData
-      -> StateT (Maybe ReaderDocument) m SrsReviewData
+      => AppUserDataTree CurrentDb
+      -> StateT (Maybe ReaderDocument) m
+           (AppUserDataTree CurrentDb)
     upFun rd = do
       mx <- lift $
         Tree.lookupMaxTree (rd ^. readerDocuments)
@@ -264,7 +265,7 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
         readerDocuments %%~ Tree.insertTree docId nd
 
   lift $ transactSrsDB $ runStateWithNothing $
-    userReviews %%~ updateTreeLiftedM uId upFun
+    userData %%~ updateTreeLiftedM uId upFun
 
 getListDocuments :: ListDocuments
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]
@@ -272,7 +273,7 @@ getListDocuments _ = do
   uId <- asks currentUserId
 
   ds <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userReviews
+    rd <- Tree.lookupTree uId $ db ^. userData
     mapM Tree.toList (rd ^? _Just . readerDocuments)
 
   let f (ReaderDocument i t c) = (i,t,p c)
@@ -288,7 +289,7 @@ getViewDocument :: ViewDocument
 getViewDocument (ViewDocument i) = do
   uId <- asks currentUserId
   s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userReviews)
+    Tree.lookupTree uId (db ^. userData)
       >>= mapM (\rd ->
         Tree.lookupTree i (rd ^. readerDocuments))
   return $ join s
@@ -298,7 +299,7 @@ getDeleteDocument :: DeleteDocument
 getDeleteDocument (DeleteDocument dId) = do
   uId <- asks currentUserId
   lift $ transactSrsDB_ $
-    userReviews %%~ updateTreeM uId
+    userData %%~ updateTreeM uId
       (readerDocuments %%~ Tree.deleteTree dId)
   getListDocuments ListDocuments
 
@@ -309,7 +310,7 @@ getVocabDetails (GetVocabDetails eIds) = do
   uId <- asks currentUserId
   vocabDb <- lift $ asks appVocabDb
   es <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userReviews
+    rd <- Tree.lookupTree uId $ db ^. userData
     let findAll vmap = do
           mapM (findOne vmap) eIds
         findOne vmap eId = do
