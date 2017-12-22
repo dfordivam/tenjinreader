@@ -1,6 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveAnyClass #-}
@@ -28,7 +29,10 @@ import Data.These
 import Data.Vector (Vector)
 
 data CurrentDb = CurrentDb
+  deriving (Generic, Show, ToJSON, FromJSON)
+
 data OldDb = OldDb
+  deriving (Generic, Show, ToJSON, FromJSON)
 
 newtype Kanji = Kanji { unKanji :: Text }
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
@@ -178,6 +182,21 @@ data ReaderDocument = ReaderDocument
   }
   deriving (Generic, Show, ToJSON, FromJSON)
 
+type family ReaderSettings t
+type instance ReaderSettings t
+  = ReaderSettingsTree t
+
+data ReaderSettingsTree t = ReaderSettings
+  { _fontSize  :: Int
+  , _rubySize  :: Int
+  , _lineHeight :: Int
+  , _verticalMode :: Bool
+  , _numOfLines :: Int
+  }
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance Default (ReaderSettingsTree t) where
+  def = ReaderSettings 120 120 150 False 20
 -- SrsEntry
 
 newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }
@@ -293,6 +312,7 @@ makeLenses ''ReaderDocument
 makePrisms ''SrsEntryState
 makeLenses ''SrsEntryStats
 makeLenses ''SrsEntry
+makeLenses ''ReaderSettingsTree
 
 
 reviewStateL :: (Profunctor p, Contravariant f)

@@ -10,7 +10,7 @@
 module Foundation where
 
 import Import.NoFoundation
-import Database.Persist.Sql (ConnectionPool, runSqlPool)
+import Database.Persist.Sql (ConnectionPool, runSqlPool, fromSqlKey)
 import Text.Hamlet          (hamletFile)
 import Text.Jasmine         (minifym)
 
@@ -27,8 +27,10 @@ import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 
 import Control.Monad.Haskey
+import Control.Lens
 import Database.Haskey.Store.File (defFileStoreConfig)
 import Data.BTree.Alloc (AllocM, AllocReaderM)
+import qualified Data.BTree.Impure as Tree
 
 import Common (CurrentDb, OldDb)
 import KanjiDB
@@ -176,7 +178,7 @@ instance Yesod App where
     isAuthorized (StaticR _) _ = return Authorized
 
     isAuthorized ProfileR _ = isAuthenticated
-    isAuthorized WebSocketHandlerR _ = isAuthenticated
+    isAuthorized WebSocketHandlerR _ = return Authorized
       --isAuthenticated
 
     -- This function creates static content files in the static folder
@@ -274,10 +276,13 @@ instance YesodAuth App where
         x <- getBy $ UniqueUser $ userId
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
-            Nothing -> Authenticated <$> insert User
+            Nothing -> do
+              uid <- insert User
                 { userIdent = userId
                 , userPassword = Nothing
                 }
+              lift $ insertNewUserData uid
+              return $ Authenticated uid
 
     -- You can add other plugins like Google Email, email or OAuth here
     authPlugins app =
@@ -294,6 +299,14 @@ isAuthenticated = do
         Just _ -> Authorized
 
 instance YesodAuthPersist App
+
+insertNewUserData :: UserId -> Handler ()
+insertNewUserData uid =
+  transactSrsDB_ $
+    userData %%~ (Tree.insertTree uId d)
+  where
+    uId = fromSqlKey uid
+    d = AppUserDataTree Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
 
 -- This instance is required to use forms. You can modify renderMessage to
 -- achieve customized and internationalized form validation messages.

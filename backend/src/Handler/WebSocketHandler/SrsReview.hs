@@ -388,7 +388,7 @@ initSrsDb = do
   transactSrsDB_ $ \db -> do
     let f db u = do
           let uId = fromSqlKey u
-              d = AppUserDataTree  Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty
+              d = AppUserDataTree  Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
           Tree.lookupTree uId (db ^. userData) >>= \case
             (Just _) -> return db
             Nothing -> db & userData %%~ (Tree.insertTree uId d)
