@@ -135,18 +135,20 @@ paginatedReader (ReaderDocument _ title annText) = do
 
         ev <- delay 0.2 =<< getPostBuild
         overFlowEv <- holdUniqDyn
-          =<< widgetHold (return True)
+          =<< widgetHold (checkOverFlow e overFlowThreshold)
           (checkOverFlow e overFlowThreshold
              <$ (leftmost [ev,resizeEv]))
         -- display overFlowEv
 
-        v2 <- widgetHold (return (never,never))
-          ((\b -> if b
+        let
+          nextParaWidget b = if b
             then do
                ev <- button "Next Page"
                return ((paraNum + 1) <$ ev, never)
-            else renderParaNum (paraNum + 1) resizeEv)
-              <$> updated overFlowEv)
+            else renderParaNum (paraNum + 1) resizeEv
+
+        v2 <- widgetHold (nextParaWidget False)
+              (nextParaWidget <$> updated overFlowEv)
         return $ (\(a,b) -> (a, leftmost [v1,b]))
           (switchPromptlyDyn $ fst <$> v2
           , switchPromptlyDyn $ snd <$> v2)
