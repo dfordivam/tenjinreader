@@ -104,7 +104,7 @@ readingPaneView (ReaderDocument _ title annText) = do
 -- variable height / content on page
 -- store the page number (or para number) and restore progress
 -- Bookmarks
-paginatedReader :: AppMonad t m
+paginatedReader :: forall t m . AppMonad t m
   => ReaderDocument
   -> AppMonadT t m ()
 paginatedReader (ReaderDocument _ title annText) = do
@@ -122,41 +122,53 @@ paginatedReader (ReaderDocument _ title annText) = do
   rec
     let
       overFlowThreshold = 400
+
       renderParaNum paraNum resizeEv = do
         let para = annText V.!? paraNum
         case para of
-          Nothing -> return never
+          Nothing -> text "--- End of Text ---" >> return (never, never)
           (Just p) -> renderPara p paraNum resizeEv
 
       renderPara para paraNum resizeEv = do
         (e,v1) <- el' "div" $
           renderOnePara vIdDyn (value rubySizeDD) paraNum para
+
         ev <- delay 0.2 =<< getPostBuild
         overFlowEv <- holdUniqDyn
           =<< widgetHold (return True)
           (checkOverFlow e overFlowThreshold
              <$ (leftmost [ev,resizeEv]))
         -- display overFlowEv
-        v2 <- widgetHold (return never)
+
+        v2 <- widgetHold (return (never,never))
           ((\b -> if b
-            then return never
+            then do
+               ev <- button "Next Page"
+               return ((paraNum + 1) <$ ev, never)
             else renderParaNum (paraNum + 1) resizeEv)
               <$> updated overFlowEv)
-        return (leftmost [v1,switchPromptlyDyn v2])
+        return $ (\(a,b) -> (a, leftmost [v1,b]))
+          (switchPromptlyDyn $ fst <$> v2
+          , switchPromptlyDyn $ snd <$> v2)
 
+      renderFromPara :: (_) => Int
+        -> AppMonadT t m (Event t Int, Event t ([VocabId], Text))
       renderFromPara startPara = do
         rec
           (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $
-            renderParaNum 0 resizeEv
+            renderParaNum startPara resizeEv
         return v
 
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
 
     vIdEv <- do
-      let newPageEv = never
-      val <- widgetHold (renderFromPara 0)
-        (renderFromPara <$> newPageEv)
-      return $ switchPromptlyDyn val
+      rec
+        let
+          newPageEv :: Event t Int
+          newPageEv = switchPromptlyDyn (fst <$> val)
+        val <- widgetHold (renderFromPara 0)
+          (renderFromPara <$> newPageEv)
+      return $ switchPromptlyDyn (snd <$> val)
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
