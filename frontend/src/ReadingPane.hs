@@ -21,15 +21,18 @@ import qualified GHCJS.DOM.Element as DOM
 import qualified GHCJS.DOM.Document as DOM
 import qualified GHCJS.DOM as DOM
 import qualified GHCJS.DOM.Types as DOM
-import qualified GHCJS.DOM.IntersectionObserverEntry as DOM
+import qualified GHCJS.DOM.IntersectionObserverEntry as DOM hiding (getBoundingClientRect)
 import qualified GHCJS.DOM.IntersectionObserverCallback as DOM
 import qualified GHCJS.DOM.IntersectionObserver as DOM
+import Reflex.Dom.Widget.Resize
 
--- checkIntersection e = do
---   rect <- DOM.getBoundingClientRect (_element_raw e)
---   y <- DOM.getY rect
---   let h = 0
---   text $ "Coords: " <> (tshow y) <> ", " <> (tshow h)
+checkOverFlow e = do
+  rect <- DOM.getBoundingClientRect (_element_raw e)
+  trects <- DOM.getClientRects (_element_raw e)
+  y <- DOM.getY rect
+  h <- DOM.getHeight rect
+  -- text $ "Coords: " <> (tshow y) <> ", " <> (tshow h)
+  return (y + h > 400)
 
 setupInterObs :: (DOM.MonadDOM m)
   => Int
@@ -56,7 +59,8 @@ readingPane docEv = do
   editEv <- button "Edit"
   rdDyn <- holdDyn Nothing (Just <$> docEv)
   widgetHold (return ())
-    (readingPaneView <$> docEv)
+    -- (readingPaneView <$> docEv)
+    (paginatedReader <$> docEv)
   return (closeEv
          , fmapMaybe identity $ tagDyn rdDyn editEv)
 
@@ -74,24 +78,16 @@ readingPaneView (ReaderDocument _ title annText) = do
   rec
     let
       -- vIdEv :: Event t ([VocabId], Text)
-      vIdEv = leftmost $ map snd $ V.toList vIdEvs
+      vIdEv = leftmost $ V.toList vIdEvs
 
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
 
     vIdEvs <- elDynAttr "div" divAttr $ do
-      el "h3" $ text title
-      V.imapM (renderOnePara vIdDyn (value rubySizeDD)) annText
-
-
-  -------------------------------------------------------------------
-  -- let
-  --   evVis = mergeList $ map fst $ V.toList vIdEvs
-  --   hVis :: Set Int -> (Int, Bool) -> Set Int
-  --   hVis s (ind, True) = Set.insert ind s
-  --   hVis s (ind, False) = Set.delete ind s
-
-  -- visDyn <- foldDyn (flip $ foldl (hVis)) Set.empty evVis
-  -- display (tshow <$> visDyn)
+      rec
+        (resEv,v) <- resizeDetector $ do
+          el "h3" $ text title
+          V.imapM (renderOnePara vIdDyn (value rubySizeDD)) annText
+      return v
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
@@ -99,6 +95,80 @@ readingPaneView (ReaderDocument _ title annText) = do
     surfDyn <- holdDyn "" (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
   return ()
+
+-- Auto paginate text
+--   - Split large para into different pages
+--   - Small para move to next page
+-- Forward and backward page turn buttons
+-- Jump to page
+-- variable height / content on page
+-- store the page number (or para number) and restore progress
+-- Bookmarks
+paginatedReader :: AppMonad t m
+  => ReaderDocument
+  -> AppMonadT t m ()
+paginatedReader (ReaderDocument _ title annText) = do
+  fontSizeDD <- dropdown 100 (constDyn fontSizeOptions) def
+  rubySizeDD <- dropdown 120 (constDyn fontSizeOptions) def
+  lineHeightDD <- dropdown 150 (constDyn lineHeightOptions) def
+  -- render one para then see check its height
+
+  let divAttr = (\s l -> "style" =:
+        ("font-size: " <> tshow s <>"%;"
+          <> "line-height: " <> tshow l <> "%;"
+          <> "height: 400;"))
+        <$> (value fontSizeDD) <*> (value lineHeightDD)
+
+  rec
+    let
+
+    vIdDyn <- holdDyn [] (fmap fst vIdEv)
+
+    vIdEv <- do
+      rec
+        let
+          renderParaNum paraNum = do
+            let para = annText V.!? paraNum
+            case para of
+              Nothing -> return never
+              (Just p) -> renderPara p paraNum
+
+          renderPara para paraNum = do
+            (e,v1) <- el' "div" $
+              renderOnePara vIdDyn (value rubySizeDD) paraNum para
+            ev <- delay 0.2 =<< getPostBuild
+            overFlowEv <- holdUniqDyn
+              =<< widgetHold (return True)
+              (checkOverFlow e <$ (leftmost [ev,resizeEv]))
+            -- display overFlowEv
+            v2 <- widgetHold (return never)
+              ((\b -> if b
+                then return never
+                else renderParaNum (paraNum + 1))
+                  <$> updated overFlowEv)
+            return (leftmost [v1,switchPromptlyDyn v2])
+
+        (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $
+          renderParaNum 0
+      return v
+
+  divClass "" $ do
+    detailsEv <- getWebSocketResponse $ GetVocabDetails
+      <$> (fmap fst vIdEv)
+    surfDyn <- holdDyn "" (fmap snd vIdEv)
+    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
+  return ()
+-- Algo
+-- Start of page
+  -- (ParaId, Maybe Offset) -- (Int , Maybe Int)
+
+-- How to determine the
+-- End of page
+  -- (ParaId, Maybe Offset)
+
+-- Get the bounding rect of each para
+-- if Y + Height > Div Height then para overflows
+-- Show the para in next page
 
 vocabRuby :: (_)
   => Dynamic t Bool
@@ -126,14 +196,14 @@ fontSizeOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
   <$> ([80,85..200]  :: [Int])
 
 renderOnePara :: (_)
-  => Dynamic t [VocabId]
+  => Dynamic t [VocabId] -- Used for mark
   -> Dynamic t Int
   -> Int
   -> [Either Text (Vocab, [VocabId], Bool)]
-  -> m (Event t (Int, Bool), Event t ([VocabId], Text))
+  -> m (Event t ([VocabId], Text))
 renderOnePara vIdDyn rubySize ind annTextPara = do
   let showAllFurigana = constDyn True
-  (e,ret) <- el' "p" $ do
+  el "p" $ do
     let f (Left t) = never <$ text t
         f (Right (v, vId, vis)) = do
           rec
@@ -155,18 +225,6 @@ renderOnePara vIdDyn rubySize ind annTextPara = do
         -- addSpace (r:rs) = r : (addSpace rs)
 
     leftmost <$> mapM f (annTextPara)
-  -- check <- delay 0.1 =<< getPostBuild
-  -- widgetHold (return ())
-  --   (checkIntersection e <$ check)
-
-  --------------------------------
-
-  -- (evVisible, action) <- newTriggerEvent
-  -- io <- setupInterObs ind action
-  -- DOM.observe io (_element_raw e)
-  let evVisible = never
-  --------------------------------
-  return (evVisible, ret)
 
 showVocabDetailsWidget :: (AppMonad t m)
   => Event t (Text, [(Entry, Maybe SrsEntryId)])
