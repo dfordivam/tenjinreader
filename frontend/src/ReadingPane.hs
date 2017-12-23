@@ -26,13 +26,13 @@ import qualified GHCJS.DOM.IntersectionObserverCallback as DOM
 import qualified GHCJS.DOM.IntersectionObserver as DOM
 import Reflex.Dom.Widget.Resize
 
-checkOverFlow e = do
+checkOverFlow e overFlowThreshold = do
   rect <- DOM.getBoundingClientRect (_element_raw e)
   trects <- DOM.getClientRects (_element_raw e)
   y <- DOM.getY rect
   h <- DOM.getHeight rect
   -- text $ "Coords: " <> (tshow y) <> ", " <> (tshow h)
-  return (y + h > 400)
+  return (y + h > overFlowThreshold)
 
 setupInterObs :: (DOM.MonadDOM m)
   => Int
@@ -121,36 +121,42 @@ paginatedReader (ReaderDocument _ title annText) = do
 
   rec
     let
+      overFlowThreshold = 400
+      renderParaNum paraNum resizeEv = do
+        let para = annText V.!? paraNum
+        case para of
+          Nothing -> return never
+          (Just p) -> renderPara p paraNum resizeEv
+
+      renderPara para paraNum resizeEv = do
+        (e,v1) <- el' "div" $
+          renderOnePara vIdDyn (value rubySizeDD) paraNum para
+        ev <- delay 0.2 =<< getPostBuild
+        overFlowEv <- holdUniqDyn
+          =<< widgetHold (return True)
+          (checkOverFlow e overFlowThreshold
+             <$ (leftmost [ev,resizeEv]))
+        -- display overFlowEv
+        v2 <- widgetHold (return never)
+          ((\b -> if b
+            then return never
+            else renderParaNum (paraNum + 1) resizeEv)
+              <$> updated overFlowEv)
+        return (leftmost [v1,switchPromptlyDyn v2])
+
+      renderFromPara startPara = do
+        rec
+          (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $
+            renderParaNum 0 resizeEv
+        return v
 
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
 
     vIdEv <- do
-      rec
-        let
-          renderParaNum paraNum = do
-            let para = annText V.!? paraNum
-            case para of
-              Nothing -> return never
-              (Just p) -> renderPara p paraNum
-
-          renderPara para paraNum = do
-            (e,v1) <- el' "div" $
-              renderOnePara vIdDyn (value rubySizeDD) paraNum para
-            ev <- delay 0.2 =<< getPostBuild
-            overFlowEv <- holdUniqDyn
-              =<< widgetHold (return True)
-              (checkOverFlow e <$ (leftmost [ev,resizeEv]))
-            -- display overFlowEv
-            v2 <- widgetHold (return never)
-              ((\b -> if b
-                then return never
-                else renderParaNum (paraNum + 1))
-                  <$> updated overFlowEv)
-            return (leftmost [v1,switchPromptlyDyn v2])
-
-        (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $
-          renderParaNum 0
-      return v
+      let newPageEv = never
+      val <- widgetHold (renderFromPara 0)
+        (renderFromPara <$> newPageEv)
+      return $ switchPromptlyDyn val
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
