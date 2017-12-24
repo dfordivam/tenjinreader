@@ -161,6 +161,42 @@ paginatedReader (ReaderDocument _ title annText) = do
             renderParaNum startPara resizeEv
         return v
 
+      bwdRenderParaNum paraNum e = do
+        let para = annText V.!? paraNum
+        case para of
+          Nothing -> return (constDyn 0)
+          (Just p) -> bwdRenderPara p paraNum e
+
+
+      bwdRenderPara para paraNum e = do
+        text "Test2"
+        ev <- delay 0.2 =<< getPostBuild
+        overFlowEv <- holdUniqDyn
+          =<< widgetHold (return True)
+          (checkOverFlow e overFlowThreshold <$ ev)
+
+        let
+          prevParaWidget b = if b
+            then return (constDyn paraNum)
+            else bwdRenderParaNum (paraNum - 1) e
+
+        v2 <- widgetHold (prevParaWidget True)
+              (prevParaWidget <$> updated overFlowEv)
+
+        el "div" $
+          renderOnePara vIdDyn (value rubySizeDD) paraNum para
+
+        return $ join v2
+
+      backwardRender :: (_) => Int
+        -> AppMonadT t m (Dynamic t Int)
+      backwardRender endPara = do
+        rec
+          text "Test"
+          (e,v) <- elDynAttr' "div" divAttr $
+            bwdRenderParaNum endPara e
+        return v -- First Para
+
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
 
     vIdEv <- do
