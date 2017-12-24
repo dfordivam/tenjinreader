@@ -169,8 +169,7 @@ paginatedReader (ReaderDocument _ title annText) = do
 
 
       bwdRenderPara para paraNum e = do
-        text "Test2"
-        ev <- delay 0.2 =<< getPostBuild
+        ev <- delay 0.1 =<< getPostBuild
         overFlowEv <- holdUniqDyn
           =<< widgetHold (return True)
           (checkOverFlow e overFlowThreshold <$ ev)
@@ -188,14 +187,26 @@ paginatedReader (ReaderDocument _ title annText) = do
 
         return $ join v2
 
-      backwardRender :: (_) => Int
-        -> AppMonadT t m (Dynamic t Int)
-      backwardRender endPara = do
+      getFirstParaOfPrevPage :: (_)
+        => Event t Int
+        -> AppMonadT t m (Event t Int)
+      getFirstParaOfPrevPage endParaEv = do
         rec
-          text "Test"
-          (e,v) <- elDynAttr' "div" divAttr $
-            bwdRenderParaNum endPara e
-        return v -- First Para
+          let
+            init endPara = do
+              rec
+                (e,v) <- elDynAttr' "div" divAttr $
+                  bwdRenderParaNum endPara e
+              return v -- First Para
+
+            getParaDyn endPara = do
+              widgetHold (init endPara)
+                ((return (constDyn 0)) <$ delEv)
+
+          delEv <- delay 1 endParaEv
+        pDyn <- widgetHold (return (constDyn (constDyn 0)))
+          (getParaDyn <$> endParaEv)
+        return (tagDyn (join $ join pDyn) delEv)
 
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
 
@@ -203,7 +214,13 @@ paginatedReader (ReaderDocument _ title annText) = do
       rec
         let
           newPageEv :: Event t Int
-          newPageEv = switchPromptlyDyn (fst <$> val)
+          newPageEv = leftmost [switchPromptlyDyn (fst <$> val), firstPara]
+        firstParaDyn <- holdDyn 0 newPageEv
+
+        prev <- button "Previous Page"
+        firstPara <- (getFirstParaOfPrevPage
+          ((\p -> max 0 (p - 1)) <$> tagDyn firstParaDyn prev))
+
         val <- widgetHold (renderFromPara 0)
           (renderFromPara <$> newPageEv)
       return $ switchPromptlyDyn (snd <$> val)
