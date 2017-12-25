@@ -139,8 +139,8 @@ paginatedReader (ReaderDocument _ title annText) = do
         let
           nextParaWidget b = if b
             then do
-               ev <- button "Next Page"
-               return ((paraNum + 1) <$ ev, never)
+               (e,_) <- elAttr' "button" nextBtnAttr $ text ">"
+               return ((paraNum + 1) <$ domEvent Click e, never)
             else renderParaNum (paraNum + 1) resizeEv
 
         v2 <- widgetHold (nextParaWidget False)
@@ -155,10 +155,15 @@ paginatedReader (ReaderDocument _ title annText) = do
       divAttr = (\s l fs -> ("style" =:
         ("font-size: " <> tshow s <>"%;"
           <> "line-height: " <> tshow l <> "%;"
-          <> "height: 400;" <> "display: block;"))
-             <> ("class" =: (if fs then "modal modal-open well-lg" else "")))
+          <> "height: 400;" <> "display: block;" <> "padding: 40px;"))
+             <> ("class" =: (if fs then "modal modal-open" else "")))
         <$> (value fontSizeDD) <*> (value lineHeightDD) <*> (fullscreenDyn)
 
+      btnCommonAttr stl = ("class" =: "btn btn-xs")
+         <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute;"
+            <> stl ))
+      prevBtnAttr = btnCommonAttr "left: 10px;"
+      nextBtnAttr = btnCommonAttr "right: 10px;"
       renderFromPara :: (_) => Int
         -> AppMonadT t m ((Event t () -- Close Full Screen
                          , Event t ()) -- Previous Page
@@ -173,7 +178,9 @@ paginatedReader (ReaderDocument _ title annText) = do
               dispFullScr (text "Close")
             prev <- if startPara == 0
               then return never
-              else button "Previous Page"
+              else do
+                (e,_) <- elAttr' "button" prevBtnAttr $ text "<"
+                return (domEvent Click e)
             v1 <- renderParaNum startPara resizeEv
             return ((domEvent Click e, prev), v1)
         return v
@@ -225,7 +232,7 @@ paginatedReader (ReaderDocument _ title annText) = do
               widgetHold (init endPara)
                 ((return (constDyn 0)) <$ delEv)
 
-          delEv <- delay 1 endParaEv
+          delEv <- delay 2 endParaEv
         pDyn <- widgetHold (return (constDyn (constDyn 0)))
           (getParaDyn <$> endParaEv)
         return (tagDyn (join $ join pDyn) delEv)
