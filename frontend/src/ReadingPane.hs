@@ -156,11 +156,12 @@ paginatedReader (ReaderDocument _ title annText) = do
         ("font-size: " <> tshow s <>"%;"
           <> "line-height: " <> tshow l <> "%;"
           <> "height: 400;" <> "display: block;"))
-             <> ("class" =: (if fs then "modal modal-open" else "")))
+             <> ("class" =: (if fs then "modal modal-open well-lg" else "")))
         <$> (value fontSizeDD) <*> (value lineHeightDD) <*> (fullscreenDyn)
 
       renderFromPara :: (_) => Int
-        -> AppMonadT t m (Event t () -- Close Full Screen
+        -> AppMonadT t m ((Event t () -- Close Full Screen
+                         , Event t ()) -- Previous Page
         , (Event t Int, Event t ([VocabId], Text)))
       renderFromPara startPara = do
         let backAttr = ("class" =: "modal-backdrop")
@@ -170,8 +171,11 @@ paginatedReader (ReaderDocument _ title annText) = do
           (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $ do
             (e,_) <- elClass' "button" "close" $
               dispFullScr (text "Close")
+            prev <- if startPara == 0
+              then return never
+              else button "Previous Page"
             v1 <- renderParaNum startPara resizeEv
-            return (domEvent Click e, v1)
+            return ((domEvent Click e, prev), v1)
         return v
 
       bwdRenderParaNum paraNum e = do
@@ -207,10 +211,14 @@ paginatedReader (ReaderDocument _ title annText) = do
         rec
           let
             init endPara = do
-              rec
-                (e,v) <- elDynAttr' "div" divAttr $
-                  bwdRenderParaNum endPara e
-              return v -- First Para
+              let backAttr = ("class" =: "modal-backdrop")
+                    <> ("style" =: "background-color: white;")
+              dispFullScr (elAttr "div" backAttr $ return ())
+              elDynAttr "div" divAttr $ do
+                rec
+                  (e,v) <- el' "div" $
+                    bwdRenderParaNum endPara e
+                return v -- First Para
 
             -- Get para num and remove self
             getParaDyn endPara = do
@@ -229,18 +237,26 @@ paginatedReader (ReaderDocument _ title annText) = do
     (vIdEv, fullScrCloseEv) <- do
       rec
         let
+          val = join valDDyn
           newPageEv :: Event t Int
           newPageEv = leftmost [switchPromptlyDyn (fst . snd <$> val), firstPara]
         firstParaDyn <- holdDyn 0 newPageEv
 
-        prev <- button "Previous Page"
+        let prev = switchPromptlyDyn (snd . fst <$> val)
         firstPara <- (getFirstParaOfPrevPage
           ((\p -> max 0 (p - 1)) <$> tagDyn firstParaDyn prev))
 
-        val <- widgetHold (renderFromPara 0)
-          (renderFromPara <$> newPageEv)
+        let
+          -- Remove itself on prev page click
+          renderParaWrap paraNum = do
+            let nVal = ((never,never), (never, never))
+            widgetHold (renderFromPara paraNum)
+              ((return nVal) <$ prev)
+
+        valDDyn <- widgetHold (renderParaWrap 0)
+          (renderParaWrap <$> newPageEv)
       return $ (switchPromptlyDyn (snd . snd <$> val)
-               , switchPromptlyDyn (fst <$> val))
+               , switchPromptlyDyn (fst . fst <$> val))
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
