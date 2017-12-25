@@ -59,6 +59,8 @@ kanjiBrowseWidget = divClass "row" $ do
         maybeKanjiDetailsEv <- getWebSocketResponse
           ((flip GetKanjiDetails) def <$> kanjiSelectionEv)
 
+        showWSProcessing kanjiSelectionEv maybeKanjiDetailsEv
+
         -- NW 1.1.2
         closeEv <- handleVisibility KanjiDetailPageVis vis $ do
           l <- linkClass "Close Details Page" ""
@@ -78,6 +80,7 @@ kanjiBrowseWidget = divClass "row" $ do
                          \overflow-y: auto;")
     kanjiSelectionEv <-
       elAttr "div" listAttr $ do
+        showWSProcessing filterEv kanjiListEv
         kanjiListWidget kanjiListEv
 
   return ()
@@ -214,6 +217,8 @@ kanjiListWidget listEv = do
 
   -- NW 1
   rec
+    lmEv <- getWebSocketResponse $ LoadMoreKanjiResults <$ ev
+    dyn <- foldDyn fun [] (align listEv lmEv)
     d <- elClass "table" "table table-striped" $ do
       el "thead" $ do
         el "tr" $ do
@@ -221,11 +226,10 @@ kanjiListWidget listEv = do
           el "th" $ text "Rank"
           el "th" $ text "Meanings"
       el "tbody" $  do
-        lmEv <- getWebSocketResponse $ LoadMoreKanjiResults <$ ev
-        dyn <- foldDyn fun [] (align listEv lmEv)
         -- NW 1.1
         simpleList dyn liWrap
     ev <- do
+      showWSProcessing ev lmEv
       (e,_) <- elClass' "button" "btn btn-block" $ text "Load More"
       return $ domEvent Click e
   return $ switchPromptlyDyn $ leftmost <$> d
@@ -288,13 +292,14 @@ vocabListWindow req listEv = do
 
   -- NW 1
   rec
+    lmEv <- getWebSocketResponse $ req <$ ev
+    dyn <- foldDyn fun [] (align listEv lmEv)
     divClass "" $  do
-      lmEv <- getWebSocketResponse $ req <$ ev
-      dyn <- foldDyn fun [] (align listEv lmEv)
       -- NW 1.1
       simpleList dyn liWrap
       -- NW 1.2
     ev <- do
+      showWSProcessing ev lmEv
       (e,_) <- elClass' "button" "btn btn-block" $ text "Load More"
       return $ domEvent Click e
   return ()
@@ -307,7 +312,7 @@ vocabSearchWidget
   => AppMonadT t m ()
 vocabSearchWidget = divClass "" $ divClass "panel panel-default" $ do
 
-  vocabResEv <- divClass "panel-heading"  $ do
+  (vocabResEv,searchEv) <- divClass "panel-heading"  $ do
     let
       tiAttr = constDyn $ (("style" =: "")
                           <> ("class" =: "col-sm-9")
@@ -330,7 +335,9 @@ vocabSearchWidget = divClass "" $ divClass "panel panel-default" $ do
     let vsDyn = VocabSearch <$> (value ti)
                   <*> (value filt)
     searchEv <- debounce 1 (updated vsDyn)
-    getWebSocketResponse searchEv
+    res <- getWebSocketResponse searchEv
+    return (res,searchEv)
 
-  divClass "panel-body" $
+  divClass "panel-body" $ do
+    showWSProcessing searchEv vocabResEv
     vocabListWindow LoadMoreVocabSearchResult vocabResEv

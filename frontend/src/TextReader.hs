@@ -119,6 +119,7 @@ documentEditor editEv = divClass "" $ do
         <*> (value ta)
   annTextEv <- getWebSocketResponse
     $ tagDyn evDyn saveEv
+  showWSProcessing saveEv annTextEv
   delEv <- delay 0.1 (fmapMaybe identity $ tagDyn rdDyn cancelEv)
   return $ leftmost [fmapMaybe identity annTextEv
     , delEv]

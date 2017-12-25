@@ -82,7 +82,9 @@ addEditSrsEntryWidget i t s = do
         ev <- do
           (e,_) <- elClass' "button" "btn btn-xs" $ text "Add to SRS"
           return $ domEvent Click e
-        getWebSocketResponse $ QuickAddSrsItem i t <$ ev
+        resp <- getWebSocketResponse $ QuickAddSrsItem i t <$ ev
+        showWSProcessing ev resp
+        return resp
   rec
     sDyn <- holdDyn s resp
     resp <- switchPromptly never
@@ -96,6 +98,7 @@ openEditSrsItemWidget
   -> AppMonadT t m (Event t (SrsEntryId, SrsEntry))
 openEditSrsItemWidget ev = do
   srsItEv <- getWebSocketResponse $ GetSrsItem <$> ev
+  showWSProcessing ev srsItEv
 
   let
       modalWidget :: (AppMonad t m)
@@ -137,8 +140,10 @@ editWidgetView
   -> m (Dynamic t SrsEntry
        , Event t (), Event t ())
 editWidgetView s savedEv = modalDiv $ do
-  divClass "modal-header" $ el "h3" $ do
+  closeEvTop <- divClass "modal-header" $ el "h3" $ do
+    (e,_) <- elClass' "button" "close" $ text "Close"
     text $ "Edit " <> (s ^. field . to (NE.head))
+    return (domEvent Click e)
 
   let bodyAttr = ("class" =: "modal-body")
           <> ("style" =: "height: 400px;\
@@ -217,8 +222,9 @@ editWidgetView s savedEv = modalDiv $ do
     let savedIcon = elClass "i" "" $ return ()
     saveEv <- button "Save"
     closeEv <- button "Close"
+    showWSProcessing saveEv savedEv
     widgetHold (return ()) (savedIcon <$ savedEv)
-    return (ret, saveEv, closeEv)
+    return (ret, saveEv, leftmost[closeEv, closeEvTop])
 
 
 editNonEmptyList :: (_)
@@ -261,3 +267,20 @@ editNonEmptyList ne conT renderFun = do
         listHoldWithKey initMap remAddEv showItem
 
   return $ (NE.fromList . (fmap fst) . Map.elems) <$> d
+
+showWSProcessing :: (_)
+  => Event t a
+  -> Event t b
+  -> m ()
+showWSProcessing evStart evFinish = do
+  let
+    showSpinner = divClass "spinner" $ do
+      divClass "bounce1" $ return ()
+      divClass "bounce2" $ return ()
+      divClass "bounce3" $ return ()
+
+  let waitForStart = do
+        void $ widgetHold (showSpinner)
+          (return () <$ evFinish)
+  void $ widgetHold (return ())
+    (waitForStart <$ evStart)

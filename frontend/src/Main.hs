@@ -9,7 +9,7 @@ import Reflex.Dom.Core (mainWidget, mainWidgetWithCss)
 -- import Reflex.Dom
 import Data.FileEmbed
 import TopWidget
-
+import Protolude
 -- main :: IO ()
 -- main = mainWidget $ text "hi"
 
@@ -18,5 +18,5 @@ main =
   -- mainWidget $ topWidget
   run 3911 $
     mainWidgetWithCss
-      ($(embedFile "src/bootstrap.css"))
+      ($(embedFile "src/bootstrap.css") <> $(embedFile "src/custom.css"))
       $ topWidget
