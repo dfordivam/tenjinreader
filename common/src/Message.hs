@@ -272,7 +272,7 @@ data AddOrEditDocument =
 
 instance WebSocketMessage AppRequest AddOrEditDocument where
   type ResponseT AppRequest AddOrEditDocument
-    = (Maybe ReaderDocument)
+    = (Maybe (ReaderDocument CurrentDb))
 
 ----------------------------------------------------------------
 data ListDocuments = ListDocuments
@@ -287,7 +287,7 @@ data ViewDocument = ViewDocument ReaderDocumentId
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest ViewDocument where
-  type ResponseT AppRequest ViewDocument = (Maybe ReaderDocument)
+  type ResponseT AppRequest ViewDocument = (Maybe (ReaderDocument CurrentDb))
 
 ----------------------------------------------------------------
 data DeleteDocument = DeleteDocument ReaderDocumentId

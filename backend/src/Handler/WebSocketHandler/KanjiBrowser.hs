@@ -239,7 +239,7 @@ makeReaderDocumentContent t = do
   liftIO $ parseAndSearch vocabDb se mec t
 
 getAddOrEditDocument :: AddOrEditDocument
-  -> WsHandlerM (Maybe ReaderDocument)
+  -> WsHandlerM (Maybe (ReaderDocument CurrentDb))
 getAddOrEditDocument (AddOrEditDocument dId title t) = do
   uId <- asks currentUserId
   c <- lift $ makeReaderDocumentContent t
@@ -247,7 +247,7 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
   let
     upFun :: (AllocM m)
       => AppUserDataTree CurrentDb
-      -> StateT (Maybe ReaderDocument) m
+      -> StateT (Maybe (ReaderDocument CurrentDb)) m
            (AppUserDataTree CurrentDb)
     upFun rd = do
       mx <- lift $
@@ -258,7 +258,7 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
             = ReaderDocumentId (k + 1)
 
           docId = maybe newk id dId
-          nd = ReaderDocument docId title c
+          nd = ReaderDocument docId title c (0,Nothing)
 
       put $ Just nd
       lift $ rd &
@@ -276,7 +276,7 @@ getListDocuments _ = do
     rd <- Tree.lookupTree uId $ db ^. userData
     mapM Tree.toList (rd ^? _Just . readerDocuments)
 
-  let f (ReaderDocument i t c) = (i,t,p c)
+  let f (ReaderDocument i t c _) = (i,t,p c)
       p c = T.take 50 (foldl' fol "" c)
       fol t ap = t <> (mconcat $ map getT ap)
       getT (Left t) = t
@@ -285,7 +285,7 @@ getListDocuments _ = do
   return $ maybe [] (map (f . snd)) ds
 
 getViewDocument :: ViewDocument
-  -> WsHandlerM (Maybe ReaderDocument)
+  -> WsHandlerM (Maybe (ReaderDocument CurrentDb))
 getViewDocument (ViewDocument i) = do
   uId <- asks currentUserId
   s <- lift $ transactReadOnlySrsDB $ \db ->

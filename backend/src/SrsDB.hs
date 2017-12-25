@@ -58,28 +58,22 @@ deriving instance Root (AppConcurrentDbTree CurrentDb)
 
 
 type family AppUserData t
-type instance AppUserData CurrentDb = AppUserDataTree CurrentDb
-
-type instance AppUserData OldDb = AppUserDataTreeOld OldDb
+type instance AppUserData t = AppUserDataTree t
 
 data AppUserDataTree t = AppUserDataTree
   { _reviews :: Tree SrsEntryId SrsEntry
-  , _readerDocuments :: Tree ReaderDocumentId ReaderDocument
+  , _readerDocuments :: Tree ReaderDocumentId (ReaderDocument t)
   , _kanjiSrsMap :: Tree KanjiId SrsEntryId
   , _vocabSrsMap :: Tree VocabId SrsEntryId
   -- An Srs Item may not have an entry in this map
   , _srsKanjiVocabMap :: Tree SrsEntryId (Either KanjiId VocabId)
   , _readerSettings :: ReaderSettings t
-  } deriving (Generic, Show, Typeable, Binary, Value)
+  } deriving (Generic, Typeable, Binary)
 
-data AppUserDataTreeOld t = AppUserDataTreeOld
-  { _reviewsOld :: Tree SrsEntryId SrsEntry
-  , _readerDocumentsOld :: Tree ReaderDocumentId ReaderDocument
-  , _kanjiSrsMapOld :: Tree KanjiId SrsEntryId
-  , _vocabSrsMapOld :: Tree VocabId SrsEntryId
-  -- An Srs Item may not have an entry in this map
-  , _srsKanjiVocabMapOld :: Tree SrsEntryId (Either KanjiId VocabId)
-  } deriving (Generic, Show, Typeable, Binary, Value)
+instance Value (AppUserDataTree CurrentDb)
+instance Value (AppUserDataTree OldDb)
+instance Show (AppUserDataTree CurrentDb)
+instance Show (AppUserDataTree OldDb)
 
 openSrsDB :: FilePath -> IO (ConcurrentDb AppConcurrentDb)
 openSrsDB fp =
@@ -110,8 +104,10 @@ instance Binary SrsInterval
 instance Value SrsInterval
 instance Binary ReaderDocumentId
 instance Value ReaderDocumentId
-instance Binary ReaderDocument
-instance Value ReaderDocument
+instance Binary (ReaderDocumentTree t)
+instance (Typeable t) => Value (ReaderDocumentTree t)
+instance Binary (ReaderDocumentOldTree t)
+instance (Typeable t) => Value (ReaderDocumentOldTree t)
 
 instance Binary SrsEntryId
 instance Value SrsEntryId
@@ -122,5 +118,4 @@ instance Key KanjiId
 instance Key VocabId
 
 makeLenses ''AppUserDataTree
-makeLenses ''AppUserDataTreeOld
 makeLenses ''AppConcurrentDbTree

@@ -51,8 +51,8 @@ intersectionObsCallback ind action (e:es) _ = do
     else liftIO $ action (ind, False)
 
 readingPane :: AppMonad t m
-  => Event t ReaderDocument
-  -> AppMonadT t m (Event t (), Event t ReaderDocument)
+  => Event t (ReaderDocument CurrentDb)
+  -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
 readingPane docEv = do
   ev <- getPostBuild
   s <- getWebSocketResponse (GetReaderSettings <$ ev)
@@ -62,9 +62,9 @@ readingPane docEv = do
          , switchPromptlyDyn (snd <$> v))
 
 readingPaneInt :: AppMonad t m
-  => Event t ReaderDocument
+  => Event t (ReaderDocument CurrentDb)
   -> ReaderSettings CurrentDb
-  -> AppMonadT t m (Event t (), Event t ReaderDocument)
+  -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
 readingPaneInt docEv rsDef = do
   closeEv <- button "Close"
   editEv <- button "Edit"
@@ -89,9 +89,9 @@ readingPaneInt docEv rsDef = do
 
 -- Display the complete document in one page
 readingPaneView :: AppMonad t m
-  => ReaderDocument
+  => (ReaderDocument CurrentDb)
   -> AppMonadT t m ()
-readingPaneView (ReaderDocument _ title annText) = do
+readingPaneView (ReaderDocument _ title annText _) = do
   fontSizeDD <- dropdown 100 (constDyn fontSizeOptions) def
   rubySizeDD <- dropdown 120 (constDyn fontSizeOptions) def
   lineHeightDD <- dropdown 150 (constDyn lineHeightOptions) def
@@ -130,9 +130,9 @@ readingPaneView (ReaderDocument _ title annText) = do
 -- Bookmarks
 paginatedReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
-  -> ReaderDocument
+  -> (ReaderDocument CurrentDb)
   -> AppMonadT t m ()
-paginatedReader rs (ReaderDocument _ title annText) = do
+paginatedReader rs (ReaderDocument _ title annText _) = do
   fullScrEv <- button "Full Screen"
   -- render one para then see check its height
 

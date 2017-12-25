@@ -52,7 +52,7 @@ textReaderTop = do
 documentListViewer
   :: AppMonad t m
   => Event t () -- refresh
-  -> AppMonadT t m (Event t ReaderDocument
+  -> AppMonadT t m (Event t (ReaderDocument CurrentDb)
                    , Event t ())
 documentListViewer refreshEv = do
   ev <- getPostBuild
@@ -82,8 +82,8 @@ viewList lss = do
 
 documentEditor
   :: AppMonad t m
-  => Event t (Maybe ReaderDocument)
-  -> AppMonadT t m (Event t ReaderDocument)
+  => Event t (Maybe (ReaderDocument CurrentDb))
+  -> AppMonadT t m (Event t (ReaderDocument CurrentDb))
 documentEditor editEv = divClass "" $ do
   let
     tiAttr = constDyn $ (("style" =: "width: 100%;")
@@ -94,7 +94,7 @@ documentEditor editEv = divClass "" $ do
 
     titleSetEv = (maybe "" _readerDocTitle) <$> editEv
     contentSetEv = (maybe "" getContentText) <$> editEv
-    getContentText (ReaderDocument _ _ c)
+    getContentText (ReaderDocument _ _ c _)
       = T.unlines $ map toT (V.toList c)
       where
         toT ap = (mconcat $ map getT ap)

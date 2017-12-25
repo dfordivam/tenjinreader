@@ -175,10 +175,22 @@ type AnnotatedDocument = Vector AnnotatedPara
 newtype ReaderDocumentId = ReaderDocumentId { unReaderDocumentId :: Int }
   deriving (Eq, Ord, Generic, Show, Typeable, ToJSON, FromJSON)
 
-data ReaderDocument = ReaderDocument
+type family ReaderDocument t
+type instance ReaderDocument CurrentDb = ReaderDocumentTree CurrentDb
+type instance ReaderDocument OldDb = ReaderDocumentOldTree OldDb
+
+data ReaderDocumentTree t = ReaderDocument
   { _readerDocId :: ReaderDocumentId
   , _readerDocTitle :: Text
   , _readerDocContent :: AnnotatedDocument
+  , _readerDocProgress :: (Int, Maybe Int) -- (Para, offset)
+  }
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+data ReaderDocumentOldTree t = ReaderDocumentOld
+  { _readerDocOldId :: ReaderDocumentId
+  , _readerDocOldTitle :: Text
+  , _readerDocOldContent :: AnnotatedDocument
   }
   deriving (Generic, Show, ToJSON, FromJSON)
 
@@ -307,7 +319,8 @@ testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b)
 makeLenses ''SrsReviewStats
 makeLenses ''VocabDetails
 makeLenses ''KanjiDetails
-makeLenses ''ReaderDocument
+makeLenses ''ReaderDocumentTree
+makeLenses ''ReaderDocumentOldTree
 
 makePrisms ''SrsEntryState
 makeLenses ''SrsEntryStats

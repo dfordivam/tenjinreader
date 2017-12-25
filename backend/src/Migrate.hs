@@ -23,8 +23,8 @@ import Model hiding (Key)
 
 import Protolude hiding ((&))
 
-import Control.Lens
-
+import Control.Lens hiding (reviews)
+import Data.Coerce
 import Data.Default
 import Data.BTree.Alloc (AllocM, AllocReaderM)
 import Data.BTree.Primitives (Value, Key)
@@ -49,6 +49,15 @@ import qualified Data.Map as Map
 import Data.Time.Calendar (Day)
 
 
+-- -data AppUserDataTreeOld t = AppUserDataTreeOld
+-- -  { _reviewsOld :: Tree SrsEntryId SrsEntry
+-- -  , _readerDocumentsOld :: Tree ReaderDocumentId ReaderDocument
+-- -  , _kanjiSrsMapOld :: Tree KanjiId SrsEntryId
+-- -  , _vocabSrsMapOld :: Tree VocabId SrsEntryId
+-- -  -- An Srs Item may not have an entry in this map
+-- -  , _srsKanjiVocabMapOld :: Tree SrsEntryId (Either KanjiId VocabId)
+-- -  } deriving (Generic, Show, Typeable, Binary, Value)
+-- -
 newtype AppOldConcurrentDb = AppOldConcurrentDb
   { unAppOldConcurrentDb :: DbSchema OldDb }
   deriving (Generic, Show, Typeable, Binary, Value, Root)
@@ -87,11 +96,12 @@ migrateFun dbOld db = do
              --   => AppUserDataTreeOld (OldDb)
              --   -> n (TType)
              tup d =
-               ( (d ^. reviewsOld)
-               , (d ^. readerDocumentsOld)
-               , (d ^. kanjiSrsMapOld)
-               , (d ^. vocabSrsMapOld)
-               , (d ^. srsKanjiVocabMapOld))
+               ( (d ^. reviews)
+               , (d ^. readerDocuments)
+               , (d ^. kanjiSrsMap)
+               , (d ^. vocabSrsMap)
+               , (d ^. srsKanjiVocabMap)
+               , (d ^. readerSettings))
                &   (_1 %%~ Tree.toList)
                >>= (_2 %%~ Tree.toList)
                >>= (_3 %%~ Tree.toList)
@@ -104,15 +114,20 @@ migrateFun dbOld db = do
       runNewDb $ transact $ \(AppConcurrentDb tree) -> do
         newD <- AppUserDataTree
           <$> (Tree.fromList $ d ^. _1)
-          <*> (Tree.fromList $ d ^. _2)
+          <*> (Tree.fromList $ map modifyRD (d ^. _2))
           <*> (Tree.fromList $ d ^. _3)
           <*> (Tree.fromList $ d ^. _4)
           <*> (Tree.fromList $ d ^. _5)
-          <*> (pure def)
+          <*> pure (coerce (d ^. _6))
 
         newTree <- tree & userData %%~
           Tree.insertTree uId newD
         commit () (AppConcurrentDb newTree)
+    modifyRD (rId, rd) = (,) rId $ ReaderDocument
+      (rd ^. readerDocOldId)
+      (rd ^. readerDocOldTitle)
+      (rd ^. readerDocOldContent)
+      (0,Nothing)
   let
     migrateAction = do
       uds <- runOldDb $ transactReadOnly $
