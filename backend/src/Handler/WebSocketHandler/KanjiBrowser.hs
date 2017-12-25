@@ -303,6 +303,22 @@ getDeleteDocument (DeleteDocument dId) = do
       (readerDocuments %%~ Tree.deleteTree dId)
   getListDocuments ListDocuments
 
+getReaderSettings :: GetReaderSettings
+  -> WsHandlerM (ReaderSettings CurrentDb)
+getReaderSettings _ = do
+  uId <- asks currentUserId
+  s <- lift $ transactReadOnlySrsDB $ \db ->
+    Tree.lookupTree uId (db ^. userData)
+      >>= (\x -> return (x ^? _Just . readerSettings))
+  return $ maybe def id s
+
+saveReaderSettings :: SaveReaderSettings
+  -> WsHandlerM ()
+saveReaderSettings (SaveReaderSettings rs) = do
+  uId <- asks currentUserId
+  lift $ transactSrsDB_ $
+    userData %%~ updateTreeM uId
+      (readerSettings %%~ (const (return rs)))
 
 getVocabDetails :: GetVocabDetails
   -> WsHandlerM [(Entry, Maybe SrsEntryId)]

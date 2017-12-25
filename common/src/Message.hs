@@ -57,6 +57,8 @@ type AppRequest
   :<|> ViewDocument
   :<|> DeleteDocument
 
+  :<|> GetReaderSettings
+  :<|> SaveReaderSettings
   -- :<|> CreateT ReaderDocument
   -- :<|> EditT ReaderDocument
   -- :<|> ReadT ReaderDocument
@@ -294,6 +296,19 @@ data DeleteDocument = DeleteDocument ReaderDocumentId
 instance WebSocketMessage AppRequest DeleteDocument where
   type ResponseT AppRequest DeleteDocument
     = [(ReaderDocumentId, Text, Text)]
+
+----------------------------------------------------------------
+data GetReaderSettings = GetReaderSettings
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest GetReaderSettings where
+  type ResponseT AppRequest GetReaderSettings = ReaderSettings CurrentDb
+
+data SaveReaderSettings = SaveReaderSettings (ReaderSettings CurrentDb)
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest SaveReaderSettings where
+  type ResponseT AppRequest SaveReaderSettings = ()
 
 ----------------------------------------------------------------
 data GetVocabDetails = GetVocabDetails [VocabId]

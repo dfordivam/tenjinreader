@@ -50,17 +50,40 @@ intersectionObsCallback ind action (e:es) _ = do
     then liftIO $ action (ind, True)
     else liftIO $ action (ind, False)
 
-
 readingPane :: AppMonad t m
   => Event t ReaderDocument
   -> AppMonadT t m (Event t (), Event t ReaderDocument)
 readingPane docEv = do
+  ev <- getPostBuild
+  s <- getWebSocketResponse (GetReaderSettings <$ ev)
+  v <- widgetHold (readingPaneInt docEv def)
+    (readingPaneInt docEv <$> s)
+  return (switchPromptlyDyn (fst <$> v)
+         , switchPromptlyDyn (snd <$> v))
+
+readingPaneInt :: AppMonad t m
+  => Event t ReaderDocument
+  -> ReaderSettings CurrentDb
+  -> AppMonadT t m (Event t (), Event t ReaderDocument)
+readingPaneInt docEv rsDef = do
   closeEv <- button "Close"
   editEv <- button "Edit"
-  rdDyn <- holdDyn Nothing (Just <$> docEv)
+
+  fontSizeDD <- dropdown (rsDef ^. fontSize) (constDyn fontSizeOptions) def
+  rubySizeDD <- dropdown (rsDef ^. rubySize) (constDyn fontSizeOptions) def
+  lineHeightDD <- dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) def
+  writingModeDD <- dropdown (rsDef ^. verticalMode) (constDyn writingModeOptions) def
+  heightDD <- dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) def
+  let rsDyn = ReaderSettings <$> (value fontSizeDD) <*> (value rubySizeDD)
+                <*> (value lineHeightDD) <*> (value writingModeDD)
+                <*> (value heightDD)
+  getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
+
+
   widgetHold (return ())
     -- (readingPaneView <$> docEv)
-    (paginatedReader <$> docEv)
+    (paginatedReader rsDyn <$> docEv)
+  rdDyn <- holdDyn Nothing (Just <$> docEv)
   return (closeEv
          , fmapMaybe identity $ tagDyn rdDyn editEv)
 
@@ -106,12 +129,10 @@ readingPaneView (ReaderDocument _ title annText) = do
 -- store the page number (or para number) and restore progress
 -- Bookmarks
 paginatedReader :: forall t m . AppMonad t m
-  => ReaderDocument
+  => Dynamic t (ReaderSettings CurrentDb)
+  -> ReaderDocument
   -> AppMonadT t m ()
-paginatedReader (ReaderDocument _ title annText) = do
-  fontSizeDD <- dropdown 100 (constDyn fontSizeOptions) def
-  rubySizeDD <- dropdown 120 (constDyn fontSizeOptions) def
-  lineHeightDD <- dropdown 150 (constDyn lineHeightOptions) def
+paginatedReader rs (ReaderDocument _ title annText) = do
   fullScrEv <- button "Full Screen"
   -- render one para then see check its height
 
@@ -127,7 +148,7 @@ paginatedReader (ReaderDocument _ title annText) = do
 
       renderPara para paraNum resizeEv = do
         (e,v1) <- el' "div" $
-          renderOnePara vIdDyn (value rubySizeDD) paraNum para
+          renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
 
         ev <- delay 0.2 =<< getPostBuild
         overFlowEv <- holdUniqDyn
@@ -157,7 +178,7 @@ paginatedReader (ReaderDocument _ title annText) = do
           <> "line-height: " <> tshow l <> "%;"
           <> "height: 400;" <> "display: block;" <> "padding: 40px;"))
              <> ("class" =: (if fs then "modal modal-open" else "")))
-        <$> (value fontSizeDD) <*> (value lineHeightDD) <*> (fullscreenDyn)
+        <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs) <*> (fullscreenDyn)
 
       btnCommonAttr stl = ("class" =: "btn btn-xs")
          <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute;"
@@ -207,7 +228,7 @@ paginatedReader (ReaderDocument _ title annText) = do
               (prevParaWidget <$> updated overFlowEv)
 
         el "div" $
-          renderOnePara vIdDyn (value rubySizeDD) paraNum para
+          renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
 
         return $ join v2
 
@@ -307,6 +328,13 @@ lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
 
 fontSizeOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
   <$> ([80,85..200]  :: [Int])
+
+writingModeOptions = Map.fromList $
+  [(False, "Horizontal" :: Text)
+  , (True, "Vertical")]
+
+numOfLinesOptions = Map.fromList $ (\x -> (x, (tshow x) <> "px"))
+  <$> ([100,150..1000]  :: [Int])
 
 renderOnePara :: (_)
   => Dynamic t [VocabId] -- Used for mark

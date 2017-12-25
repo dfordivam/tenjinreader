@@ -74,6 +74,9 @@ wsHandler = HandlerWrapper $
   :<&> h getViewDocument
   :<&> h getDeleteDocument
 
+  :<&> h getReaderSettings
+  :<&> h saveReaderSettings
+
   :<&> h getVocabDetails
 
   where
