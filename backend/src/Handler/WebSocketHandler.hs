@@ -76,6 +76,7 @@ wsHandler = HandlerWrapper $
 
   :<&> h getReaderSettings
   :<&> h saveReaderSettings
+  :<&> h saveReadingProgress
 
   :<&> h getVocabDetails
 

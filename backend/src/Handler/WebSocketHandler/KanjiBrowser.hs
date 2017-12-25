@@ -320,6 +320,15 @@ saveReaderSettings (SaveReaderSettings rs) = do
     userData %%~ updateTreeM uId
       (readerSettings %%~ (const (return rs)))
 
+saveReadingProgress :: SaveReadingProgress
+  -> WsHandlerM ()
+saveReadingProgress (SaveReadingProgress docId p) = do
+  uId <- asks currentUserId
+  lift $ transactSrsDB_ $
+    userData %%~ updateTreeM uId
+      (readerDocuments %%~ updateTreeM docId
+        (readerDocProgress %%~ (const (return p))))
+
 getVocabDetails :: GetVocabDetails
   -> WsHandlerM [(Entry, Maybe SrsEntryId)]
 getVocabDetails (GetVocabDetails eIds) = do

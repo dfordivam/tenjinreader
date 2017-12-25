@@ -132,7 +132,7 @@ paginatedReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
   -> (ReaderDocument CurrentDb)
   -> AppMonadT t m ()
-paginatedReader rs (ReaderDocument _ title annText _) = do
+paginatedReader rs (ReaderDocument docId title annText (startPara, _)) = do
   fullScrEv <- button "Full Screen"
   -- render one para then see check its height
 
@@ -268,7 +268,9 @@ paginatedReader rs (ReaderDocument _ title annText _) = do
           val = join valDDyn
           newPageEv :: Event t Int
           newPageEv = leftmost [switchPromptlyDyn (fst . snd <$> val), firstPara]
-        firstParaDyn <- holdDyn 0 newPageEv
+        firstParaDyn <- holdDyn startPara newPageEv
+
+        getWebSocketResponse ((\p -> SaveReadingProgress docId (p,Nothing)) <$> newPageEv)
 
         let prev = switchPromptlyDyn (snd . fst <$> val)
         firstPara <- (getFirstParaOfPrevPage
@@ -281,7 +283,7 @@ paginatedReader rs (ReaderDocument _ title annText _) = do
             widgetHold (renderFromPara paraNum)
               ((return nVal) <$ prev)
 
-        valDDyn <- widgetHold (renderParaWrap 0)
+        valDDyn <- widgetHold (renderParaWrap startPara)
           (renderParaWrap <$> newPageEv)
       return $ (switchPromptlyDyn (snd . snd <$> val)
                , switchPromptlyDyn (fst . fst <$> val))

@@ -59,6 +59,7 @@ type AppRequest
 
   :<|> GetReaderSettings
   :<|> SaveReaderSettings
+  :<|> SaveReadingProgress
   -- :<|> CreateT ReaderDocument
   -- :<|> EditT ReaderDocument
   -- :<|> ReadT ReaderDocument
@@ -304,11 +305,19 @@ data GetReaderSettings = GetReaderSettings
 instance WebSocketMessage AppRequest GetReaderSettings where
   type ResponseT AppRequest GetReaderSettings = ReaderSettings CurrentDb
 
+----------------------------------------------------------------
 data SaveReaderSettings = SaveReaderSettings (ReaderSettings CurrentDb)
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest SaveReaderSettings where
   type ResponseT AppRequest SaveReaderSettings = ()
+
+----------------------------------------------------------------
+data SaveReadingProgress = SaveReadingProgress ReaderDocumentId (Int, Maybe Int)
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest SaveReadingProgress where
+  type ResponseT AppRequest SaveReadingProgress = ()
 
 ----------------------------------------------------------------
 data GetVocabDetails = GetVocabDetails [VocabId]
