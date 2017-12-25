@@ -435,10 +435,16 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
 
     showStats = do
       let colour c = ("style" =: ("color: " <> c <>";" ))
+          labelText t = elClass "span" "small text-muted" $ text t
+      labelText "Pending "
       elAttr "span" (colour "black") $
         dynText $ (tshow . _srsReviewStats_pendingCount) <$> statsDyn
+      text "\t|\t"
+      labelText " Correct "
       elAttr "span" (colour "green") $
         dynText $ (tshow . _srsReviewStats_correctCount) <$> statsDyn
+      text "\t|\t"
+      labelText " Incorrect "
       elAttr "span" (colour "red") $
         dynText $ (tshow . _srsReviewStats_incorrectCount) <$> statsDyn
 
