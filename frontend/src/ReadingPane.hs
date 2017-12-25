@@ -64,6 +64,7 @@ readingPane docEv = do
   return (closeEv
          , fmapMaybe identity $ tagDyn rdDyn editEv)
 
+-- Display the complete document in one page
 readingPaneView :: AppMonad t m
   => ReaderDocument
   -> AppMonadT t m ()
@@ -111,13 +112,8 @@ paginatedReader (ReaderDocument _ title annText) = do
   fontSizeDD <- dropdown 100 (constDyn fontSizeOptions) def
   rubySizeDD <- dropdown 120 (constDyn fontSizeOptions) def
   lineHeightDD <- dropdown 150 (constDyn lineHeightOptions) def
+  fullScrEv <- button "Full Screen"
   -- render one para then see check its height
-
-  let divAttr = (\s l -> "style" =:
-        ("font-size: " <> tshow s <>"%;"
-          <> "line-height: " <> tshow l <> "%;"
-          <> "height: 400;"))
-        <$> (value fontSizeDD) <*> (value lineHeightDD)
 
   rec
     let
@@ -153,12 +149,29 @@ paginatedReader (ReaderDocument _ title annText) = do
           (switchPromptlyDyn $ fst <$> v2
           , switchPromptlyDyn $ snd <$> v2)
 
+      dispFullScr m = do
+        dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
+
+      divAttr = (\s l fs -> ("style" =:
+        ("font-size: " <> tshow s <>"%;"
+          <> "line-height: " <> tshow l <> "%;"
+          <> "height: 400;" <> "display: block;"))
+             <> ("class" =: (if fs then "modal modal-open" else "")))
+        <$> (value fontSizeDD) <*> (value lineHeightDD) <*> (fullscreenDyn)
+
       renderFromPara :: (_) => Int
-        -> AppMonadT t m (Event t Int, Event t ([VocabId], Text))
+        -> AppMonadT t m (Event t () -- Close Full Screen
+        , (Event t Int, Event t ([VocabId], Text)))
       renderFromPara startPara = do
+        let backAttr = ("class" =: "modal-backdrop")
+              <> ("style" =: "background-color: white;")
+        dispFullScr (elAttr "div" backAttr $ return ())
         rec
-          (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $
-            renderParaNum startPara resizeEv
+          (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $ do
+            (e,_) <- elClass' "button" "close" $
+              dispFullScr (text "Close")
+            v1 <- renderParaNum startPara resizeEv
+            return (domEvent Click e, v1)
         return v
 
       bwdRenderParaNum paraNum e = do
@@ -199,6 +212,7 @@ paginatedReader (ReaderDocument _ title annText) = do
                   bwdRenderParaNum endPara e
               return v -- First Para
 
+            -- Get para num and remove self
             getParaDyn endPara = do
               widgetHold (init endPara)
                 ((return (constDyn 0)) <$ delEv)
@@ -208,13 +222,15 @@ paginatedReader (ReaderDocument _ title annText) = do
           (getParaDyn <$> endParaEv)
         return (tagDyn (join $ join pDyn) delEv)
 
+    fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
+                                             , False <$ fullScrCloseEv])
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
 
-    vIdEv <- do
+    (vIdEv, fullScrCloseEv) <- do
       rec
         let
           newPageEv :: Event t Int
-          newPageEv = leftmost [switchPromptlyDyn (fst <$> val), firstPara]
+          newPageEv = leftmost [switchPromptlyDyn (fst . snd <$> val), firstPara]
         firstParaDyn <- holdDyn 0 newPageEv
 
         prev <- button "Previous Page"
@@ -223,7 +239,8 @@ paginatedReader (ReaderDocument _ title annText) = do
 
         val <- widgetHold (renderFromPara 0)
           (renderFromPara <$> newPageEv)
-      return $ switchPromptlyDyn (snd <$> val)
+      return $ (switchPromptlyDyn (snd . snd <$> val)
+               , switchPromptlyDyn (fst <$> val))
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
