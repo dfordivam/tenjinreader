@@ -27,6 +27,8 @@ import Database.Persist.Sql
 import Data.These
 import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 import Control.Monad.State hiding (foldM)
+import NLP.Japanese.Utils
+
 
 getSrsStats :: GetSrsStats
   -> WsHandlerM (SrsStats,SrsStats)
@@ -355,7 +357,8 @@ makeSrsEntry v surface = do
             . traverse . readingPhrase . to (Reading . unReadingPhrase)
           m = nonEmpty $ v ^.. _Just . vocabEntry . entrySenses
             . traverse . senseGlosses . traverse . glossDefinition . to (Meaning)
-          f = (:|[]) <$> (unKanjiPhrase <$> (matchingSurface ks =<< surface)
+          f = (:|[]) <$> ((isSurfaceKana surface)
+            <|> unKanjiPhrase <$> (matchingSurface ks =<< surface)
                          <|> vocabField)
 
           vocabField = v ^? _Just . vocabDetails . vocab
@@ -377,6 +380,15 @@ makeSrsEntry v surface = do
         }
       state = (NewReview, SrsEntryStats 0 0)
   return (get <$> tmp)
+
+isSurfaceKana (Just t) = if isKanaOnly t
+  then Just t
+  else Nothing
+isSurfaceKana Nothing = Nothing
+
+isKanaOnly :: Text -> Bool
+isKanaOnly = (all f) . T.unpack
+  where f = not . isKanji
 
 matchingSurface :: [KanjiPhrase] -> Text -> Maybe KanjiPhrase
 matchingSurface ks surf = fmap fst $ headMay $ reverse (sortF comPrefixes)
