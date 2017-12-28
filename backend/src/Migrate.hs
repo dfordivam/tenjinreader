@@ -123,11 +123,12 @@ migrateFun dbOld db = do
         newTree <- tree & userData %%~
           Tree.insertTree uId newD
         commit () (AppConcurrentDb newTree)
-    modifyRD (rId, rd) = (,) rId $ ReaderDocument
-      (rd ^. readerDocOldId)
-      (rd ^. readerDocOldTitle)
-      (rd ^. readerDocOldContent)
-      (0,Nothing)
+    modifyRD = coerce
+    -- modifyRD (rId, rd) = (,) rId $ ReaderDocument
+    --   (rd ^. readerDocOldId)
+    --   (rd ^. readerDocOldTitle)
+    --   (rd ^. readerDocOldContent)
+    --   (0,Nothing)
   let
     migrateAction = do
       uds <- runOldDb $ transactReadOnly $
