@@ -13,6 +13,7 @@ import FrontendCommon
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Vector as V
@@ -53,7 +54,7 @@ intersectionObsCallback ind action (e:es) _ = do
     else liftIO $ action (ind, False)
 
 readingPane :: AppMonad t m
-  => Event t (ReaderDocument CurrentDb)
+  => Event t (ReaderDocumentData)
   -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
 readingPane docEv = do
   ev <- getPostBuild
@@ -64,7 +65,7 @@ readingPane docEv = do
          , switchPromptlyDyn (snd <$> v))
 
 readingPaneInt :: AppMonad t m
-  => Event t (ReaderDocument CurrentDb)
+  => Event t (ReaderDocumentData)
   -> ReaderSettings CurrentDb
   -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
 readingPaneInt docEv rsDef = do
@@ -82,12 +83,12 @@ readingPaneInt docEv rsDef = do
   getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
 
 
-  widgetHold (return ())
+  widgetHold ((text "waiting for document data"))
     -- (readingPaneView <$> docEv)
     (paginatedReader rsDyn <$> docEv)
-  rdDyn <- holdDyn Nothing (Just <$> docEv)
-  return (closeEv
-         , fmapMaybe identity $ tagDyn rdDyn editEv)
+  -- rdDyn <- holdDyn Nothing (Just <$> docEv)
+  return (closeEv, never)
+         -- , fmapMaybe identity $ tagDyn rdDyn editEv)
 
 -- Display the complete document in one page
 readingPaneView :: AppMonad t m
@@ -122,6 +123,85 @@ readingPaneView (ReaderDocument _ title annText _) = do
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
   return ()
 
+-- Remove itself on prev page click
+
+renderParaWrap ::
+     forall t m b . (AppMonad t m)
+  => Dynamic t (ReaderSettingsTree CurrentDb)
+  -> Event t b
+  -> Dynamic t [VocabId]
+  -> Dynamic t [(Int,AnnotatedPara)]
+  -> (AppMonadT t m () -> AppMonadT t m (Event t ()))
+  -> Dynamic t (Map Text Text)
+  -> Int
+  -> AppMonadT t m (Dynamic t ( (Event t (), Event t ())
+                              , (Event t Int, Event t ([VocabId], Text))))
+
+renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr paraNum =
+  widgetHold (renderFromPara paraNum)
+    ((return nVal) <$ prev)
+  where
+    nVal = ((never,never), (never, never))
+
+    renderParaNum 0 paraNum resizeEv = return (never,never)
+    renderParaNum paraCount paraNum resizeEv = do
+      cntnt <- sample $ current textContent
+      let para = List.lookup paraNum cntnt
+      case para of
+        Nothing -> text "--- End of Text ---" >> return (never, never)
+        (Just p) -> renderPara paraCount p paraNum resizeEv
+
+    renderPara paraCount para paraNum resizeEv = do
+      (e,v1) <- el' "div" $
+        renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
+
+      ev <- delay 0.2 =<< getPostBuild
+      overFlowEv <- holdUniqDyn
+        =<< widgetHold (checkOverFlow e (_numOfLines <$> rs))
+        (checkOverFlow e (_numOfLines <$> rs)
+           <$ (leftmost [ev,resizeEv]))
+      -- display overFlowEv
+
+      let
+        nextParaWidget b = if b
+          then do
+             (e,_) <- elAttr' "button" nextBtnAttr $ text ">"
+             return ((paraNum + 1) <$ domEvent Click e, never)
+          else renderParaNum (paraCount - 1) (paraNum + 1) resizeEv
+
+      v2 <- widgetHold (nextParaWidget False)
+            (nextParaWidget <$> updated overFlowEv)
+      return $ (\(a,b) -> (a, leftmost [v1,b]))
+        (switchPromptlyDyn $ fst <$> v2
+        , switchPromptlyDyn $ snd <$> v2)
+
+    btnCommonAttr stl = ("class" =: "btn btn-xs")
+       <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute;"
+          <> stl ))
+    prevBtnAttr = btnCommonAttr "left: 10px;"
+    nextBtnAttr = btnCommonAttr "right: 10px;"
+    renderFromPara :: (_) => Int
+      -> AppMonadT t m ((Event t () -- Close Full Screen
+                       , Event t ()) -- Previous Page
+      , (Event t Int, Event t ([VocabId], Text)))
+    renderFromPara startPara = do
+      let backAttr = ("class" =: "modal-backdrop")
+            <> ("style" =: "background-color: white;")
+      dispFullScr (elAttr "div" backAttr $ return ())
+      rec
+        (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $ do
+          (e,_) <- elClass' "button" "close" $
+            dispFullScr (text "Close")
+          prev <- if startPara == 0
+            then return never
+            else do
+              (e,_) <- elAttr' "button" prevBtnAttr $ text "<"
+              return (domEvent Click e)
+          v1 <- renderParaNum 20 startPara resizeEv
+          return ((domEvent Click e, prev), v1)
+      return v
+
+
 -- Auto paginate text
 --   - Split large para into different pages
 --   - Small para move to next page
@@ -132,170 +212,134 @@ readingPaneView (ReaderDocument _ title annText _) = do
 -- Bookmarks
 paginatedReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
-  -> (ReaderDocument CurrentDb)
+  -> (ReaderDocumentData)
   -> AppMonadT t m ()
-paginatedReader rs (ReaderDocument docId title annText (startPara, _)) = do
+paginatedReader rs (docId, title, (startPara, _), annText) = do
   fullScrEv <- button "Full Screen"
   -- render one para then see check its height
 
   rec
     let
-      renderParaNum paraNum resizeEv = do
-        let para = annText V.!? paraNum
-        case para of
-          Nothing -> text "--- End of Text ---" >> return (never, never)
-          (Just p) -> renderPara p paraNum resizeEv
-
-      renderPara para paraNum resizeEv = do
-        (e,v1) <- el' "div" $
-          renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
-
-        ev <- delay 0.2 =<< getPostBuild
-        overFlowEv <- holdUniqDyn
-          =<< widgetHold (checkOverFlow e (_numOfLines <$> rs))
-          (checkOverFlow e (_numOfLines <$> rs)
-             <$ (leftmost [ev,resizeEv]))
-        -- display overFlowEv
-
-        let
-          nextParaWidget b = if b
-            then do
-               (e,_) <- elAttr' "button" nextBtnAttr $ text ">"
-               return ((paraNum + 1) <$ domEvent Click e, never)
-            else renderParaNum (paraNum + 1) resizeEv
-
-        v2 <- widgetHold (nextParaWidget False)
-              (nextParaWidget <$> updated overFlowEv)
-        return $ (\(a,b) -> (a, leftmost [v1,b]))
-          (switchPromptlyDyn $ fst <$> v2
-          , switchPromptlyDyn $ snd <$> v2)
-
       dispFullScr m = do
         dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
 
       divAttr = (\s l h fs -> ("style" =:
         ("font-size: " <> tshow s <>"%;"
           <> "line-height: " <> tshow l <> "%;"
-          <> "height: " <> tshow h <> "px;"
+          -- <> "height: " <> tshow h <> "px;"
           <> "display: block;" <> "padding: 40px;"))
              <> ("class" =: (if fs then "modal modal-open" else "")))
         <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
         <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
-      btnCommonAttr stl = ("class" =: "btn btn-xs")
-         <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute;"
-            <> stl ))
-      prevBtnAttr = btnCommonAttr "left: 10px;"
-      nextBtnAttr = btnCommonAttr "right: 10px;"
-      renderFromPara :: (_) => Int
-        -> AppMonadT t m ((Event t () -- Close Full Screen
-                         , Event t ()) -- Previous Page
-        , (Event t Int, Event t ([VocabId], Text)))
-      renderFromPara startPara = do
-        let backAttr = ("class" =: "modal-backdrop")
-              <> ("style" =: "background-color: white;")
-        dispFullScr (elAttr "div" backAttr $ return ())
-        rec
-          (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $ do
-            (e,_) <- elClass' "button" "close" $
-              dispFullScr (text "Close")
-            prev <- if startPara == 0
-              then return never
-              else do
-                (e,_) <- elAttr' "button" prevBtnAttr $ text "<"
-                return (domEvent Click e)
-            v1 <- renderParaNum startPara resizeEv
-            return ((domEvent Click e, prev), v1)
-        return v
+    -- Some more
 
-      bwdRenderParaNum paraNum e = do
-        let para = annText V.!? paraNum
-        case para of
-          Nothing -> return (constDyn 0)
-          (Just p) -> bwdRenderPara p paraNum e
+      vIdEv = switchPromptlyDyn (snd . snd <$> val)
+      fullScrCloseEv = switchPromptlyDyn (fst . fst <$> val)
 
+      val = join valDDyn
+      newPageEv :: Event t Int
+      newPageEv = leftmost [switchPromptlyDyn (fst . snd <$> val), firstPara]
 
-      bwdRenderPara para paraNum e = do
-        ev <- delay 0.1 =<< getPostBuild
-        overFlowEv <- holdUniqDyn
-          =<< widgetHold (return True)
-          (checkOverFlow e (_numOfLines <$> rs) <$ ev)
-
-        let
-          prevParaWidget b = if b
-            then return (constDyn paraNum)
-            else bwdRenderParaNum (paraNum - 1) e
-
-        v2 <- widgetHold (prevParaWidget True)
-              (prevParaWidget <$> updated overFlowEv)
-
-        el "div" $
-          renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
-
-        return $ join v2
-
-      getFirstParaOfPrevPage :: (_)
-        => Event t Int
-        -> AppMonadT t m (Event t Int)
-      getFirstParaOfPrevPage endParaEv = do
-        rec
-          let
-            init endPara = do
-              let backAttr = ("class" =: "modal-backdrop")
-                    <> ("style" =: "background-color: white;")
-              dispFullScr (elAttr "div" backAttr $ return ())
-              elDynAttr "div" divAttr $ do
-                rec
-                  (e,v) <- el' "div" $
-                    bwdRenderParaNum endPara e
-                return v -- First Para
-
-            -- Get para num and remove self
-            getParaDyn endPara = do
-              widgetHold (init endPara)
-                ((return (constDyn 0)) <$ delEv)
-
-          delEv <- delay 2 endParaEv
-        pDyn <- widgetHold (return (constDyn (constDyn 0)))
-          (getParaDyn <$> endParaEv)
-        return (tagDyn (join $ join pDyn) delEv)
-
+    -- Big let block end, now actual stuff
+    vIdDyn <- holdDyn [] (fmap fst vIdEv)
     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
                                              , False <$ fullScrCloseEv])
-    vIdDyn <- holdDyn [] (fmap fst vIdEv)
 
-    (vIdEv, fullScrCloseEv) <- do
-      rec
-        let
-          val = join valDDyn
-          newPageEv :: Event t Int
-          newPageEv = leftmost [switchPromptlyDyn (fst . snd <$> val), firstPara]
-        firstParaDyn <- holdDyn startPara newPageEv
+    firstParaDyn <- holdDyn startPara newPageEv
+    let lastAvailablePara = ((\(p:_) -> fst p) . reverse) <$> textContent
+        hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara newPageEv)
+        hitEndF (l,n)
+          | l - n < 10 = Just l
+          | otherwise = Nothing
 
-        getWebSocketResponse ((\p -> SaveReadingProgress docId (p,Nothing)) <$> newPageEv)
+    moreContentEv <- getWebSocketResponse $
+      (\p -> ViewDocument docId (Just p)) <$> hitEndEv
 
-        let prev = switchPromptlyDyn (snd . fst <$> val)
-        firstPara <- (getFirstParaOfPrevPage
-          ((\p -> max 0 (p - 1)) <$> tagDyn firstParaDyn prev))
+    textContent <- holdDyn annText ((\(_,_,_,c) -> c) <$>
+                                    (fmapMaybe identity moreContentEv))
 
-        let
-          -- Remove itself on prev page click
-          renderParaWrap paraNum = do
-            let nVal = ((never,never), (never, never))
-            widgetHold (renderFromPara paraNum)
-              ((return nVal) <$ prev)
+    -- Temporary render to find firstPara
+    let prev = switchPromptlyDyn (snd . fst <$> val)
+    firstPara <- (getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr 
+      ((\p -> max 0 (p - 1)) <$> tagDyn firstParaDyn prev))
 
-        valDDyn <- widgetHold (renderParaWrap startPara)
-          (renderParaWrap <$> newPageEv)
-      return $ (switchPromptlyDyn (snd . snd <$> val)
-               , switchPromptlyDyn (fst . fst <$> val))
+    let renderParaF = renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr
+    -- Render Actual content
+    valDDyn <- widgetHold (renderParaF startPara)
+      (renderParaF <$> newPageEv)
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
       <$> (fmap fst vIdEv)
     surfDyn <- holdDyn "" (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
+
+  getWebSocketResponse ((\p -> SaveReadingProgress docId (p,Nothing)) <$> newPageEv)
   return ()
+
+
+getFirstParaOfPrevPage ::
+     forall t m b . (AppMonad t m)
+  => Dynamic t (ReaderSettingsTree CurrentDb)
+  -> Event t b
+  -> Dynamic t [VocabId]
+  -> Dynamic t [(Int,AnnotatedPara)]
+  -> (AppMonadT t m () -> AppMonadT t m (Event t ()))
+  -> Dynamic t (Map Text Text)
+  -> Event t Int
+  -> AppMonadT t m (Event t Int)
+getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr endParaEv = do
+  rec
+    let
+      init endPara = do
+        let backAttr = ("class" =: "modal-backdrop")
+              <> ("style" =: "background-color: white;")
+        dispFullScr (elAttr "div" backAttr $ return ())
+        elDynAttr "div" divAttr $ do
+          rec
+            (e,v) <- el' "div" $
+              bwdRenderParaNum 20 endPara e
+          return v -- First Para
+
+      -- Get para num and remove self
+      getParaDyn endPara = do
+        widgetHold (init endPara)
+          ((return (constDyn 0)) <$ delEv)
+
+    delEv <- delay 2 endParaEv
+  pDyn <- widgetHold (return (constDyn (constDyn 0)))
+    (getParaDyn <$> endParaEv)
+  return (tagDyn (join $ join pDyn) delEv)
+  where
+    bwdRenderParaNum 0 paraNum e = return (constDyn paraNum)
+    bwdRenderParaNum paraCount paraNum e = do
+      cntnt <- sample $ current textContent
+      let para = List.lookup paraNum cntnt
+      case para of
+        Nothing -> return (constDyn 0)
+        (Just p) -> bwdRenderPara paraCount p paraNum e
+
+
+    bwdRenderPara paraCount para paraNum e = do
+      ev <- delay 0.1 =<< getPostBuild
+      overFlowEv <- holdUniqDyn
+        =<< widgetHold (return True)
+        (checkOverFlow e (_numOfLines <$> rs) <$ ev)
+
+      let
+        prevParaWidget b = if b
+          then return (constDyn paraNum)
+          else bwdRenderParaNum (paraCount - 1) (paraNum - 1) e
+
+      v2 <- widgetHold (prevParaWidget True)
+            (prevParaWidget <$> updated overFlowEv)
+
+      el "div" $
+        renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
+
+      return $ join v2
+
 -- Algo
 -- Start of page
   -- (ParaId, Maybe Offset) -- (Int , Maybe Int)
