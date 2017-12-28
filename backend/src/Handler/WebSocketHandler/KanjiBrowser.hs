@@ -15,6 +15,7 @@ import Handler.WebSocketHandler.Utils
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.Vector as V
 import Text.Pretty.Simple
 import Data.SearchEngine
 import qualified Data.BTree.Impure as Tree
@@ -285,14 +286,22 @@ getListDocuments _ = do
   return $ maybe [] (map (f . snd)) ds
 
 getViewDocument :: ViewDocument
-  -> WsHandlerM (Maybe (ReaderDocument CurrentDb))
-getViewDocument (ViewDocument i) = do
+  -> WsHandlerM (Maybe (ReaderDocumentData))
+getViewDocument (ViewDocument i paraNum) = do
   uId <- asks currentUserId
   s <- lift $ transactReadOnlySrsDB $ \db ->
     Tree.lookupTree uId (db ^. userData)
       >>= mapM (\rd ->
         Tree.lookupTree i (rd ^. readerDocuments))
-  return $ join s
+  let ret r = (r ^. readerDocId, r ^. readerDocTitle
+              , p, slice)
+        where
+          slice = zip [startI..] $ V.toList $ V.slice startI len $ r ^. readerDocContent
+          len = min (totalLen - startI) 30
+          totalLen = (V.length $ r ^. readerDocContent)
+          startI = maybe (max 0 (fst p - 10)) (\p -> min p (totalLen - 1)) paraNum
+          p = r ^. readerDocProgress
+  return $ ret <$> join s
 
 getDeleteDocument :: DeleteDocument
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]

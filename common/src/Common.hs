@@ -176,21 +176,13 @@ newtype ReaderDocumentId = ReaderDocumentId { unReaderDocumentId :: Int }
   deriving (Eq, Ord, Generic, Show, Typeable, ToJSON, FromJSON)
 
 type family ReaderDocument t
-type instance ReaderDocument CurrentDb = ReaderDocumentTree CurrentDb
-type instance ReaderDocument OldDb = ReaderDocumentOldTree OldDb
+type instance ReaderDocument t = ReaderDocumentTree t
 
 data ReaderDocumentTree t = ReaderDocument
   { _readerDocId :: ReaderDocumentId
   , _readerDocTitle :: Text
   , _readerDocContent :: AnnotatedDocument
   , _readerDocProgress :: (Int, Maybe Int) -- (Para, offset)
-  }
-  deriving (Generic, Show, ToJSON, FromJSON)
-
-data ReaderDocumentOldTree t = ReaderDocumentOld
-  { _readerDocOldId :: ReaderDocumentId
-  , _readerDocOldTitle :: Text
-  , _readerDocOldContent :: AnnotatedDocument
   }
   deriving (Generic, Show, ToJSON, FromJSON)
 
@@ -320,7 +312,6 @@ makeLenses ''SrsReviewStats
 makeLenses ''VocabDetails
 makeLenses ''KanjiDetails
 makeLenses ''ReaderDocumentTree
-makeLenses ''ReaderDocumentOldTree
 
 makePrisms ''SrsEntryState
 makeLenses ''SrsEntryStats

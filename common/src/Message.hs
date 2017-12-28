@@ -8,17 +8,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module Message
   where
 
 import Protolude
-import Data.Aeson
+import Data.Aeson (ToJSON, FromJSON)
 import Data.Default
 import Data.Time.Calendar
 import Data.List.NonEmpty (NonEmpty)
 import Control.Lens.TH
 import Control.Lens
-
 import Reflex.Dom.WebSocket.Message
 
 import Common
@@ -284,12 +284,15 @@ instance WebSocketMessage AppRequest ListDocuments where
     = [(ReaderDocumentId, Text, Text)]
 
 ----------------------------------------------------------------
-data ViewDocument = ViewDocument ReaderDocumentId
+data ViewDocument = ViewDocument ReaderDocumentId (Maybe Int)
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest ViewDocument where
-  type ResponseT AppRequest ViewDocument = (Maybe (ReaderDocument CurrentDb))
+  type ResponseT AppRequest ViewDocument = (Maybe (ReaderDocumentData))
 
+type ReaderDocumentData =
+  (ReaderDocumentId, Text, (Int, Maybe Int)
+   , [(Int, AnnotatedPara)])
 ----------------------------------------------------------------
 data DeleteDocument = DeleteDocument ReaderDocumentId
   deriving (Generic, Show, ToJSON, FromJSON)

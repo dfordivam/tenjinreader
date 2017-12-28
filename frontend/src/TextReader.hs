@@ -52,7 +52,7 @@ textReaderTop = do
 documentListViewer
   :: AppMonad t m
   => Event t () -- refresh
-  -> AppMonadT t m (Event t (ReaderDocument CurrentDb)
+  -> AppMonadT t m (Event t (ReaderDocumentData)
                    , Event t ())
 documentListViewer refreshEv = do
   ev <- getPostBuild

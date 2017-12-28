@@ -232,7 +232,6 @@ paginatedReader rs (docId, title, (startPara, _), annText) = do
         <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
         <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
-    -- Some more
 
       vIdEv = switchPromptlyDyn (snd . snd <$> val)
       fullScrCloseEv = switchPromptlyDyn (fst . fst <$> val)
@@ -241,27 +240,43 @@ paginatedReader rs (docId, title, (startPara, _), annText) = do
       newPageEv :: Event t Int
       newPageEv = leftmost [switchPromptlyDyn (fst . snd <$> val), firstPara]
 
-    -- Big let block end, now actual stuff
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
                                              , False <$ fullScrCloseEv])
 
     firstParaDyn <- holdDyn startPara newPageEv
     let lastAvailablePara = ((\(p:_) -> fst p) . reverse) <$> textContent
+        firstAvailablePara = ((\(p:_) -> fst p)) <$> textContent
         hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara newPageEv)
         hitEndF (l,n)
-          | l - n < 10 = Just l
+          | l - n < 10 = Just (l + 1)
+          | otherwise = Nothing
+        hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara firstPara)
+        hitStartF (f,n)
+          | n - f < 10 = Just (max 0 (f - 30))
           | otherwise = Nothing
 
     moreContentEv <- getWebSocketResponse $
-      (\p -> ViewDocument docId (Just p)) <$> hitEndEv
+      (\p -> ViewDocument docId (Just p)) <$> (leftmost [hitEndEv, hitStartEv])
 
-    textContent <- holdDyn annText ((\(_,_,_,c) -> c) <$>
+    display firstParaDyn
+    text ", "
+    display lastAvailablePara
+    text ", "
+    display (length <$> textContent)
+    -- Keep at most 60 paras in memory, length n == 30
+    let
+        accF :: [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)]
+        accF [] o = o
+        accF n@(n1:_) o@(o1:_)
+          | (fst n1) > (fst o1) = (drop (length o - 30) o) ++ n -- More forward content
+          | otherwise = n ++ (take 30 o) -- More previous paras
+    textContent <- foldDyn accF annText ((\(_,_,_,c) -> c) <$>
                                     (fmapMaybe identity moreContentEv))
 
     -- Temporary render to find firstPara
     let prev = switchPromptlyDyn (snd . fst <$> val)
-    firstPara <- (getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr 
+    firstPara <- (getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr
       ((\p -> max 0 (p - 1)) <$> tagDyn firstParaDyn prev))
 
     let renderParaF = renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr

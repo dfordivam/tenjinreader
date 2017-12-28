@@ -187,7 +187,7 @@ syncResultWithServer :: AppMonad t m
 syncResultWithServer rt addEv = do
   rec
     let
-      sendResultEv = traceEvent "sendResEv" $
+      sendResultEv =
         fmapMaybeCheap sendResultEvFun $
         updated sendResultDyn
 

@@ -381,7 +381,7 @@ reviewWidget p refreshEv = do
     fetchMoreReviewsResp <- getWebSocketResponse dEv
 
     let
-        addResEv = traceEvent "addResEv" $ fmapMaybe (_resultQueue)
+        addResEv = fmapMaybe (_resultQueue)
           (updated widgetStateDyn)
     syncResultWithServer rt addResEv
 
