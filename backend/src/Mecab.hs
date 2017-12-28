@@ -69,10 +69,16 @@ getVocabFurigana (surf, reading)
 
 parseMecab :: MeCab -> Text -> IO ([(Text, Maybe MecabNodeFeatures)])
 parseMecab m t = do
-  nodes <- parseToNodes m t
-  pPrint $ nodes
+  let spaceReplaced = T.map rep t
+      rep ' ' = '�'
+      rep c = c
+  nodes <- parseToNodes m spaceReplaced
   let feats = map nodeFeature nodes
-  return $ zip (map nodeSurface nodes)
+      unReplaceSpace (t,n)
+        | T.any (== '�') t  = (T.replicate (T.length t) " "
+                            , Nothing)
+        | otherwise = (t,n)
+  return $ map unReplaceSpace $ zip (map nodeSurface nodes)
     (fmap makeMecabFeat feats)
 
 makeMecabFeat :: Text -> Maybe MecabNodeFeatures
