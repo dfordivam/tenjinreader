@@ -56,6 +56,7 @@ showStats
   -> AppMonadT t m (Event t SrsWidgetView)
 showStats refreshEv = do
   s <- getWebSocketResponse (GetSrsStats () <$ refreshEv)
+  showWSProcessing refreshEv s
   retEvDyn <- widgetHold (return never) (showStatsWidget <$> s)
   return $ switchPromptlyDyn $ retEvDyn
 
@@ -229,12 +230,14 @@ browseSrsItemsWidget = do
         checkBoxSelAllEv = updated $
           value selectAllToggleCheckBox
 
-      itemEv <- getWebSocketResponse $ leftmost
-        [updated browseSrsFilterDyn
-        , tagDyn browseSrsFilterDyn editDone]
+        reqEv = leftmost
+          [updated browseSrsFilterDyn
+          , tagDyn browseSrsFilterDyn editDone]
+      itemEv <- getWebSocketResponse reqEv
 
       -- List and selection checkBox
       selList <- divClass "panel-body" $ do
+        showWSProcessing reqEv itemEv
         widgetHold (checkBoxList never [])
           (checkBoxList checkBoxSelAllEv <$> itemEv)
 
@@ -287,6 +290,7 @@ bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "panel-foo
           , ChangeSrsReviewData <$> tagPromptlyDyn dateDyn reviewDateChange]
     doUpdate <- getWebSocketResponse $
       (attachDynWith ($) (BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
+    showWSProcessing bEditOp doUpdate
     return $ fmapMaybe identity doUpdate
 
 datePicker

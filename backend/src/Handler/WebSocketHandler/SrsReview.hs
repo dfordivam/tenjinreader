@@ -49,8 +49,10 @@ getReviewStats rt = do
       totalR = maybe 0 id $ (+) <$> succ <*> fail
 
       s = maybe 0 id succ
-      avgSucc = floor $ ((fromIntegral s) * 100) /
+      avgSucc = if (totalR > 0)
+        then floor $ ((fromIntegral s) * 100) /
                   (fromIntegral totalR)
+        else 0
   return $ SrsStats (length pend) total totalR avgSucc
 
 getAllPendingReviews
