@@ -484,6 +484,7 @@ inputFieldWidget
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
 inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
   let
+    tiId = "JP-TextInput-IME-Input"
     style = "text-align: center; width: 100%;" <> color
     color = getInputFieldStyle rt
     ph = getInputFieldPlaceHolder rt
@@ -492,7 +493,11 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
             & textInputConfig_setValue .~ ev
             & textInputConfig_attributes
             .~ constDyn (("style" =: style)
-                        <> ("placeholder" =: ph))
+                        <> ("id" =: tiId)
+                        <> ("placeholder" =: ph)
+                        <> ("autocapitalize" =: "none")
+                        <> ("autocorrect" =: "none")
+                        <> ("autocomplete" =: "off"))
       divClass "" $
         divClass "" $ do
           textInput tiAttr
@@ -519,7 +524,16 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
   -- Need dalay, otherwise focus doesn't work
   ev <- delay 0.1 =<< getPostBuild
 
-  widgetHold (return ()) ( DOM.focus (_textInput_element inpField) <$ ev)
+  let focusAndBind e = do
+        DOM.focus e
+        void $ liftJSM $ do
+          ef <- eval ("globalFunc = function () {\
+                      \var input = document.getElementById('JP-TextInput-IME-Input');\
+                      \wanakana.bind(input);}" :: Text)
+          jsg0 ("globalFunc" :: Text)
+          return ()
+
+  widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ ev)
 
   let resultDisAttr = ("class" =: "")
           <> ("style" =: "height: 6em;\

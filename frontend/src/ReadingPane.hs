@@ -26,7 +26,9 @@ import qualified GHCJS.DOM.IntersectionObserverCallback as DOM
 import qualified GHCJS.DOM.IntersectionObserver as DOM
 import Reflex.Dom.Widget.Resize
 
-checkOverFlow e overFlowThreshold = do
+checkOverFlow e heightDyn = do
+  v <- sample $ current heightDyn
+  let overFlowThreshold = fromIntegral v
   rect <- DOM.getBoundingClientRect (_element_raw e)
   trects <- DOM.getClientRects (_element_raw e)
   y <- DOM.getY rect
@@ -138,8 +140,6 @@ paginatedReader rs (ReaderDocument docId title annText (startPara, _)) = do
 
   rec
     let
-      overFlowThreshold = 400
-
       renderParaNum paraNum resizeEv = do
         let para = annText V.!? paraNum
         case para of
@@ -152,8 +152,8 @@ paginatedReader rs (ReaderDocument docId title annText (startPara, _)) = do
 
         ev <- delay 0.2 =<< getPostBuild
         overFlowEv <- holdUniqDyn
-          =<< widgetHold (checkOverFlow e overFlowThreshold)
-          (checkOverFlow e overFlowThreshold
+          =<< widgetHold (checkOverFlow e (_numOfLines <$> rs))
+          (checkOverFlow e (_numOfLines <$> rs)
              <$ (leftmost [ev,resizeEv]))
         -- display overFlowEv
 
@@ -173,12 +173,14 @@ paginatedReader rs (ReaderDocument docId title annText (startPara, _)) = do
       dispFullScr m = do
         dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
 
-      divAttr = (\s l fs -> ("style" =:
+      divAttr = (\s l h fs -> ("style" =:
         ("font-size: " <> tshow s <>"%;"
           <> "line-height: " <> tshow l <> "%;"
-          <> "height: 400;" <> "display: block;" <> "padding: 40px;"))
+          <> "height: " <> tshow h <> "px;"
+          <> "display: block;" <> "padding: 40px;"))
              <> ("class" =: (if fs then "modal modal-open" else "")))
-        <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs) <*> (fullscreenDyn)
+        <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
+        <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
       btnCommonAttr stl = ("class" =: "btn btn-xs")
          <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute;"
@@ -217,7 +219,7 @@ paginatedReader rs (ReaderDocument docId title annText (startPara, _)) = do
         ev <- delay 0.1 =<< getPostBuild
         overFlowEv <- holdUniqDyn
           =<< widgetHold (return True)
-          (checkOverFlow e overFlowThreshold <$ ev)
+          (checkOverFlow e (_numOfLines <$> rs) <$ ev)
 
         let
           prevParaWidget b = if b
@@ -336,7 +338,7 @@ writingModeOptions = Map.fromList $
   , (True, "Vertical")]
 
 numOfLinesOptions = Map.fromList $ (\x -> (x, (tshow x) <> "px"))
-  <$> ([100,150..1000]  :: [Int])
+  <$> ([100,150..2000]  :: [Int])
 
 renderOnePara :: (_)
   => Dynamic t [VocabId] -- Used for mark

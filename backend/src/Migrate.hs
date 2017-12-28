@@ -66,7 +66,7 @@ deriving instance Show (AppConcurrentDbTree OldDb)
 deriving instance Value (AppConcurrentDbTree OldDb)
 deriving instance Root (AppConcurrentDbTree OldDb)
 
-main = do
+migrateMain = do
   db <- openSrsDB "srsdb"
   dbOld <- openOldSrsDB "oldsrsdb"
   putStrLn $ ("Doing Migration" :: Text)

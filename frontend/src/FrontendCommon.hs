@@ -32,12 +32,16 @@ import qualified Data.Text as T
 import Data.These as X
 import Data.Align as X
 
+import Language.Javascript.JSaddle as X (call, eval)
+import GHCJS.DOM.Types as X
+       (liftJSM, askJSM, runJSM, JSM, MonadJSM)
+
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty)
 
 --
 type AppMonadT t m = WithWebSocketT AppRequest t m
-type AppMonad t m = (MonadWidget t m)
+type AppMonad t m = (MonadWidget t m, MonadJSM m)
 
 handleVisibility
   :: (DomBuilder t m, PostBuild t m, Eq a)

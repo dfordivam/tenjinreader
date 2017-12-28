@@ -164,10 +164,12 @@ executable houhou2-server
   default-language: Haskell2010
 
 executable houhou2-db-migrate
-  main-is: Migrate.hs
+  main-is: migrateMain.hs
   hs-source-dirs:
-      srs
+      app, src
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  other-modules:
+      Migrate
   build-depends:
       base >=4.8.2.0 && <4.9 || >=4.9.1.0 && <5
     , classy-prelude-yesod >=0.10.2 && <1.0 || >=1.1
@@ -208,6 +210,26 @@ executable houhou2-db-migrate
     , wai
     , houhou2-server
     , foreign-store
+    , protolude
+    , full-text-search
+    , mecab
+    , romkan
+    , snowball
+    , lens
+    , binary
+    , pretty-simple
+    , haskey
+    , haskey-btree
+    , haskey-mtl
+    , binary-orphans
+    , kanjidbreader
+    , jmdict-ast
+    , hs-nlp-jp-utils
+    , tokenize
+    , mtl
+    , transformers
+    , these
+    , common
   if flag(library-only)
     buildable: False
   default-language: Haskell2010
