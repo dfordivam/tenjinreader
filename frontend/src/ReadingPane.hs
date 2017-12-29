@@ -69,8 +69,8 @@ readingPaneInt :: AppMonad t m
   -> ReaderSettings CurrentDb
   -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
 readingPaneInt docEv rsDef = do
-  closeEv <- button "Close"
-  editEv <- button "Edit"
+  closeEv <- btn "btn-default" "Close"
+  -- editEv <- btn "btn-default" "Edit"
 
   fontSizeDD <- dropdown (rsDef ^. fontSize) (constDyn fontSizeOptions) def
   rubySizeDD <- dropdown (rsDef ^. rubySize) (constDyn fontSizeOptions) def
@@ -185,9 +185,6 @@ renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr paraNum =
                        , Event t ()) -- Previous Page
       , (Event t Int, Event t ([VocabId], Text)))
     renderFromPara startPara = do
-      let backAttr = ("class" =: "modal-backdrop")
-            <> ("style" =: "background-color: white;")
-      dispFullScr (elAttr "div" backAttr $ return ())
       rec
         (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $ do
           (e,_) <- elClass' "button" "close" $
@@ -215,7 +212,7 @@ paginatedReader :: forall t m . AppMonad t m
   -> (ReaderDocumentData)
   -> AppMonadT t m ()
 paginatedReader rs (docId, title, (startPara, _), annText) = do
-  fullScrEv <- button "Full Screen"
+  fullScrEv <- btn "btn-default" "Full Screen"
   -- render one para then see check its height
 
   rec
@@ -227,8 +224,9 @@ paginatedReader rs (docId, title, (startPara, _), annText) = do
         ("font-size: " <> tshow s <>"%;"
           <> "line-height: " <> tshow l <> "%;"
           -- <> "height: " <> tshow h <> "px;"
+          <> (if fs then "position: fixed;" else "")
           <> "display: block;" <> "padding: 40px;"))
-             <> ("class" =: (if fs then "modal modal-open" else "")))
+             <> ("class" =: (if fs then "modal modal-content" else "")))
         <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
         <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
@@ -308,9 +306,6 @@ getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr endParaEv 
   rec
     let
       init endPara = do
-        let backAttr = ("class" =: "modal-backdrop")
-              <> ("style" =: "background-color: white;")
-        dispFullScr (elAttr "div" backAttr $ return ())
         elDynAttr "div" divAttr $ do
           rec
             (e,v) <- el' "div" $

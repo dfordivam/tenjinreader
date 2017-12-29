@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -8,7 +9,9 @@
 {-# LANGUAGE RankNTypes #-}
 
 module TopWidget
-  (topWidget)
+  (topWidget
+  , readable_bootstrap_css
+  , custom_css)
   where
 
 import FrontendCommon
@@ -26,9 +29,14 @@ import qualified Data.Set as Set
 import Control.Lens.Indexed
 import Reflex.Dom.Location
 
+import Data.FileEmbed
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
+
+import GHCJS.DOM
+import GHCJS.DOM.Document
+import GHCJS.DOM.Element
 
 topWidget :: MonadWidget t m => m ()
 topWidget = do
@@ -70,7 +78,36 @@ wrapper m = elClass "nav" "navbar navbar-default" $
   divClass "container-fluid" $ do
     divClass "navbar-header" $
       elClass "a" "navbar-brand" $ text "HH Name"
-    m
+    a <- m
+    elClass "ul" "nav navbar-nav navbar-right" $ do
+      ev <- btn "btn-default" "Toggle"
+      toggleTheme ev
+    return a
+
+readable_bootstrap_css = $(embedFile "src/readable_bootstrap.min.css")
+custom_css = $(embedFile "src/custom.css")
+slate_bootstrap_css = $(embedFile "src/slate_bootstrap.min.css")
+
+toggleTheme :: AppMonad t m
+  => Event t ()
+  -> AppMonadT t m ()
+toggleTheme ev = do
+  rec
+    d <- holdDyn False (not <$> (tag (current d) ev))
+
+  let
+    toggle b = liftJSM $ do
+      let css = custom_css <> if b
+            then slate_bootstrap_css
+            else readable_bootstrap_css
+      doc <- currentDocumentUnchecked
+      headElement <- getHeadUnchecked doc
+      setInnerHTML headElement $
+        "<style>" <> T.unpack (decodeUtf8 css)
+          <> "</style>" --TODO: Fix this
+
+  void $ widgetHold (return ())
+    (toggle <$> updated d)
 
 -- | A widget to construct a tabbed view that shows only one of its child widgets at a time.
 --   Creates a header bar containing a <ul> with one <li> per child; clicking a <li> displays
