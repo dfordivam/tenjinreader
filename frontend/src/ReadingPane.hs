@@ -26,6 +26,8 @@ import qualified GHCJS.DOM.IntersectionObserverEntry as DOM hiding (getBoundingC
 import qualified GHCJS.DOM.IntersectionObserverCallback as DOM
 import qualified GHCJS.DOM.IntersectionObserver as DOM
 import Reflex.Dom.Widget.Resize
+import Language.Javascript.JSaddle.Value
+import JavaScript.Object
 
 checkOverFlow e heightDyn = do
   v <- sample $ current heightDyn
@@ -39,12 +41,13 @@ checkOverFlow e heightDyn = do
 
 setupInterObs :: (DOM.MonadDOM m)
   => Int
+  -> _
   -> ((Int, Bool) -> IO ())
   -> m DOM.IntersectionObserver
-setupInterObs ind action = do
+setupInterObs ind options action = do
   cb <- DOM.newIntersectionObserverCallback
     (intersectionObsCallback ind action)
-  DOM.newIntersectionObserver cb Nothing
+  DOM.newIntersectionObserver cb (Just options)
 
 intersectionObsCallback ind action [] _ = return ()
 intersectionObsCallback ind action (e:es) _ = do
@@ -85,7 +88,8 @@ readingPaneInt docEv rsDef = do
 
   widgetHold ((text "waiting for document data"))
     -- (readingPaneView <$> docEv)
-    (paginatedReader rsDyn <$> docEv)
+    -- (paginatedReader rsDyn <$> docEv)
+    (verticalReader rsDyn <$> docEv)
   -- rdDyn <- holdDyn Nothing (Just <$> docEv)
   return (closeEv, never)
          -- , fmapMaybe identity $ tagDyn rdDyn editEv)
@@ -362,6 +366,65 @@ getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr endParaEv 
 -- if Y + Height > Div Height then para overflows
 -- Show the para in next page
 
+----------------------------------------------------------------------------------
+-- Vertical rendering
+
+
+verticalReader :: forall t m . AppMonad t m
+  => Dynamic t (ReaderSettings CurrentDb)
+  -> (ReaderDocumentData)
+  -> AppMonadT t m ()
+verticalReader rs (docId, title, (startPara, _), annText) = do
+  -- fullScrEv <- btn "btn-default" "Full Screen"
+
+  (evVisible, action) <- newTriggerEvent
+
+  rec
+    let
+      fullscreenDyn = constDyn False
+      divAttr = (\s l h fs -> ("style" =:
+        ("font-size: " <> tshow s <>"%;"
+          <> "line-height: " <> tshow l <> "%;"
+          <> "height: " <> tshow h <> "px;"
+          <> "width: " <> tshow h <> "px;"
+          <> "writing-mode: vertical-rl;"
+          <> (if fs then "position: fixed;" else "")
+          <> "display: block;" <> "padding: 40px;"))
+             <> ("class" =: (if fs then "modal modal-content" else "")))
+        <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
+        <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
+
+    (rowRoot, clash) <- elDynAttr' "div" divAttr $ do
+
+      let para = maybe [] identity $ List.lookup paraNum annText
+          vIdDyn = constDyn []
+          paraNum = 0
+      el "div" $
+        renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
+
+      (clash, _) <- elAttr' "div" ("style" =: "height: 1px;") $ return ()
+      return (clash)
+
+  --------------------------------
+
+  v <- liftJSM $ do
+    o <- create
+    m <- toJSVal (0 :: Double)
+    t <- toJSVal (1 :: Double)
+    r <- toJSVal (_element_raw rowRoot)
+    setProp "root" r o
+    setProp "margin" m o
+    setProp "threshold" t o
+    toJSVal (ValObject o)
+
+  io <- setupInterObs 0 (DOM.IntersectionObserverInit v) action
+  DOM.observe io (_element_raw clash)
+
+  d <- holdDyn (0,False) evVisible
+  display d
+
+  return ()
+----------------------------------------------------------------------------------
 vocabRuby :: (_)
   => Dynamic t Bool
   -> Dynamic t Int
