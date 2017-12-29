@@ -70,7 +70,7 @@ showStatsWidget (recog, prod) = do
       ev <- divClass "panel-heading" $ divClass "row" $ do
         elClass "h4" "col-sm-3" $ text lbl
         divClass "col-sm-4" $
-          button "Start Review"
+          btn "btn-lg btn-success" "Start Review"
 
       divClass "panel-body" $ divClass "row" $ do
         divClass "col-sm-1" $ text "Pending:"
@@ -84,7 +84,7 @@ showStatsWidget (recog, prod) = do
 
   ev1 <- w "Recognition Review" recog
   ev2 <- w "Production Review" prod
-  browseEv <- button "Browse Srs Items"
+  browseEv <- btn "btn-primary" "Browse Srs Items"
   return $ leftmost
     [ShowReviewWindow ReviewTypeRecogReview <$ ev1
     , ShowReviewWindow ReviewTypeProdReview <$ ev2
@@ -214,7 +214,7 @@ browseSrsItemsWidget = do
       elClass "td" "el-sm-4" $
         text $ fold $ NE.intersperse ", " $ t
       ev <- elClass "td" "el-sm-2" $
-        button "edit"
+        btn "btn-sm btn-primary" "edit"
       openEditSrsItemWidget $ i <$ ev
       return $ (,) i <$> (value c1)
 
@@ -549,11 +549,11 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
   -- Footer
   (drForced, addEditEv) <- divClass "row" $ do
     addEditEv <- divClass "col-sm-2" $ do
-      ev <- button "Edit"
+      ev <- btn "btn-primary" "Edit"
       newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
       return $ (\s -> AddItemsEv [getReviewItem s] 0) <$> newSrsEntryEv
     ev <- divClass "col-sm-2" $
-      button "分かる"
+      btn "btn-primary" "分かる"
     return (ev, addEditEv)
 
   return $ leftmost [DoReviewEv (i, rt, True) <$ drForced

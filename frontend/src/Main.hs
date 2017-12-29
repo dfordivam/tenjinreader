@@ -18,5 +18,7 @@ main =
   -- mainWidget $ topWidget
   run 3911 $
     mainWidgetWithCss
-      ($(embedFile "src/bootstrap.css") <> $(embedFile "src/custom.css"))
+      -- ($(embedFile "src/bootstrap.css") <> $(embedFile "src/custom.css"))
+      -- ($(embedFile "src/slate_bootstrap.min.css") <> $(embedFile "src/custom.css"))
+      ($(embedFile "src/readable_bootstrap.min.css") <> $(embedFile "src/custom.css"))
       $ topWidget

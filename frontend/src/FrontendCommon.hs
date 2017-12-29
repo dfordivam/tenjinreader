@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -66,6 +67,10 @@ displayVocabT (Vocab ks) = do
           el "rt" $ text r
   mapM_ f ks
 
+btn cl t = do
+  (e,_) <- elClass' "button" ("btn " <> cl) $ text t
+  return $ domEvent Click e
+
 -- Controls to add/edit related srs items
 addEditSrsEntryWidget :: AppMonad t m
   => (Either KanjiId VocabId)
@@ -76,16 +81,12 @@ addEditSrsEntryWidget i t s = do
   let
     widget s = case s of
       (Just sId) -> do
-        ev <- do
-          (e,_) <- elClass' "button" "btn btn-xs" $ text "Edit SRS"
-          return $ domEvent Click e
+        ev <- btn "btn-xs" "Edit SRS"
         openEditSrsItemWidget (sId <$ ev)
         return never
 
       (Nothing) -> do
-        ev <- do
-          (e,_) <- elClass' "button" "btn btn-xs" $ text "Add to SRS"
-          return $ domEvent Click e
+        ev <- btn "btn-xs" "Add to SRS"
         resp <- getWebSocketResponse $ QuickAddSrsItem i t <$ ev
         showWSProcessing ev resp
         return resp
@@ -224,8 +225,8 @@ editWidgetView s savedEv = modalDiv $ do
 
   divClass "modal-footer" $ do
     let savedIcon = elClass "i" "" $ return ()
-    saveEv <- button "Save"
-    closeEv <- button "Close"
+    saveEv <- btn "btn-primary" "Save"
+    closeEv <- btn "btn-default" "Close"
     showWSProcessing saveEv savedEv
     widgetHold (return ()) (savedIcon <$ savedEv)
     return (ret, saveEv, leftmost[closeEv, closeEvTop])

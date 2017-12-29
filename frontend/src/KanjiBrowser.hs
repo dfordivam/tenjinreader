@@ -230,8 +230,7 @@ kanjiListWidget listEv = do
         simpleList dyn liWrap
     ev <- do
       showWSProcessing ev lmEv
-      (e,_) <- elClass' "button" "btn btn-block" $ text "Load More"
-      return $ domEvent Click e
+      btn "btn-block btn-primary" "Load More"
   return $ switchPromptlyDyn $ leftmost <$> d
 
 kanjiDetailsWidget
@@ -300,8 +299,7 @@ vocabListWindow req listEv = do
       -- NW 1.2
     ev <- do
       showWSProcessing ev lmEv
-      (e,_) <- elClass' "button" "btn btn-block" $ text "Load More"
-      return $ domEvent Click e
+      btn "btn-block btn-primary" "Load More"
   return ()
 
 textMay (Just v) = text v
