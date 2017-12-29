@@ -403,7 +403,7 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
       stopTicks = fmapMaybe (\(_,b) -> if b then Nothing else Just ()) evVisible
       startTicksAgain = updated rs
       ticksWidget = do
-        let init = widgetHold (tickLossy 0.1 time)
+        let init = widgetHold (tickLossy 1 time)
               (return never <$ stopTicks)
         t <- widgetHold init
           (init <$ startTicksAgain)
@@ -418,19 +418,35 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
           -- vIdDyn = constDyn []
           paraNum = 0
 
-          dEv = ffor (tagDyn visDyn tickEv) $ \(_,b) -> if b
+          dEv = traceEvent "dEv" $ ffor (tagDyn visDyn tickEv) $ \(_,b) -> if b
             then GrowText
             else ShrinkText
 
-          ff :: TextAdjust -> Text -> Text
-          ff ShrinkText t = if T.null t then "" else T.init t
-          ff GrowText t = t <> "あ"
+          ff :: TextAdjust -> [(Int,AnnotatedPara)] -> [(Int,AnnotatedPara)]
+          ff ShrinkText [] = []
+          ff ShrinkText ps
+            | (lp:rp) <- reverse ps = (reverse rp) ++ case reverse (snd lp) of
+                [] -> ff ShrinkText (reverse rp)
+                (lc:rc) -> [(fst lp, reverse rc)] -- drop lc
+          ff GrowText [] = maybe [] (\p -> [(0,p)]) $ List.lookup 0 annText
+          ff GrowText ps = (reverse rp) ++ newLp
+              where
+                ((lpN, lpT):rp) = reverse ps
+                newLp = if length lpT < length lpOT
+                  then [(lpN, lpTN)]
+                  else [(lpN, lpT)] ++ newPara
+                lpTN = lpT ++ (take 1 (drop (length lpT) lpOT))
+                lpOT = maybe [] identity $ List.lookup lpN annText
+                newPara = maybe [] (\p -> [(,) (lpN + 1) p])
+                  $ List.lookup (lpN + 1) annText
 
-      dt <- foldDyn ff "" dEv
+      row1Dyn <- foldDyn ff [] dEv
       el "div" $ do
-        dynText dt
+        renderDynParas rs row1Dyn
 
-      (clash, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ return ()
+      (clash, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+        text "End"
+        return ()
       return (clash)
 
   --------------------------------
@@ -452,6 +468,15 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
   return ()
 
 data TextAdjust = ShrinkText | GrowText
+  deriving (Show)
+
+renderDynParas rs dynParas = do
+  let dynMap = Map.fromList <$> dynParas
+      vIdDyn = constDyn []
+      renderF = renderOnePara vIdDyn (_rubySize <$> rs) 0
+      renderEachPara dt = do
+        dyn (renderF <$> dt)
+  list dynMap renderEachPara
 
 ----------------------------------------------------------------------------------
 vocabRuby :: (_)
