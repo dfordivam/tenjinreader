@@ -400,9 +400,19 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
         <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
         <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
+      stopTicks = fmapMaybe (\(_,b) -> if b then Nothing else Just ()) evVisible
+      startTicksAgain = updated rs
+      ticksWidget = do
+        let init = widgetHold (tickLossy 0.1 time)
+              (return never <$ stopTicks)
+        t <- widgetHold init
+          (init <$ startTicksAgain)
+        return (switchPromptlyDyn $ join t)
+
+    tickEv <- ticksWidget
+
     (rowRoot, clash) <- elDynAttr' "div" divAttr $ do
 
-      tickEv <- tickLossy 0.01 time
 
       let para = maybe [] identity $ List.lookup paraNum annText
           -- vIdDyn = constDyn []
@@ -420,7 +430,7 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
       el "div" $ do
         dynText dt
 
-      (clash, _) <- elAttr' "div" ("style" =: "height: 1px;") $ return ()
+      (clash, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ return ()
       return (clash)
 
   --------------------------------
