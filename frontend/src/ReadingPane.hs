@@ -377,7 +377,12 @@ verticalReader :: forall t m . AppMonad t m
 verticalReader rs (docId, title, (startPara, _), annText) = do
   -- fullScrEv <- btn "btn-default" "Full Screen"
 
+  time <- liftIO $ getCurrentTime
+
   (evVisible, action) <- newTriggerEvent
+
+  visDyn <- holdDyn (0,False) evVisible
+  display visDyn
 
   rec
     let
@@ -386,8 +391,9 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
         ("font-size: " <> tshow s <>"%;"
           <> "line-height: " <> tshow l <> "%;"
           <> "height: " <> tshow h <> "px;"
-          <> "width: " <> tshow h <> "px;"
+          <> "width: 80vw;"
           <> "writing-mode: vertical-rl;"
+          <> "word-wrap: break-word;"
           <> (if fs then "position: fixed;" else "")
           <> "display: block;" <> "padding: 40px;"))
              <> ("class" =: (if fs then "modal modal-content" else "")))
@@ -396,11 +402,23 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
 
     (rowRoot, clash) <- elDynAttr' "div" divAttr $ do
 
+      tickEv <- tickLossy 0.01 time
+
       let para = maybe [] identity $ List.lookup paraNum annText
-          vIdDyn = constDyn []
+          -- vIdDyn = constDyn []
           paraNum = 0
-      el "div" $
-        renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
+
+          dEv = ffor (tagDyn visDyn tickEv) $ \(_,b) -> if b
+            then GrowText
+            else ShrinkText
+
+          ff :: TextAdjust -> Text -> Text
+          ff ShrinkText t = if T.null t then "" else T.init t
+          ff GrowText t = t <> "あ"
+
+      dt <- foldDyn ff "" dEv
+      el "div" $ do
+        dynText dt
 
       (clash, _) <- elAttr' "div" ("style" =: "height: 1px;") $ return ()
       return (clash)
@@ -420,10 +438,11 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
   io <- setupInterObs 0 (DOM.IntersectionObserverInit v) action
   DOM.observe io (_element_raw clash)
 
-  d <- holdDyn (0,False) evVisible
-  display d
 
   return ()
+
+data TextAdjust = ShrinkText | GrowText
+
 ----------------------------------------------------------------------------------
 vocabRuby :: (_)
   => Dynamic t Bool
