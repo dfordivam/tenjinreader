@@ -415,15 +415,6 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
         <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
         <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
-      -- stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
-      -- startTicksAgain = updated rs
-      -- ticksWidget = do
-      --   let init = widgetHold (tickLossy 1 time)
-      --         (return never <$ stopTicks)
-      --   t <- widgetHold init
-      --     (init <$ startTicksAgain)
-      --   return (switchPromptlyDyn $ join t)
-
     (rowRoot, (inside, outside)) <- elDynAttr' "div" divAttr $ do
 
 
@@ -431,24 +422,25 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
           -- vIdDyn = constDyn []
           paraNum = 0
 
-          dEv = fmapMaybe identity $ snd <$> (evVisible)
+          dEv = snd <$> (evVisible)
             -- (tagDyn visDyn tickEv)
 
-          ff :: TextAdjust
+          ff :: Maybe TextAdjust
             -> ((Int,Int), [(Int,AnnotatedPara)])
             -> ((Int,Int), [(Int,AnnotatedPara)])
-          ff ShrinkText v@(_,[]) = v
-          ff ShrinkText ((li,ui), ps)
+          ff (Just ShrinkText) v@(_,[]) = v
+          ff (Just ShrinkText) ((li,ui), ps)
             | (lp:rp) <- reverse ps = case (lp) of
                 (_,[]) -> case reverse rp of
-                  (p1:pr) -> ff ShrinkText ((0,length p1), p1:pr)
+                  (p1:pr) -> ff (Just ShrinkText) ((0,length p1), p1:pr)
                 (lpN,lpT) -> ((li, (length lpT))
                     , (reverse rp) ++ [(lpN, take halfL $ lpT)])
-                  where halfL = li + (floor $ (fromIntegral (length lpT - li)) / 2)
+                  where halfL = min (length lpT - 1)
+                          (li + (floor $ (fromIntegral (length lpT - li)) / 2))
 
-          ff GrowText v@(_,[]) = maybe v (\p -> ((0, length p), [(0,p)]))
+          ff (Just GrowText) v@(_,[]) = maybe v (\p -> ((0, length p), [(0,p)]))
                                    $ List.lookup 0 annText
-          ff GrowText ((li,ui), ps) = (\(i,n) -> (i, (reverse rp) ++ n)) newLp
+          ff (Just GrowText) ((li,ui), ps) = (\(i,n) -> (i, (reverse rp) ++ n)) newLp
               where
                 ((lpN, lpT):rp) = reverse ps
                 lenT = length lpT
@@ -456,17 +448,24 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
                 newLp = if lenT < lenOT
                   then (,) (length lpTN, ui) [(lpN, lpTN)]
                   else (,) (0, length newPara) $ [(lpN, lpT)] ++ newPara
-                halfL = ceiling $ (fromIntegral (ui - lenT)) / 2
+                halfL = max 1 $ ceiling $ (fromIntegral (ui - lenT)) / 2
                 lpTN = lpT ++ (take halfL (drop lenT lpOT))
                 lpOT = maybe [] identity $ List.lookup lpN annText
                 newPara = maybe [] (\p -> [(,) (lpN + 1) p])
                   $ List.lookup (lpN + 1) annText
+
+          ff Nothing (_, ps) = ((0,(length lpOT) + 1),ps)
+              where
+                ((lpN, lpT):rp) = reverse ps
+                lpOT = maybe [] identity $ List.lookup lpN annText
 
       row1Dyn <- foldDyn ff ((0,1), []) dEv
       el "div" $ do
         renderDynParas rs (snd <$> row1Dyn)
 
       (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+        text ""
+      elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
         text ""
       (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
         text ""
@@ -491,7 +490,17 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
   -- DOM.observe io inEl
   -- DOM.observe io outEl
 
-  tickEv <- (tickLossy 0.5 time)
+  let
+      stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
+      startTicksAgain = updated rs
+      ticksWidget = do
+        let init = widgetHold (tickLossy 1 time)
+              (return never <$ stopTicks)
+        t <- widgetHold init
+          (init <$ startTicksAgain)
+        return (switchPromptlyDyn $ join t)
+
+  tickEv <- ticksWidget
 
   performEvent (checkVerticalOverflow (inEl, outEl)
                 (_element_raw rowRoot) action <$ tickEv)
