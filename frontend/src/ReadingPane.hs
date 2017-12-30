@@ -39,22 +39,37 @@ checkOverFlow e heightDyn = do
   -- text $ "Coords: " <> (tshow y) <> ", " <> (tshow h)
   return (y + h > overFlowThreshold)
 
-setupInterObs :: (DOM.MonadDOM m)
-  => Int
+checkVerticalOverflow (ie,oe) r action = do
+  rx <- DOM.getX =<< DOM.getBoundingClientRect r
+  ix <- DOM.getX =<< DOM.getBoundingClientRect ie
+  ox <- DOM.getX =<< DOM.getBoundingClientRect oe
+  liftIO $ putStrLn $ (show (rx,ix,ox) :: Text)
+  liftIO $ action $ if (rx > ox && rx < ix) -- Outside
+    then (0, Nothing)
+    else if rx > ix
+            then (0, Just ShrinkText)
+            else (0, Just GrowText)
+
+setupInterObs :: (DOM.MonadDOM m, DOM.IsElement e)
+  => (e, e)
   -> _
-  -> ((Int, Bool) -> IO ())
+  -> ((Int, Maybe TextAdjust) -> IO ())
   -> m DOM.IntersectionObserver
 setupInterObs ind options action = do
   cb <- DOM.newIntersectionObserverCallback
     (intersectionObsCallback ind action)
   DOM.newIntersectionObserver cb (Just options)
 
-intersectionObsCallback ind action [] _ = return ()
-intersectionObsCallback ind action (e:es) _ = do
-  r <- DOM.getIntersectionRatio e
-  if (r > 0.9)
-    then liftIO $ action (ind, True)
-    else liftIO $ action (ind, False)
+intersectionObsCallback (ie,oe) action (e:_) _  = do
+  rx <- DOM.getX =<< DOM.getRootBounds e
+  ix <- DOM.getX =<< DOM.getBoundingClientRect ie
+  ox <- DOM.getX =<< DOM.getBoundingClientRect oe
+  liftIO $ putStrLn $ (show (rx,ix,ox) :: Text)
+  liftIO $ action $ if (rx > ox && rx < ix) -- Outside
+    then (0, Nothing)
+    else if rx > ix
+            then (0, Just ShrinkText)
+            else (0, Just GrowText)
 
 readingPane :: AppMonad t m
   => Event t (ReaderDocumentData)
@@ -381,7 +396,7 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
 
   (evVisible, action) <- newTriggerEvent
 
-  visDyn <- holdDyn (0,False) evVisible
+  visDyn <- holdDyn (0,Nothing) evVisible
   display visDyn
 
   rec
@@ -400,75 +415,91 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
         <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
         <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
-      stopTicks = fmapMaybe (\(_,b) -> if b then Nothing else Just ()) evVisible
-      startTicksAgain = updated rs
-      ticksWidget = do
-        let init = widgetHold (tickLossy 1 time)
-              (return never <$ stopTicks)
-        t <- widgetHold init
-          (init <$ startTicksAgain)
-        return (switchPromptlyDyn $ join t)
+      -- stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
+      -- startTicksAgain = updated rs
+      -- ticksWidget = do
+      --   let init = widgetHold (tickLossy 1 time)
+      --         (return never <$ stopTicks)
+      --   t <- widgetHold init
+      --     (init <$ startTicksAgain)
+      --   return (switchPromptlyDyn $ join t)
 
-    tickEv <- ticksWidget
-
-    (rowRoot, clash) <- elDynAttr' "div" divAttr $ do
+    (rowRoot, (inside, outside)) <- elDynAttr' "div" divAttr $ do
 
 
       let para = maybe [] identity $ List.lookup paraNum annText
           -- vIdDyn = constDyn []
           paraNum = 0
 
-          dEv = traceEvent "dEv" $ ffor (tagDyn visDyn tickEv) $ \(_,b) -> if b
-            then GrowText
-            else ShrinkText
+          dEv = fmapMaybe identity $ snd <$> (evVisible)
+            -- (tagDyn visDyn tickEv)
 
-          ff :: TextAdjust -> [(Int,AnnotatedPara)] -> [(Int,AnnotatedPara)]
-          ff ShrinkText [] = []
-          ff ShrinkText ps
-            | (lp:rp) <- reverse ps = (reverse rp) ++ case reverse (snd lp) of
-                [] -> ff ShrinkText (reverse rp)
-                (lc:rc) -> [(fst lp, reverse rc)] -- drop lc
-          ff GrowText [] = maybe [] (\p -> [(0,p)]) $ List.lookup 0 annText
-          ff GrowText ps = (reverse rp) ++ newLp
+          ff :: TextAdjust
+            -> ((Int,Int), [(Int,AnnotatedPara)])
+            -> ((Int,Int), [(Int,AnnotatedPara)])
+          ff ShrinkText v@(_,[]) = v
+          ff ShrinkText ((li,ui), ps)
+            | (lp:rp) <- reverse ps = case (lp) of
+                (_,[]) -> case reverse rp of
+                  (p1:pr) -> ff ShrinkText ((0,length p1), p1:pr)
+                (lpN,lpT) -> ((li, (length lpT))
+                    , (reverse rp) ++ [(lpN, take halfL $ lpT)])
+                  where halfL = li + (floor $ (fromIntegral (length lpT - li)) / 2)
+
+          ff GrowText v@(_,[]) = maybe v (\p -> ((0, length p), [(0,p)]))
+                                   $ List.lookup 0 annText
+          ff GrowText ((li,ui), ps) = (\(i,n) -> (i, (reverse rp) ++ n)) newLp
               where
                 ((lpN, lpT):rp) = reverse ps
-                newLp = if length lpT < length lpOT
-                  then [(lpN, lpTN)]
-                  else [(lpN, lpT)] ++ newPara
-                lpTN = lpT ++ (take 1 (drop (length lpT) lpOT))
+                lenT = length lpT
+                lenOT = length lpOT
+                newLp = if lenT < lenOT
+                  then (,) (length lpTN, ui) [(lpN, lpTN)]
+                  else (,) (0, length newPara) $ [(lpN, lpT)] ++ newPara
+                halfL = ceiling $ (fromIntegral (ui - lenT)) / 2
+                lpTN = lpT ++ (take halfL (drop lenT lpOT))
                 lpOT = maybe [] identity $ List.lookup lpN annText
                 newPara = maybe [] (\p -> [(,) (lpN + 1) p])
                   $ List.lookup (lpN + 1) annText
 
-      row1Dyn <- foldDyn ff [] dEv
+      row1Dyn <- foldDyn ff ((0,1), []) dEv
       el "div" $ do
-        renderDynParas rs row1Dyn
+        renderDynParas rs (snd <$> row1Dyn)
 
-      (clash, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
-        text "End"
+      (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+        text ""
+      (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+        text ""
         return ()
-      return (clash)
+      return (inside, outside)
 
   --------------------------------
 
-  v <- liftJSM $ do
-    o <- create
-    m <- toJSVal (0 :: Double)
-    t <- toJSVal (1 :: Double)
-    r <- toJSVal (_element_raw rowRoot)
-    setProp "root" r o
-    setProp "margin" m o
-    setProp "threshold" t o
-    toJSVal (ValObject o)
+  -- v <- liftJSM $ do
+  --   o <- create
+  --   m <- toJSVal (0.9 :: Double)
+  --   t <- toJSVal (1 :: Double)
+  --   r <- toJSVal (_element_raw rowRoot)
+  --   setProp "root" r o
+  --   setProp "margin" m o
+  --   setProp "threshold" t o
+  --   toJSVal (ValObject o)
 
-  io <- setupInterObs 0 (DOM.IntersectionObserverInit v) action
-  DOM.observe io (_element_raw clash)
+  let inEl = _element_raw inside
+      outEl = _element_raw outside
+  -- io <- setupInterObs (inEl, outEl) (DOM.IntersectionObserverInit v) action
+  -- DOM.observe io inEl
+  -- DOM.observe io outEl
 
+  tickEv <- (tickLossy 0.5 time)
+
+  performEvent (checkVerticalOverflow (inEl, outEl)
+                (_element_raw rowRoot) action <$ tickEv)
 
   return ()
 
 data TextAdjust = ShrinkText | GrowText
-  deriving (Show)
+  deriving (Show, Eq)
 
 renderDynParas rs dynParas = do
   let dynMap = Map.fromList <$> dynParas
