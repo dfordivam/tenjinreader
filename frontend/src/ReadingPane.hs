@@ -392,8 +392,6 @@ verticalReader :: forall t m . AppMonad t m
 verticalReader rs (docId, title, (startPara, _), annText) = do
   -- fullScrEv <- btn "btn-default" "Full Screen"
 
-  time <- liftIO $ getCurrentTime
-
   (evVisible, action) <- newTriggerEvent
 
   visDyn <- holdDyn (0,Nothing) evVisible
@@ -425,41 +423,8 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
           dEv = snd <$> (evVisible)
             -- (tagDyn visDyn tickEv)
 
-          ff :: Maybe TextAdjust
-            -> ((Int,Int), [(Int,AnnotatedPara)])
-            -> ((Int,Int), [(Int,AnnotatedPara)])
-          ff (Just ShrinkText) v@(_,[]) = v
-          ff (Just ShrinkText) ((li,ui), ps)
-            | (lp:rp) <- reverse ps = case (lp) of
-                (_,[]) -> case reverse rp of
-                  (p1:pr) -> ff (Just ShrinkText) ((0,length p1), p1:pr)
-                (lpN,lpT) -> ((li, (length lpT))
-                    , (reverse rp) ++ [(lpN, take halfL $ lpT)])
-                  where halfL = min (length lpT - 1)
-                          (li + (floor $ (fromIntegral (length lpT - li)) / 2))
 
-          ff (Just GrowText) v@(_,[]) = maybe v (\p -> ((0, length p), [(0,p)]))
-                                   $ List.lookup 0 annText
-          ff (Just GrowText) ((li,ui), ps) = (\(i,n) -> (i, (reverse rp) ++ n)) newLp
-              where
-                ((lpN, lpT):rp) = reverse ps
-                lenT = length lpT
-                lenOT = length lpOT
-                newLp = if lenT < lenOT
-                  then (,) (length lpTN, ui) [(lpN, lpTN)]
-                  else (,) (0, length newPara) $ [(lpN, lpT)] ++ newPara
-                halfL = max 1 $ ceiling $ (fromIntegral (ui - lenT)) / 2
-                lpTN = lpT ++ (take halfL (drop lenT lpOT))
-                lpOT = maybe [] identity $ List.lookup lpN annText
-                newPara = maybe [] (\p -> [(,) (lpN + 1) p])
-                  $ List.lookup (lpN + 1) annText
-
-          ff Nothing (_, ps) = ((0,(length lpOT) + 1),ps)
-              where
-                ((lpN, lpT):rp) = reverse ps
-                lpOT = maybe [] identity $ List.lookup lpN annText
-
-      row1Dyn <- foldDyn ff ((0,1), []) dEv
+      row1Dyn <- foldDyn (textAdjustF annText) ((0,1), []) dEv
       el "div" $ do
         renderDynParas rs (snd <$> row1Dyn)
 
@@ -490,11 +455,14 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
   -- DOM.observe io inEl
   -- DOM.observe io outEl
 
+  time <- liftIO $ getCurrentTime
+
   let
+    -- TODO Stop if we hit end of text
       stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
       startTicksAgain = updated rs
       ticksWidget = do
-        let init = widgetHold (tickLossy 1 time)
+        let init = widgetHold (tickLossy 0.1 time)
               (return never <$ stopTicks)
         t <- widgetHold init
           (init <$ startTicksAgain)
@@ -509,6 +477,70 @@ verticalReader rs (docId, title, (startPara, _), annText) = do
 
 data TextAdjust = ShrinkText | GrowText
   deriving (Show, Eq)
+
+-- Converge on the text content size based on Events
+-- The Input events will toggle between shrink and grow
+-- This is equivalent to binary space search.
+-- Keep track of low and upper bound
+-- lower bound causes Grow event, upper bound causes Shrink event
+-- Do binary search between these bounds
+-- When a resize occurs (ie event goes Nothing -> Just)
+-- The bounds will have to be re-calculated
+textAdjustF
+  :: [(Int,AnnotatedPara)]
+  -> Maybe TextAdjust
+  -> ((Int,Int), [(Int,AnnotatedPara)])
+  -> ((Int,Int), [(Int,AnnotatedPara)])
+
+-- lp -> last para
+-- ps -> all paras
+-- lpN -> last para number
+-- lpT -> last para Content
+textAdjustF annText (Just ShrinkText) v@(_,[]) = v
+textAdjustF annText (Just ShrinkText) ((li,ui), ps)
+  = case (lp) of
+      (_,[]) -> case psRev of
+        (lp':psRev') -> textAdjustF annText (Just ShrinkText)
+          ((0,length lp'), (reverse psRev))
+        [] -> ((0,1),[])
+
+      (lpN,lpT) -> ((li, (length lpT)) -- Adjust upper bound
+          , (reverse psRev) ++ [(lpN, nlpT)])
+        where halfL = li +
+                (floor $ (fromIntegral (length lpT - li)) / 2)
+              nlpT = take halfL $ lpT
+  where
+    (lp:psRev) = reverse ps
+
+textAdjustF annText (Just GrowText) v@(_,[])
+  = maybe v (\p -> ((0, length p), [(0,p)])) $ List.lookup 0 annText
+
+textAdjustF annText (Just GrowText) ((li,ui), ps) =
+  (\(i,n) -> (i, (reverse psRev) ++ n)) newLp
+    where
+      ((lpN, lpT):psRev) = reverse ps
+      newLp = if lenT < lenOT
+        -- Add content from this para
+        -- Adjust lower bound
+        then (,) (lenT, ui) [(lpN, lpTN)]
+        -- This para content over, add a new Para
+        else (,) (0, length newPara) $ [(lpN, lpT)] ++ newPara
+
+      lpTN = take halfL lpOT
+      halfL = lenT + (ceiling $ (fromIntegral (ui - lenT)) / 2)
+
+      lenT = length lpT
+      lenOT = length lpOT -- Full para / orig length
+
+      lpOT = maybe [] identity $ List.lookup lpN annText
+
+      newPara = maybe [] (\p -> [(,) (lpN + 1) p])
+        $ List.lookup (lpN + 1) annText
+
+textAdjustF annText Nothing (_, ps) = ((0,(length lpOT)),ps)
+    where
+      ((lpN, lpT):_) = reverse ps
+      lpOT = maybe [] identity $ List.lookup lpN annText
 
 renderDynParas rs dynParas = do
   let dynMap = Map.fromList <$> dynParas
