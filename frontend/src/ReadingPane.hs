@@ -105,8 +105,8 @@ readingPaneInt docEv rsDef = do
 
   widgetHold ((text "waiting for document data"))
     -- (readingPaneView <$> docEv)
-    -- (paginatedReader rsDyn <$> docEv)
-    (verticalReader rsDyn fullScrEv <$> docEv)
+    (paginatedReader rsDyn fullScrEv <$> docEv)
+    -- (verticalReader rsDyn fullScrEv <$> docEv)
   -- rdDyn <- holdDyn Nothing (Just <$> docEv)
   return (closeEv, never)
          -- , fmapMaybe identity $ tagDyn rdDyn editEv)

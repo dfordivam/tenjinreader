@@ -32,6 +32,10 @@ srsWidget
 srsWidget = divClass "" $ do
   ev <- getPostBuild
 
+  let widgetReDraw w redraw = do
+        evDyn <- widgetHold (w)
+          (w <$ redraw)
+        return $ switchPromptlyDyn evDyn
   rec
     let
       visEv = leftmost [ev1,ev2,ev3,ev4, ShowStatsWindow <$ ev]
@@ -41,14 +45,14 @@ srsWidget = divClass "" $ do
     ev1 <- handleVisibility ShowStatsWindow vis $
       showStats refreshEv
 
-    ev2 <- handleVisibility ShowBrowseSrsItemsWindow vis $
+    (ev2, editDone) <- handleVisibility ShowBrowseSrsItemsWindow vis $
       browseSrsItemsWidget
 
     ev3 <- handleVisibility (ShowReviewWindow ReviewTypeRecogReview) vis $
-      reviewWidget (Proxy :: Proxy RecogReview) refreshEv
+      widgetReDraw (reviewWidget (Proxy :: Proxy RecogReview) refreshEv) editDone
 
     ev4 <- handleVisibility (ShowReviewWindow ReviewTypeProdReview) vis $
-      reviewWidget (Proxy :: Proxy ProdReview) refreshEv
+      widgetReDraw (reviewWidget (Proxy :: Proxy ProdReview) refreshEv) editDone
   return ()
 
 showStats
@@ -172,7 +176,7 @@ getBrowseSrsItemsEv filt levels = do
 --
 browseSrsItemsWidget
   :: forall t m . AppMonad t m
-  => AppMonadT t m (Event t SrsWidgetView)
+  => AppMonadT t m (Event t SrsWidgetView, Event t ())
 browseSrsItemsWidget = do
   -- Widget declarations
   let
@@ -219,13 +223,14 @@ browseSrsItemsWidget = do
       return $ (,) i <$> (value c1)
 
   -- UI
-  closeEv <- divClass "panel panel-default" $ do
+  (closeEv, editDone) <- divClass "panel panel-default" $ do
     (e,_) <- elClass' "button" "close" $ text "Close"
 
     -- Filter Options
     (browseSrsFilterDyn, selectAllToggleCheckBox, filtOptsDyn, revTypeDyn) <-
       filterOptionsWidget
 
+    evPB <- getPostBuild
     rec
       let
         checkBoxSelAllEv = updated $
@@ -233,7 +238,8 @@ browseSrsItemsWidget = do
 
         reqEv = leftmost
           [updated browseSrsFilterDyn
-          , tagDyn browseSrsFilterDyn editDone]
+          , tagDyn browseSrsFilterDyn editDone
+          , tagDyn browseSrsFilterDyn evPB]
       itemEv <- getWebSocketResponse reqEv
 
       -- List and selection checkBox
@@ -245,9 +251,9 @@ browseSrsItemsWidget = do
       -- Action buttons
       editDone <-
         bulkEditWidgetActionButtons filtOptsDyn revTypeDyn $ join selList
-    return (domEvent Click e)
+    return (domEvent Click e, editDone)
 
-  return $ ShowStatsWindow <$ closeEv
+  return $ (ShowStatsWindow <$ closeEv, editDone)
 
 buttonWithDisable t active = do
   let attr True = ("type" =: "button") <> ("class" =: "btn btn-primary active")

@@ -240,7 +240,7 @@ makeReaderDocumentContent t = do
   liftIO $ parseAndSearch vocabDb se mec t
 
 getAddOrEditDocument :: AddOrEditDocument
-  -> WsHandlerM (Maybe (ReaderDocument CurrentDb))
+  -> WsHandlerM (Maybe (ReaderDocumentData))
 getAddOrEditDocument (AddOrEditDocument dId title t) = do
   uId <- asks currentUserId
   c <- lift $ makeReaderDocumentContent t
@@ -248,7 +248,7 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
   let
     upFun :: (AllocM m)
       => AppUserDataTree CurrentDb
-      -> StateT (Maybe (ReaderDocument CurrentDb)) m
+      -> StateT (Maybe ReaderDocumentData) m
            (AppUserDataTree CurrentDb)
     upFun rd = do
       mx <- lift $
@@ -261,12 +261,18 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
           docId = maybe newk id dId
           nd = ReaderDocument docId title c (0,Nothing)
 
-      put $ Just nd
+      put $ Just (getReaderDocumentData nd Nothing)
       lift $ rd &
         readerDocuments %%~ Tree.insertTree docId nd
 
   lift $ transactSrsDB $ runStateWithNothing $
     userData %%~ updateTreeLiftedM uId upFun
+
+getQuickAnalyzeText :: QuickAnalyzeText
+  -> WsHandlerM [(Int, AnnotatedPara)]
+getQuickAnalyzeText (QuickAnalyzeText t) = do
+  v <- lift $ makeReaderDocumentContent t
+  return $ zip [1..] $ V.toList v
 
 getListDocuments :: ListDocuments
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]
@@ -293,15 +299,32 @@ getViewDocument (ViewDocument i paraNum) = do
     Tree.lookupTree uId (db ^. userData)
       >>= mapM (\rd ->
         Tree.lookupTree i (rd ^. readerDocuments))
-  let ret r = (r ^. readerDocId, r ^. readerDocTitle
-              , p, slice)
-        where
-          slice = zip [startI..] $ V.toList $ V.slice startI len $ r ^. readerDocContent
-          len = min (totalLen - startI) 30
-          totalLen = (V.length $ r ^. readerDocContent)
-          startI = maybe (max 0 (fst p - 10)) (\p -> min p (totalLen - 1)) paraNum
-          p = r ^. readerDocProgress
-  return $ ret <$> join s
+  return $ flip getReaderDocumentData paraNum <$> join s
+
+getReaderDocumentData r paraNum = (r ^. readerDocId, r ^. readerDocTitle
+                                  , p, slice)
+  where
+    slice = zip [startI..] $ V.toList $ V.slice startI len $ r ^. readerDocContent
+    len = min (totalLen - startI) 30
+    totalLen = (V.length $ r ^. readerDocContent)
+    startI = maybe (max 0 (fst p - 10)) (\p -> min p (totalLen - 1)) paraNum
+    p = r ^. readerDocProgress
+
+getViewRawDocument :: ViewRawDocument
+  -> WsHandlerM (Maybe (ReaderDocumentId, Text, Text))
+getViewRawDocument (ViewRawDocument i) = do
+  uId <- asks currentUserId
+  s <- lift $ transactReadOnlySrsDB $ \db ->
+    Tree.lookupTree uId (db ^. userData)
+      >>= mapM (\rd ->
+        Tree.lookupTree i (rd ^. readerDocuments))
+  let combineToText d = T.unlines $ map getText $ V.toList d
+      getText ap = mconcat $ map getT ap
+      getT (Left t) = t
+      getT (Right (v,_,_)) = vocabToText v
+  return $ (\r -> (i, r ^. readerDocTitle
+                  , r ^. readerDocContent . to (combineToText)))
+                  <$> (join s)
 
 getDeleteDocument :: DeleteDocument
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]

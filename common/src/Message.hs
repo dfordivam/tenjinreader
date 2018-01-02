@@ -55,7 +55,10 @@ type AppRequest
   :<|> AddOrEditDocument
   :<|> ListDocuments
   :<|> ViewDocument
+  :<|> ViewRawDocument
   :<|> DeleteDocument
+
+  :<|> QuickAnalyzeText
 
   :<|> GetReaderSettings
   :<|> SaveReaderSettings
@@ -273,7 +276,7 @@ data AddOrEditDocument =
 
 instance WebSocketMessage AppRequest AddOrEditDocument where
   type ResponseT AppRequest AddOrEditDocument
-    = (Maybe (ReaderDocument CurrentDb))
+    = (Maybe (ReaderDocumentData))
 
 ----------------------------------------------------------------
 data ListDocuments = ListDocuments
@@ -293,6 +296,14 @@ instance WebSocketMessage AppRequest ViewDocument where
 type ReaderDocumentData =
   (ReaderDocumentId, Text, (Int, Maybe Int)
    , [(Int, AnnotatedPara)])
+
+----------------------------------------------------------------
+data ViewRawDocument = ViewRawDocument ReaderDocumentId
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest ViewRawDocument where
+  type ResponseT AppRequest ViewRawDocument = (Maybe (ReaderDocumentId, Text, Text))
+
 ----------------------------------------------------------------
 data DeleteDocument = DeleteDocument ReaderDocumentId
   deriving (Generic, Show, ToJSON, FromJSON)
@@ -300,6 +311,14 @@ data DeleteDocument = DeleteDocument ReaderDocumentId
 instance WebSocketMessage AppRequest DeleteDocument where
   type ResponseT AppRequest DeleteDocument
     = [(ReaderDocumentId, Text, Text)]
+
+----------------------------------------------------------------
+data QuickAnalyzeText = QuickAnalyzeText Text
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest QuickAnalyzeText where
+  type ResponseT AppRequest QuickAnalyzeText
+    = [(Int, AnnotatedPara)]
 
 ----------------------------------------------------------------
 data GetReaderSettings = GetReaderSettings

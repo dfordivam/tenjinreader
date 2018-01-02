@@ -155,8 +155,10 @@ radicalMatrix evValid = do
     let
       disableAll = constDyn False
       renderMatrix = do
-        divClass "row well-lg hidden-xs"
-          $ mapM showRadical (Map.toList radicalTable)
+        divClass "row well-lg hidden-xs" $ do
+          r <- btn "btn-block btn-default btn-xs" "Reset"
+          ev <- mapM showRadical (Map.toList radicalTable)
+          return (ev, r)
 
       showRadical :: (RadicalId, RadicalDetails) -> m (Event t RadicalId)
       showRadical (i,(RadicalDetails r _)) = do
@@ -167,9 +169,9 @@ radicalMatrix evValid = do
               Set.member i <$> selectedRadicals
             -- (Valid, Selected)
             cl (_,True) = " btn-success "
-            cl (True, False) = " btn-default "
-            cl (False,False) = " btn-default disabled "
-            attr = (\c -> ("class" =: (c <> "btn btn-sm" )))
+            cl (True, False) = " btn-info "
+            cl (False,False) = " btn-info disabled "
+            attr = (\c -> ("class" =: (c <> "btn btn-xs" )))
                      <$> (cl <$> zipDyn valid sel)
 
             spanAttr = ("class" =: "badge")
@@ -185,12 +187,13 @@ radicalMatrix evValid = do
             f _ _ = Nothing
         return (i <$ ev)
 
-    ev <- renderMatrix
+    (ev, resetEv) <- renderMatrix
 
     let
       h :: RadicalId -> Set RadicalId -> Set RadicalId
       h i s = if Set.member i s then Set.delete i s else Set.insert i s
-    selectedRadicals <- foldDyn h Set.empty (leftmost ev)
+      foldF = foldDyn h Set.empty (leftmost ev)
+    selectedRadicals <- join <$> widgetHold foldF (foldF <$ resetEv)
   return $ Set.toList <$> selectedRadicals
 
 

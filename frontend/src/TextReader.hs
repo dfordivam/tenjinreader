@@ -31,18 +31,19 @@ textReaderTop = do
   rec
     let visEv = leftmost
           [ListOfDocumentsView <$ closeEv
+          , ListOfDocumentsView <$ cancelEv
           , EditDocumentView <$ editEv
           , ReadingView <$ viewEv]
-        viewEv = leftmost [viewEv1, viewEv2]
-        editEv = leftmost [Nothing <$ newDocEv
-                          , Just <$> editEv2]
+        viewEv = leftmost [viewEv1
+                          , viewEv2]
+        editEv = leftmost [editEv1]
 
     vis <- holdDyn ListOfDocumentsView visEv
 
-    (viewEv1, newDocEv) <- handleVisibility ListOfDocumentsView vis $
+    (viewEv1, editEv1) <- handleVisibility ListOfDocumentsView vis $
       (documentListViewer (closeEv))
 
-    (viewEv2) <- handleVisibility EditDocumentView vis $
+    (viewEv2, cancelEv) <- handleVisibility EditDocumentView vis $
       documentEditor editEv
 
     (closeEv, editEv2) <- handleVisibility ReadingView vis $
@@ -50,40 +51,64 @@ textReaderTop = do
   return ()
 
 documentListViewer
-  :: AppMonad t m
+  :: forall t m . AppMonad t m
   => Event t () -- refresh
   -> AppMonadT t m (Event t (ReaderDocumentData)
-                   , Event t ())
+                   , Event t (Maybe (ReaderDocumentId, Text, Text)))
 documentListViewer refreshEv = do
   ev <- getPostBuild
   listEv <- getWebSocketResponse
     (ListDocuments <$ (leftmost [ev,refreshEv]))
 
   newDocEv <- button "New"
-  evDyn <- widgetHold (return [])
-    (viewList <$> listEv)
-  resp <- getWebSocketResponse
-    (switchPromptlyDyn (leftmost <$> evDyn))
-  return $ (fmapMaybe identity resp
-           , newDocEv)
+  rec
+    showWSProcessing deleteEv delDone
+    evDyn <- widgetHold (return [])
+      (viewList <$> (leftmost [listEv, delDone]))
+    let
+      deleteEv :: Event t DeleteDocument
+      deleteEv = switchPromptlyDyn (leftmost <$> ((map (snd . snd)) <$> evDyn))
+    delDone <- getWebSocketResponse deleteEv
 
+  let
+    viewEv :: Event t ViewDocument
+    viewEv = switchPromptlyDyn (leftmost <$> ((map fst) <$> evDyn))
+    viewRawEv = switchPromptlyDyn (leftmost <$> ((map (fst . snd)) <$> evDyn))
+
+  editEv <- getWebSocketResponse viewRawEv
+  resp <- getWebSocketResponse viewEv
+  return $ (fmapMaybe identity resp
+           , leftmost [Nothing <$ newDocEv, editEv])
+
+viewList :: (AppMonad t m)
+  => [(ReaderDocumentId, Text, Text)]
+  -> AppMonadT t m [(Event t ViewDocument
+                    , (Event t ViewRawDocument
+                    , Event t DeleteDocument))]
 viewList lss = do
   elClass "table" "table table-striped" $ do
     el "thead" $ do
       el "tr" $ do
         el "th" $ text "Title"
         el "th" $ text "Contents"
+        el "th" $ text ""
     el "tbody" $  do
       forM lss $ \(i, t, c) -> do
-        (e,_) <- el' "tr" $ do
-          el "td" $ text t
-          el "td" $ text c
-        return (ViewDocument i <$ domEvent Click e)
+        el "tr" $ do
+          (e1,_) <- el' "td" $ text t
+          (e2,_) <- el' "td" $ text c
+          el "td" $ do
+            ed <- btn "btn-xs" "Edit"
+            d <- btn "btn-xs" "Delete"
+            return (ViewDocument i Nothing
+                    <$ (leftmost [domEvent Click e1, domEvent Click e2])
+               , (ViewRawDocument i <$ ed
+               , DeleteDocument i <$ d))
 
 documentEditor
   :: AppMonad t m
-  => Event t (Maybe (ReaderDocument CurrentDb))
-  -> AppMonadT t m (Event t (ReaderDocument CurrentDb))
+  => Event t (Maybe (ReaderDocumentId, Text, Text))
+  -> AppMonadT t m (Event t (ReaderDocumentData), Event t ())
 documentEditor editEv = divClass "" $ do
   let
     tiAttr = constDyn $ (("style" =: "width: 100%;")
@@ -92,8 +117,8 @@ documentEditor editEv = divClass "" $ do
                         <> ("rows" =: "10")
                         <> ("placeholder" =: "Contents"))
 
-    titleSetEv = (maybe "" _readerDocTitle) <$> editEv
-    contentSetEv = (maybe "" getContentText) <$> editEv
+    titleSetEv = editEv & mapped %~ (maybe "" (view _2))
+    contentSetEv = editEv & mapped %~ (maybe "" (view _3))
     getContentText (ReaderDocument _ _ c _)
       = T.unlines $ map toT (V.toList c)
       where
@@ -114,12 +139,11 @@ documentEditor editEv = divClass "" $ do
   cancelEv <- button "Cancel"
 
   let evDyn = AddOrEditDocument
-        <$> (fmap _readerDocId <$> rdDyn)
+        <$> (rdDyn & mapped %~ preview (_Just . _1))
         <*> (value ti)
         <*> (value ta)
   annTextEv <- getWebSocketResponse
     $ tagDyn evDyn saveEv
   showWSProcessing saveEv annTextEv
-  delEv <- delay 0.1 (fmapMaybe identity $ tagDyn rdDyn cancelEv)
-  return $ leftmost [fmapMaybe identity annTextEv
-    , delEv]
+  return $ (fmapMaybe identity annTextEv
+    , cancelEv)
