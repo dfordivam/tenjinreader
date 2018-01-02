@@ -147,3 +147,34 @@ documentEditor editEv = divClass "" $ do
   showWSProcessing saveEv annTextEv
   return $ (fmapMaybe identity annTextEv
     , cancelEv)
+
+quickAnalyzeTop
+  :: AppMonad t m
+  => AppMonadT t m ()
+quickAnalyzeTop = do
+  let
+    taAttr = constDyn $ (("style" =: "width: 100%;")
+                        <> ("rows" =: "4")
+                        <> ("class" =: "form-control")
+                        <> ("placeholder" =: "Enter text to search all Kanjis in it"))
+  ta <- divClass "col-md-6" $ do
+    textArea $ def
+      & textAreaConfig_attributes .~ taAttr
+  resp <- getWebSocketResponse $ QuickAnalyzeText <$> (_textArea_input ta)
+
+  v <- divClass "col-md-6" $ do
+    rsDyn <- readerSettingsControls def
+    let renderF = renderOnePara (constDyn [])
+          (_rubySize <$> rsDyn) 0
+    divWrap rsDyn (constDyn False) $ do
+      widgetHold (return [])
+        ((\r -> mapM renderF $ map snd r) <$> resp)
+
+  let vIdEv = switchPromptlyDyn $ leftmost <$> v
+
+  divClass "" $ do
+    detailsEv <- getWebSocketResponse $ GetVocabDetails
+      <$> (fmap fst vIdEv)
+    surfDyn <- holdDyn "" (fmap snd vIdEv)
+    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
+  return ()

@@ -72,7 +72,8 @@ widget = divClass "container" $ do
       [(0, ("SRS", srsWidget))
       ,(1, ("Kanji", kanjiBrowseWidget))
       , (2, ("Vocab", vocabSearchWidget))
-      , (3, ("Reader", textReaderTop))]
+      , (3, ("Reader", textReaderTop))
+      , (4, ("Sentence", quickAnalyzeTop))]
 
 wrapper m = elClass "nav" "navbar navbar-default" $
   divClass "container-fluid" $ do

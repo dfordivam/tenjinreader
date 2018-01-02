@@ -83,14 +83,7 @@ readingPane docEv = do
   return (switchPromptlyDyn (fst <$> v)
          , switchPromptlyDyn (snd <$> v))
 
-readingPaneInt :: AppMonad t m
-  => Event t (ReaderDocumentData)
-  -> ReaderSettings CurrentDb
-  -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
-readingPaneInt docEv rsDef = do
-  closeEv <- btn "btn-default" "Close"
-  -- editEv <- btn "btn-default" "Edit"
-
+readerSettingsControls rsDef = do
   fontSizeDD <- dropdown (rsDef ^. fontSize) (constDyn fontSizeOptions) def
   rubySizeDD <- dropdown (rsDef ^. rubySize) (constDyn fontSizeOptions) def
   lineHeightDD <- dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) def
@@ -99,9 +92,34 @@ readingPaneInt docEv rsDef = do
   let rsDyn = ReaderSettings <$> (value fontSizeDD) <*> (value rubySizeDD)
                 <*> (value lineHeightDD) <*> (value writingModeDD)
                 <*> (value heightDD)
-  fullScrEv <- btn "btn-default" "Full Screen"
-  getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
+  return rsDyn
 
+divWrap rs fullscreenDyn w = do
+  let
+    divAttr = (\s l h fs -> ("style" =:
+      ("font-size: " <> tshow s <>"%;"
+        <> "line-height: " <> tshow l <> "%;"
+        -- <> "height: " <> tshow h <> "px;"
+        <> (if fs then "position: fixed;" else "")
+        <> "display: block;" <> "padding: 40px;"))
+           <> ("class" =: (if fs then "modal modal-content" else "")))
+      <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
+      <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
+
+  elDynAttr "div" divAttr w
+
+readingPaneInt :: AppMonad t m
+  => Event t (ReaderDocumentData)
+  -> ReaderSettings CurrentDb
+  -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
+readingPaneInt docEv rsDef = do
+  closeEv <- btn "btn-default" "Close"
+  -- editEv <- btn "btn-default" "Edit"
+  fullScrEv <- btn "btn-default" "Full Screen"
+
+  rsDyn <- readerSettingsControls rsDef
+
+  getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
 
   widgetHold ((text "waiting for document data"))
     -- (readingPaneView <$> docEv)
