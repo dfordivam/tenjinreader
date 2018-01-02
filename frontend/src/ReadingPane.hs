@@ -285,12 +285,7 @@ paginatedReader rs fullScrEv (docId, title, (startPara, _), annText) = do
     display (length <$> textContent)
     -- Keep at most 60 paras in memory, length n == 30
     let
-        accF :: [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)]
-        accF [] o = o
-        accF n@(n1:_) o@(o1:_)
-          | (fst n1) > (fst o1) = (drop (length o - 30) o) ++ n -- More forward content
-          | otherwise = n ++ (take 30 o) -- More previous paras
-    textContent <- foldDyn accF annText ((\(_,_,_,c) -> c) <$>
+    textContent <- foldDyn moreContentAccF annText ((\(_,_,_,c) -> c) <$>
                                     (fmapMaybe identity moreContentEv))
 
     -- Temporary render to find firstPara
@@ -392,7 +387,7 @@ verticalReader :: forall t m . AppMonad t m
   -> Event t ()
   -> (ReaderDocumentData)
   -> AppMonadT t m ()
-verticalReader rs fullScrEv (docId, title, startPara, annText) = do
+verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   (evVisible, action) <- newTriggerEvent
 
   visDyn <- holdDyn (0,Nothing) evVisible
@@ -418,29 +413,47 @@ verticalReader rs fullScrEv (docId, title, startPara, annText) = do
     leftBtnAttr = btnCommonAttr "left: 10px;"
     rightBtnAttr = btnCommonAttr "right: 10px;"
 
+  -- Buttons
+  closeEv <- do
+    (e,_) <- elClass' "button" "close" $ do
+      --dispFullScr (text "Close")
+      (text "Close")
+    return (domEvent Click e)
+  prev <- if False
+    then return never
+    else do
+      (e,_) <- elAttr' "button" leftBtnAttr $ text "<"
+      return (domEvent Click e)
+  next <- if False
+    then return never
+    else do
+      (e,_) <- elAttr' "button" rightBtnAttr $ text ">"
+      return (domEvent Click e)
+
   --------------------------------
   rec
     let
-      dispFullScr m = do
-        dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
+      -- dispFullScr m = do
+      --   dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
 
       divAttr = divAttr' <*> fullscreenDyn
 
+      startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
       dEv = snd <$> (evVisible)
-      newPageEv = fmapMaybe (sets _2 Just) $ leftmost
+      newPageEv :: Event t (Int,Int)
+      newPageEv = fmapMaybe identity $ leftmost
         [tagDyn nextParaMaybe next
         , tagDyn prevParaMaybe prev]
 
-      -- lastDisplayedPara = ((\((p:t):_) -> (p, length t)) . reverse . snd) <$> row1Dyn
       lastDisplayedPara :: Dynamic t (Int, Int)
-      lastDisplayedPara = undefined
-      nextParaMaybe = join $ combineDyn getNextParaMaybe lastDisplayedPara textContent
-      prevParaMaybe = join $ combineDyn getPrevParaMaybe firstParaDyn textContent
+      lastDisplayedPara = (\(_,(p,t):_) -> (p, length t)) <$> row1Dyn
 
-    fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
-                                             , False <$ closeEv])
+    nextParaMaybe <- combineDyn getNextParaMaybe lastDisplayedPara textContent
+    prevParaMaybe <- combineDyn getPrevParaMaybe firstParaDyn textContent
 
     firstParaDyn <- holdDyn startPara newPageEv
+    fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
+                                             , False <$ closeEv])
 
     textContentInThisView <- holdDyn (getStart (annText, startPara))
       (getStart <$> attachDyn textContent newPageEv)
@@ -448,64 +461,22 @@ verticalReader rs fullScrEv (docId, title, startPara, annText) = do
     (row1Dyn :: Dynamic t ((Int,Int), [(Int,AnnotatedPara)]))
       <- foldDyn textAdjustF ((0,1), []) (attachDyn textContentInThisView dEv)
 
-
-    -- Fetch more contents
-    display firstParaDyn
-    text ", "
-    display lastAvailablePara
-    text ", "
-    display (length <$> textContent)
-    -- Keep at most 60 paras in memory, length n == 30
-    let
-        accF :: [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)]
-        accF [] o = o
-        accF n@(n1:_) o@(o1:_)
-          | (fst n1) > (fst o1) = (drop (length o - 30) o) ++ n -- More forward content
-          | otherwise = n ++ (take 30 o) -- More previous paras
-
-        lastAvailablePara = ((\(p:_) -> fst p) . reverse) <$> textContent
-        firstAvailablePara = ((\(p:_) -> fst p)) <$> textContent
-        hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara newPageEv)
-        hitEndF (l,(n,_))
-          | l - n < 10 = Just (l + 1)
-          | otherwise = Nothing
-        hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara firstPara)
-        hitStartF (f,(n,_))
-          | n - f < 10 = Just (max 0 (f - 30))
-          | otherwise = Nothing
-
-    moreContentEv <- getWebSocketResponse $
-      (\p -> ViewDocument docId (Just p)) <$> (leftmost [hitEndEv, hitStartEv])
-
-    textContent <- foldDyn accF annText ((\(_,_,_,c) -> c) <$>
-                                    (fmapMaybe identity moreContentEv))
-
-    -- Buttons
-    closeEv <- do
-      (e,_) <- elClass' "button" "close" $ do
-        dispFullScr (text "Close")
-      return (domEvent Click e)
-    prev <- if startPara == 0
-      then return never
-      else do
-        (e,_) <- elAttr' "button" leftBtnAttr $ text "<"
-        return (domEvent Click e)
-    next <- if startPara == 0
-      then return never
-      else do
-        (e,_) <- elAttr' "button" rightBtnAttr $ text ">"
-        return (domEvent Click e)
+    textContent <- fetchMoreContentF docId annText firstPara newPageEv
 
     -- Reverse render widget for finding first para of prev page
     -- Find the para num (from start) which is visible completely
     let
-      renderBackWidget :: _ -> m (Event t (Int,Int))
+      renderBackWidget :: _ -> AppMonadT t m (Event t (Int,Int))
       renderBackWidget = renderVerticalBackwards rs divAttr fullscreenDyn
       prevPageEv :: Event t (Int,Int)
       prevPageEv = fmapMaybe identity (tagDyn prevParaMaybe prev)
+      firstPara = never
 
-    firstPara <- widgetHoldWithRemoveAfterEvent
-      (renderBackWidget <$> attachDyn textContent prevPageEv)
+    -- firstPara <- widgetHoldWithRemoveAfterEvent
+    --   (renderBackWidget <$> attachDyn textContent prevPageEv)
+
+
+  display firstParaDyn
 
   --------------------------------
   (resizeEv, (rowRoot, (inside, outside, vIdEv))) <- resizeDetector $ elDynAttr' "div" divAttr $ do
@@ -527,7 +498,7 @@ verticalReader rs fullScrEv (docId, title, startPara, annText) = do
     surfDyn <- holdDyn "" (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
 
-  getWebSocketResponse (SaveReadingProgress docId <$> newPageEv)
+  getWebSocketResponse ((\(p,o) -> SaveReadingProgress docId (p,Just o)) <$> newPageEv)
 
   --------------------------------
 
@@ -554,7 +525,7 @@ verticalReader rs fullScrEv (docId, title, startPara, annText) = do
       stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
       startTicksAgain = updated rs -- resizeEv
       ticksWidget = do
-        let init = widgetHold (tickLossy 0.1 time)
+        let init = widgetHold (tickLossy 1 time)
               (return never <$ stopTicks)
         t <- widgetHold init
           (init <$ startTicksAgain)
@@ -567,13 +538,52 @@ verticalReader rs fullScrEv (docId, title, startPara, annText) = do
 
   return ()
 
-getStart :: ([(Int,AnnotatedPara)], (Int,Maybe Int))
+fetchMoreContentF :: (AppMonad t m)
+  => _
+  -> [(Int,AnnotatedPara)]
+  -> Event t (Int,Int)
+  -> Event t (Int,Int)
+  -> AppMonadT t m (Dynamic t [(Int,AnnotatedPara)])
+fetchMoreContentF docId annText firstPara newPageEv = do
+  rec
+    -- Fetch more contents
+    -- Keep at most 60 paras in memory, length n == 30
+    let
+
+        lastAvailablePara = ((\(p:_) -> fst p) . reverse) <$> textContent
+        firstAvailablePara = ((\(p:_) -> fst p)) <$> textContent
+        hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara newPageEv)
+        hitEndF (l,(n,_))
+          | l - n < 10 = Just (l + 1)
+          | otherwise = Nothing
+        hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara firstPara)
+        hitStartF (f,(n,_))
+          | n - f < 10 = Just (max 0 (f - 30))
+          | otherwise = Nothing
+
+    moreContentEv <- getWebSocketResponse $
+      (\p -> ViewDocument docId (Just p)) <$> (leftmost [hitEndEv, hitStartEv])
+
+    textContent <- foldDyn moreContentAccF annText ((\(_,_,_,c) -> c) <$>
+                                    (fmapMaybe identity moreContentEv))
+
+  display lastAvailablePara
+  text ", "
+  display (length <$> textContent)
+
+  return textContent
+
+moreContentAccF :: [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)]
+moreContentAccF [] o = o
+moreContentAccF n@(n1:_) o@(o1:_)
+  | (fst n1) > (fst o1) = (drop (length o - 30) o) ++ n -- More forward content
+  | otherwise = n ++ (take 30 o) -- More previous paras
+
+getStart :: ([(Int,AnnotatedPara)], (Int, Int))
   -> [(Int,AnnotatedPara)]
 getStart (annText, (p,o)) = startP : restP
   where
-    startP = (p, maybe [] (getOff o) (List.lookup p annText))
-    getOff Nothing v = v
-    getOff (Just off) t = drop off t
+    startP = (p, maybe [] (drop o) (List.lookup p annText))
     restP = filter ((> p) . fst) annText
 
 -- Start of next page (one after end of current page)
@@ -713,17 +723,18 @@ renderDynParas :: (_)
   -> Dynamic t [(Int,AnnotatedPara)]
   -> m (Event t ([VocabId], Text))
 renderDynParas rs dynParas = do
-  let dynMap = Map.fromList <$> dynParas
-      vIdDyn = constDyn []
-      renderF = renderOnePara vIdDyn (_rubySize <$> rs) 0
-      renderEachPara dt = do
-        ev <- dyn (renderF <$> dt)
-        switchPromptly never ev
+ --  let dynMap = Map.fromList <$> dynParas
+ --      vIdDyn = constDyn []
+ --      renderF = renderOnePara vIdDyn (_rubySize <$> rs) 0
+ --      renderEachPara dt = do
+ --        ev <- dyn (renderF <$> dt)
+ --        switchPromptly never ev
 
- -- (Dynamic t (Map k ((Event t ([VocabId], Text)))))
-  v <- list dynMap renderEachPara
-  let f = switchPromptlyDyn . (fmap (leftmost . Map.elems))
-  return (f v)
+ -- -- (Dynamic t (Map k ((Event t ([VocabId], Text)))))
+ --  v <- list dynMap renderEachPara
+ --  let f = switchPromptlyDyn . (fmap (leftmost . Map.elems))
+  -- return (f v)
+  return never
 
 widgetHoldWithRemoveAfterEvent :: (_)
   => Event t (m (Event t a))
@@ -782,7 +793,7 @@ renderVerticalBackwards rs divAttr fullscreenDyn (textContent, (ep,epOff)) = do
       stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
       startTicksAgain = updated rs -- resizeEv
       ticksWidget = do
-        let init = widgetHold (tickLossy 0.1 time)
+        let init = widgetHold (tickLossy 1 time)
               (return never <$ stopTicks)
         t <- widgetHold init
           (init <$ startTicksAgain)
