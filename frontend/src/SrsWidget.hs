@@ -20,7 +20,6 @@ import NLP.Romkan (toHiragana)
 import Data.List.NonEmpty (NonEmpty)
 import System.Random
 import qualified GHCJS.DOM.HTMLElement as DOM
-import Language.Javascript.JSaddle.Object
 
 data SrsWidgetView =
   ShowStatsWindow | ShowReviewWindow ReviewType | ShowBrowseSrsItemsWindow

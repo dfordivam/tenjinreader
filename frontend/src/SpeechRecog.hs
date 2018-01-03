@@ -20,6 +20,7 @@ import GHCJS.DOM.SpeechRecognition
 import GHCJS.DOM.SpeechRecognitionEvent
 import GHCJS.DOM.SpeechGrammar
 import GHCJS.DOM.EventM
+import Language.Javascript.JSaddle.Object
 #endif
 
 -- speechRecogWidget readings = do
@@ -38,9 +39,9 @@ type Result = [[(Double, T.Text)]]
 initWanakaBindFn :: (MonadWidget t m) => m ()
 initWanakaBindFn =
 #if defined (ghcjs_HOST_OS)
-  void $ liftJSM $ eval ("globalFunc = function () {\
-                \var input = document.getElementById('JP-TextInput-IME-Input');\
-                \wanakana.bind(input);}" :: Text)
+  void $ liftJSM $ eval ("globalFunc = function () {"
+                <> "var input = document.getElementById('JP-TextInput-IME-Input');"
+                <> "wanakana.bind(input);}" :: Text)
 #else
   return ()
 #endif
