@@ -434,6 +434,10 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
           <> stl ))
     leftBtnAttr = btnCommonAttr "left: 10px;"
     rightBtnAttr = btnCommonAttr "right: 10px;"
+    startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
+    initState = getState (getStart (annText, startPara))
+    getState content = maybe ((0,1), []) (\p -> ((0,length p), [p])) $
+      headMay content
 
   -- Buttons
   closeEv <- do
@@ -444,12 +448,12 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   prev <- if False
     then return never
     else do
-      (e,_) <- elAttr' "button" leftBtnAttr $ text "<"
+      (e,_) <- elAttr' "button" rightBtnAttr $ text ">"
       return (domEvent Click e)
   next <- if False
     then return never
     else do
-      (e,_) <- elAttr' "button" rightBtnAttr $ text ">"
+      (e,_) <- elAttr' "button" leftBtnAttr $ text "<"
       return (domEvent Click e)
 
   --------------------------------
@@ -460,7 +464,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
       divAttr = divAttr' <*> fullscreenDyn
 
-      startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
       dEv = snd <$> (evVisible)
       newPageEv' :: Event t (Int,Int)
       newPageEv' = fmapMaybe identity $ leftmost
@@ -468,10 +471,9 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
         , tagDyn prevParaMaybe prev]
 
       lastDisplayedPara :: Dynamic t (Int, Int)
-      lastDisplayedPara = (\(_,(p,t):_) -> (p, length t)) <$> row1Dyn
+      lastDisplayedPara = (\v -> maybe (0,0) (\(pn,pt) -> (pn, length pt))
+                            (preview (_2 . to reverse . _head) v)) <$> row1Dyn
 
-      initState = maybe ((0,1), []) (\p -> ((0,length p), [p])) $
-        headMay (getStart (annText, startPara))
 
     nextParaMaybe <- combineDyn getNextParaMaybe lastDisplayedPara textContent
     prevParaMaybe <- combineDyn getPrevParaMaybe firstParaDyn textContent
@@ -484,8 +486,13 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     textContentInThisView <- holdDyn (getStart (annText, startPara))
       (getStart <$> attachDyn textContent newPageEv)
 
-    (row1Dyn :: Dynamic t ((Int,Int), [(Int,AnnotatedPara)]))
-      <- foldDyn textAdjustF initState (attachDyn textContentInThisView dEv)
+    let foldF st = foldDyn textAdjustF st (attachDyn textContentInThisView dEv)
+        newStateEv = getState <$> (updated textContentInThisView)
+        row1Dyn :: Dynamic t ((Int,Int), [(Int,AnnotatedPara)])
+        row1Dyn = join row1Dyn'
+
+    (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
+
 
     textContent <- fetchMoreContentF docId annText firstPara newPageEv
 
@@ -501,7 +508,14 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       (renderBackWidget <$> attachDyn textContent prevPageEv)
 
 
+  text "firstParaDyn:"
   display firstParaDyn
+  text " lastDisplayedPara:"
+  display lastDisplayedPara
+  text " nextParaMaybe:"
+  display nextParaMaybe
+  text " prevParaMaybe:"
+  display prevParaMaybe
 
   --------------------------------
   (resizeEv, (rowRoot, (inside, outside, vIdEv))) <- resizeDetector $ elDynAttr' "div" divAttr $ do
@@ -548,7 +562,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   let
     -- TODO Stop if we hit end of text
       stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
-      startTicksAgain = updated rs -- resizeEv
+      startTicksAgain = leftmost [() <$ updated rs, resizeEv, () <$ newPageEv]
       ticksWidget = do
         let init = widgetHold (tickLossy 1 time)
               (return never <$ stopTicks)
