@@ -351,9 +351,7 @@ reviewWidget
   -> Event t ()
   -> AppMonadT t m (Event t SrsWidgetView)
 reviewWidget p refreshEv = do
-  void $ liftJSM $ eval ("globalFunc = function () {\
-                \var input = document.getElementById('JP-TextInput-IME-Input');\
-                \wanakana.bind(input);}" :: Text)
+  initWanakaBindFn
   let
     rt = reviewType p
 
@@ -544,9 +542,7 @@ inputFieldWidget doRecog (ri@(ReviewItem i k m r), rt) = do
   let focusAndBind e = do
         DOM.focus e
         let ans = getAnswer ri rt
-        when (isRight ans) $ void $ liftJSM $
-          jsg0 ("globalFunc" :: Text)
-        return ()
+        when (isRight ans) bindWanaKana
 
   widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ ev)
 

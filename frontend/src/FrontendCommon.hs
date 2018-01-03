@@ -67,6 +67,7 @@ displayVocabT (Vocab ks) = do
           el "rt" $ text r
   mapM_ f ks
 
+btn :: (_) => Text -> Text -> m (Event t ())
 btn cl t = do
   (e,_) <- elClass' "button" ("btn " <> cl) $ text t
   return $ domEvent Click e

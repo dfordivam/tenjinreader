@@ -106,8 +106,8 @@ instance Binary ReaderDocumentId
 instance Value ReaderDocumentId
 instance Binary (ReaderDocumentTree t)
 instance (Typeable t) => Value (ReaderDocumentTree t)
-instance Binary (ReaderDocumentOldTree t)
-instance (Typeable t) => Value (ReaderDocumentOldTree t)
+-- instance Binary (ReaderDocumentOldTree t)
+-- instance (Typeable t) => Value (ReaderDocumentOldTree t)
 
 instance Binary SrsEntryId
 instance Value SrsEntryId

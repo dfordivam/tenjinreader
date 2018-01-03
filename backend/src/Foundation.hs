@@ -103,7 +103,7 @@ instance Yesod App where
     -- Store session data on the client in encrypted cookies,
     -- default session idle timeout is 120 minutes
     makeSessionBackend _ = Just <$> defaultClientSessionBackend
-        120    -- timeout in minutes
+        (30*24*60)    -- timeout in minutes
         "config/client_session_key.aes"
 
     -- Yesod Middleware allows you to run code before and after each handler function.
@@ -178,8 +178,9 @@ instance Yesod App where
     isAuthorized (StaticR _) _ = return Authorized
 
     isAuthorized ProfileR _ = isAuthenticated
-    isAuthorized WebSocketHandlerR _ = return Authorized
-      --isAuthenticated
+    isAuthorized WebSocketHandlerR _ =
+      -- return Authorized
+      isAuthenticated
 
     -- This function creates static content files in the static folder
     -- and names them based on a hash of their content. This allows

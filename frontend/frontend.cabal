@@ -51,10 +51,9 @@ executable frontend
                      , jsaddle-warp
 
   -- Fix this
-  -- if impl(ghcjs)
-  --   build-depends: ghcjs-base
-  -- else
-  --   build-depends: jsaddle-warp
+  if impl(ghcjs)
+     build-depends: ghcjs-base
+                    , ghcjs-dom-jsffi
 
   hs-source-dirs:      src
   default-language:    Haskell2010

@@ -83,12 +83,16 @@ readingPane docEv = do
   return (switchPromptlyDyn (fst <$> v)
          , switchPromptlyDyn (snd <$> v))
 
-readerSettingsControls rsDef = do
-  fontSizeDD <- dropdown (rsDef ^. fontSize) (constDyn fontSizeOptions) def
-  rubySizeDD <- dropdown (rsDef ^. rubySize) (constDyn fontSizeOptions) def
-  lineHeightDD <- dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) def
-  writingModeDD <- dropdown (rsDef ^. verticalMode) (constDyn writingModeOptions) def
-  heightDD <- dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) def
+readerSettingsControls rsDef = divClass "form-inline" $ divClass "form-group" $ do
+  let
+    ddConf :: _
+    ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
+    ddAttr = ("class" =: "form-control input-sm")
+  fontSizeDD <- dropdown (rsDef ^. fontSize) (constDyn fontSizeOptions) ddConf
+  rubySizeDD <- dropdown (rsDef ^. rubySize) (constDyn fontSizeOptions) ddConf
+  lineHeightDD <- dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) ddConf
+  writingModeDD <- dropdown (rsDef ^. verticalMode) (constDyn writingModeOptions) ddConf
+  heightDD <- dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) ddConf
   let rsDyn = ReaderSettings <$> (value fontSizeDD) <*> (value rubySizeDD)
                 <*> (value lineHeightDD) <*> (value writingModeDD)
                 <*> (value heightDD)
@@ -837,7 +841,10 @@ vocabRuby :: (_)
   -> Vocab -> m (_)
 vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
   let
-    spClass = ffor markDyn $ \b -> if b then "mark" else ""
+    elA t = do
+      (e,_) <- el' t $ mapM f ks
+      return (domEvent Click e, domEvent Mouseenter e, domEvent Mouseleave e)
+    elType = ffor markDyn $ \b -> if b then "mark" else "span"
     rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
     g r True = r
     g _ _ = ""
@@ -846,8 +853,11 @@ vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
       = elDynAttr "ruby" rubyAttr $ do
           text k
           el "rt" $ dynText (g r <$> visDyn)
-  (e,_) <- elDynClass' "span" spClass $ mapM f ks
-  return $ (domEvent Click e, domEvent Mouseenter e, domEvent Mouseleave e)
+  v <- dyn (elA <$> elType)
+  e1 <- switchPromptly never (v & mapped %~ view _1)
+  e2 <- switchPromptly never (v & mapped %~ view _2)
+  e3 <- switchPromptly never (v & mapped %~ view _3)
+  return (e1,e2,e3)
 
 lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
   <$> ([100,150..400]  :: [Int])

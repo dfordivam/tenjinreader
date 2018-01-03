@@ -60,7 +60,7 @@ documentListViewer refreshEv = do
   listEv <- getWebSocketResponse
     (ListDocuments <$ (leftmost [ev,refreshEv]))
 
-  newDocEv <- button "New"
+  newDocEv <- btn "btn-info btn-block" "新作"
   rec
     showWSProcessing deleteEv delDone
     evDyn <- widgetHold (return [])
@@ -89,8 +89,8 @@ viewList lss = do
   elClass "table" "table table-striped" $ do
     el "thead" $ do
       el "tr" $ do
-        el "th" $ text "Title"
-        el "th" $ text "Contents"
+        el "th" $ text "題名"
+        el "th" $ text "内容"
         el "th" $ text ""
     el "tbody" $  do
       forM lss $ \(i, t, c) -> do
@@ -98,8 +98,8 @@ viewList lss = do
           (e1,_) <- el' "td" $ text t
           (e2,_) <- el' "td" $ text c
           el "td" $ do
-            ed <- btn "btn-xs" "Edit"
-            d <- btn "btn-xs" "Delete"
+            ed <- btn "btn-xs btn-primary" "Edit"
+            d <- btn "btn-xs btn-warning" "Delete"
             return (ViewDocument i Nothing
                     <$ (leftmost [domEvent Click e1, domEvent Click e2])
                , (ViewRawDocument i <$ ed
@@ -156,7 +156,7 @@ quickAnalyzeTop = do
     taAttr = constDyn $ (("style" =: "width: 100%;")
                         <> ("rows" =: "4")
                         <> ("class" =: "form-control")
-                        <> ("placeholder" =: "Enter text to search all Kanjis in it"))
+                        <> ("placeholder" =: "文章"))
   ta <- divClass "col-md-6" $ do
     ev <- btn "" "Clear"
     textArea $ def

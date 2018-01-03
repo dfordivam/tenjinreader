@@ -1,22 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
 module SpeechRecog
-  (speechRecogSetup, Result)
+  (speechRecogSetup, Result
+  , initWanakaBindFn, bindWanaKana)
   where
 
 import Protolude hiding (on)
 import Control.Lens
 import FrontendCommon
 import qualified Data.Text as T
+import Data.JSString.Text
 
+#if defined (ghcjs_HOST_OS)
 import GHCJS.DOM.SpeechRecognition
 import GHCJS.DOM.SpeechRecognitionEvent
 import GHCJS.DOM.SpeechGrammar
 import GHCJS.DOM.EventM
-import Data.JSString.Text
+#endif
 
 -- speechRecogWidget readings = do
 --   -- TODO Do check on recogEv before this
@@ -30,9 +34,30 @@ import Data.JSString.Text
 
 type Result = [[(Double, T.Text)]]
 
+-- CPP has issues with multi-line literal, so move all ifdef here
+initWanakaBindFn :: (MonadWidget t m) => m ()
+initWanakaBindFn =
+#if defined (ghcjs_HOST_OS)
+  void $ liftJSM $ eval ("globalFunc = function () {\
+                \var input = document.getElementById('JP-TextInput-IME-Input');\
+                \wanakana.bind(input);}" :: Text)
+#else
+  return ()
+#endif
+
+bindWanaKana :: (MonadWidget t m) => m ()
+bindWanaKana =
+#if defined (ghcjs_HOST_OS)
+        void $ liftJSM $
+          jsg0 ("globalFunc" :: Text)
+#else
+  return ()
+#endif
+
 speechRecogSetup :: MonadWidget t m
   => m (Event t () -> m (Event t Result))
 speechRecogSetup = do
+#if defined (ghcjs_HOST_OS)
   (trigEv, trigAction) <- newTriggerEvent
 
   recog <- liftIO $ do
@@ -51,7 +76,11 @@ speechRecogSetup = do
   return (\e -> do
     performEvent (startRecognition recog <$ e)
     return trigEv)
+#else
+  return (const (return never))
+#endif
 
+#if defined (ghcjs_HOST_OS)
 onResultEv :: (Result -> IO ())
   -> EventM SpeechRecognition SpeechRecognitionEvent ()
 onResultEv trigAction = do
@@ -71,3 +100,4 @@ onResultEv trigAction = do
       return (c, textFromJSString t)))
 
   liftIO $ trigAction result
+#endif
