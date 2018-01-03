@@ -313,16 +313,15 @@ vocabSearchWidget
   => AppMonadT t m ()
 vocabSearchWidget = divClass "" $ divClass "panel panel-default" $ do
 
-  (vocabResEv,searchEv) <- divClass "panel-heading"  $ do
+  (vocabResEv,searchEv) <- divClass "panel-heading clearfix" $ divClass "" $ do
     let
       tiAttr = constDyn $ (("style" =: "")
-                          <> ("class" =: "col-sm-9")
+                          <> ("class" =: "col-sm-10")
                           <> ("placeholder" =: "Search by meaning or reading"))
     ti <- textInput $ def
       & textInputConfig_attributes .~ tiAttr
 
-    filt <- divClass "" $ do
-      text "|"
+    filt <- divClass "col-sm-2" $ do
 
       dropdown Nothing
         (constDyn ((Nothing =: "All")
@@ -331,7 +330,7 @@ vocabSearchWidget = divClass "" $ divClass "panel panel-default" $ do
             =: "Verb Only")
         <> ((Just (PosAdjective NaAdjective)) =: "Adj or Adv only")))
         $ def
-          & dropdownConfig_attributes .~ (constDyn ("class" =: "col-sm-2"))
+          & dropdownConfig_attributes .~ (constDyn ("class" =: "form-control input-sm"))
 
     let vsDyn = VocabSearch <$> (value ti)
                   <*> (value filt)

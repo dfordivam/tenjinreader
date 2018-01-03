@@ -158,7 +158,7 @@ quickAnalyzeTop = do
                         <> ("class" =: "form-control")
                         <> ("placeholder" =: "文章"))
   ta <- divClass "col-md-6" $ do
-    ev <- btn "" "Clear"
+    ev <- btn "btn-xs btn-default" "Clear"
     textArea $ def
       & textAreaConfig_attributes .~ taAttr
       & textAreaConfig_setValue .~ ("" <$ ev)

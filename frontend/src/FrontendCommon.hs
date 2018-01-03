@@ -82,12 +82,12 @@ addEditSrsEntryWidget i t s = do
   let
     widget s = case s of
       (Just sId) -> do
-        ev <- btn "btn-xs" "Edit SRS"
+        ev <- btn "btn-xs btn-primary" "Edit SRS"
         openEditSrsItemWidget (sId <$ ev)
         return never
 
       (Nothing) -> do
-        ev <- btn "btn-xs" "Add to SRS"
+        ev <- btn "btn-xs btn-primary" "Add to SRS"
         resp <- getWebSocketResponse $ QuickAddSrsItem i t <$ ev
         showWSProcessing ev resp
         return resp

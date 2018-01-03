@@ -180,17 +180,20 @@ browseSrsItemsWidget
 browseSrsItemsWidget = do
   -- Widget declarations
   let
+    ddConf :: _
+    ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
+    ddAttr = ("class" =: "form-control input-sm")
 
     filterOptionsWidget =
-      divClass "panel-heading" $ do
+      divClass "panel-heading" $ divClass "form-inline" $ divClass "form-group" $ do
         -- Selection buttons
         selectAllToggleCheckBox <- divClass "col-sm-1" $ do
 
           checkbox False def -- & setValue .~ allSelected
 
-        filt <- dropdown (BrowseSrsItemsDue) (constDyn browseOptions) def
-        levels <- dropdown (LearningLvl) (constDyn srsLevels) def
-        revType <- dropdown (ReviewTypeRecogReview) (constDyn revTypeSel) def
+        filt <- dropdown (BrowseSrsItemsDue) (constDyn browseOptions) ddConf
+        levels <- dropdown (LearningLvl) (constDyn srsLevels) ddConf
+        revType <- dropdown (ReviewTypeRecogReview) (constDyn revTypeSel) ddConf
 
         brwDyn <- getBrowseSrsItemsEv filt levels
         let filtOptsDyn = BrowseSrsItems <$> value revType <*> brwDyn
