@@ -295,7 +295,7 @@ checkAnswerInt readings kanaAlts =
     True -> AnswerCorrect
     False -> AnswerIncorrect "T"
   where
-    kanas = mconcat $ map (map snd) kanaAlts
+    kanas = concat $ map (map snd) kanaAlts
 
 getQuickAddSrsItem :: QuickAddSrsItem -> WsHandlerM (Maybe SrsEntryId)
 getQuickAddSrsItem (QuickAddSrsItem v t) = do

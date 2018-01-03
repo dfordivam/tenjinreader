@@ -158,8 +158,10 @@ quickAnalyzeTop = do
                         <> ("class" =: "form-control")
                         <> ("placeholder" =: "Enter text to search all Kanjis in it"))
   ta <- divClass "col-md-6" $ do
+    ev <- btn "" "Clear"
     textArea $ def
       & textAreaConfig_attributes .~ taAttr
+      & textAreaConfig_setValue .~ ("" <$ ev)
   resp <- getWebSocketResponse $ QuickAnalyzeText <$> (_textArea_input ta)
 
   v <- divClass "col-md-6" $ do

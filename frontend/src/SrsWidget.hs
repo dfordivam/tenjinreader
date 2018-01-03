@@ -484,9 +484,11 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
       showNE Nothing = text "No Reviews!"
     dyn $ showNE <$> (dyn2 & mapped . mapped %~ (uncurry getField))
 
+  doRecog <- lift $ speechRecogSetup
+
   dr <- dyn $ ffor dyn2 $ \case
     (Nothing) -> return never
-    (Just v) -> inputFieldWidget v
+    (Just v) -> inputFieldWidget doRecog v
 
   evReview <- switchPromptly never dr
   return (closeEv, evReview)
@@ -494,9 +496,10 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
 
 inputFieldWidget
   :: (AppMonad t m, SrsReviewType rt)
-  => (ReviewItem, ActualReviewType rt)
+  => (Event t () -> m (Event t Result))
+  -> (ReviewItem, ActualReviewType rt)
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
-inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
+inputFieldWidget doRecog (ri@(ReviewItem i k m r), rt) = do
   let
     tiId = "JP-TextInput-IME-Input"
     style = "text-align: center; width: 100%;" <> color
@@ -543,6 +546,7 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
         let ans = getAnswer ri rt
         when (isRight ans) $ void $ liftJSM $
           jsg0 ("globalFunc" :: Text)
+        return ()
 
   widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ ev)
 
@@ -553,16 +557,19 @@ inputFieldWidget (ri@(ReviewItem i k m r), rt) = do
     widgetHold (return ()) (showResult <$> resEv)
 
   -- Footer
-  (drForced, addEditEv) <- divClass "row" $ do
+  (wakaru, addEditEv, recogRes) <- divClass "row" $ do
     addEditEv <- divClass "col-sm-2" $ do
       ev <- btn "btn-primary" "Edit"
       newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
       return $ (\s -> AddItemsEv [getReviewItem s] 0) <$> newSrsEntryEv
-    ev <- divClass "col-sm-2" $
+    wEv <- divClass "col-sm-2" $
       btn "btn-primary" "分かる"
-    return (ev, addEditEv)
+    recogRes <- divClass "col-md-8" $
+      speechRecogWidget doRecog (ri, rt)
+    let wakaru = DoReviewEv (i, rt, True) <$ wEv
+    return (wakaru, addEditEv, recogRes)
 
-  return $ leftmost [DoReviewEv (i, rt, True) <$ drForced
+  return $ leftmost [ wakaru, recogRes
                     , dr, addEditEv]
 
 reviewInputFieldHandler
@@ -611,5 +618,85 @@ checkAnswer (Left m) t = elem (T.toCaseFold $ T.strip t) (answers <> woExpl <> w
 checkAnswer (Right r) t = elem t answers
   where answers = map unReading r
 
+checkSpeechRecogResult
+  :: (AppMonad t m, SrsReviewType rt)
+  => (ReviewItem, ActualReviewType rt)
+  -> Event t Result
+  -> AppMonadT t m (Event t Bool)
+checkSpeechRecogResult (ri,rt) resEv = do
+  let
+    checkF res = do
+      ev <- getPostBuild
+      let
+        r1 = any ((checkAnswer n) . snd) (concat res)
+        n = getAnswer ri rt
+        readings = case n of
+          (Left m) -> []
+          (Right r) -> NE.toList r
+      if r1
+        then return (True <$ ev)
+        else do
+          respEv <- getWebSocketResponse $ CheckAnswer readings res <$ ev
+          return ((== AnswerCorrect) <$> respEv)
+
+  evDyn <- widgetHold (return never)
+    (checkF <$> resEv)
+  return $ switchPromptlyDyn evDyn
+
+
 data AnswerBoxState = ReviewStart | ShowAnswer | NextReview
   deriving (Eq)
+
+data SpeechRecogWidgetState
+  = NewReviewStart
+  | WaitingForRecogResponse
+  | WaitingForServerResponse
+  | AnswerSuccessful
+  | AnswerWrong
+
+btnText :: SpeechRecogWidgetState
+  -> Text
+btnText NewReviewStart = "Recog"
+btnText WaitingForRecogResponse = "Listening"
+btnText WaitingForServerResponse = "Processing"
+btnText AnswerSuccessful = "Correct! (Click for next)"
+btnText AnswerWrong = "Not quite, Try Again?"
+
+-- Widget Sta
+speechRecogWidget :: forall t m rt . (AppMonad t m, SrsReviewType rt)
+  => (Event t () -> m (Event t Result))
+  -> (ReviewItem, ActualReviewType rt)
+  -> AppMonadT t m (Event t (ReviewStateEvent rt))
+speechRecogWidget doRecog (ri@(ReviewItem i k m r),rt) = do
+  let startRecogEv st ev =
+        fforMaybe (tagDyn st ev) $ \case
+          NewReviewStart -> Just ()
+          AnswerWrong -> Just ()
+          _ -> Nothing
+
+      doReviewEv st ev =
+        fforMaybe (tagDyn st ev) $ \case
+          AnswerSuccessful -> Just ()
+          _ -> Nothing
+
+  rec
+    let
+      ev' = leftmost [ev1, ev2, ev3]
+      ev1 = ffor recRes2 $ \case
+          True -> AnswerSuccessful
+          False -> AnswerWrong
+      ev2 = WaitingForRecogResponse <$ stRec
+      ev3 = WaitingForServerResponse <$ recRes1
+      stRec = (startRecogEv stDyn evClick)
+
+    evEv <- dyn $ (btn "btn-primary")
+      <$> (btnText <$> stDyn)
+    evClick <- switchPromptly never evEv
+    ev <- delay 1 ev'
+
+    recRes1 <- lift $ doRecog stRec
+    recRes2 <- checkSpeechRecogResult (ri,rt) (traceEvent "Recog ->" recRes1)
+
+    stDyn <- holdDyn NewReviewStart ev
+
+  return $ (DoReviewEv (i,rt,True)) <$ doReviewEv stDyn evClick

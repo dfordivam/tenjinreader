@@ -37,7 +37,9 @@ getKana t = do
   let feats = map nodeFeature nodes
       -- get the last part of the mecab output, this will include '*'
       readings :: [Text]
-      readings = catMaybes $ map (headMay . reverse . (T.splitOn ",")) feats
+      readings = map getR feats
+      getR t = r2
+        where (_:r2:_) = (reverse . (T.splitOn ",")) t
       -- convert valid characters to hiragana
       f = map katakanaToHiragana $ filter hasKanaOrKanji readings
 
