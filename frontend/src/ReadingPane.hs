@@ -127,8 +127,8 @@ readingPaneInt docEv rsDef = do
 
   widgetHold ((text "waiting for document data"))
     -- (readingPaneView <$> docEv)
-    (paginatedReader rsDyn fullScrEv <$> docEv)
-    -- (verticalReader rsDyn fullScrEv <$> docEv)
+    -- (paginatedReader rsDyn fullScrEv <$> docEv)
+    (verticalReader rsDyn fullScrEv <$> docEv)
   -- rdDyn <- holdDyn Nothing (Just <$> docEv)
   return (closeEv, never)
          -- , fmapMaybe identity $ tagDyn rdDyn editEv)
@@ -462,17 +462,21 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
       startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
       dEv = snd <$> (evVisible)
-      newPageEv :: Event t (Int,Int)
-      newPageEv = fmapMaybe identity $ leftmost
+      newPageEv' :: Event t (Int,Int)
+      newPageEv' = fmapMaybe identity $ leftmost
         [tagDyn nextParaMaybe next
         , tagDyn prevParaMaybe prev]
 
       lastDisplayedPara :: Dynamic t (Int, Int)
       lastDisplayedPara = (\(_,(p,t):_) -> (p, length t)) <$> row1Dyn
 
+      initState = maybe ((0,1), []) (\p -> ((0,length p), [p])) $
+        headMay (getStart (annText, startPara))
+
     nextParaMaybe <- combineDyn getNextParaMaybe lastDisplayedPara textContent
     prevParaMaybe <- combineDyn getPrevParaMaybe firstParaDyn textContent
 
+    newPageEv <- delay 1 newPageEv'
     firstParaDyn <- holdDyn startPara newPageEv
     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
                                              , False <$ closeEv])
@@ -481,7 +485,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       (getStart <$> attachDyn textContent newPageEv)
 
     (row1Dyn :: Dynamic t ((Int,Int), [(Int,AnnotatedPara)]))
-      <- foldDyn textAdjustF ((0,1), []) (attachDyn textContentInThisView dEv)
+      <- foldDyn textAdjustF initState (attachDyn textContentInThisView dEv)
 
     textContent <- fetchMoreContentF docId annText firstPara newPageEv
 
@@ -492,10 +496,9 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       renderBackWidget = renderVerticalBackwards rs divAttr fullscreenDyn
       prevPageEv :: Event t (Int,Int)
       prevPageEv = fmapMaybe identity (tagDyn prevParaMaybe prev)
-      firstPara = never
 
-    -- firstPara <- widgetHoldWithRemoveAfterEvent
-    --   (renderBackWidget <$> attachDyn textContent prevPageEv)
+    firstPara <- widgetHoldWithRemoveAfterEvent
+      (renderBackWidget <$> attachDyn textContent prevPageEv)
 
 
   display firstParaDyn
@@ -745,18 +748,17 @@ renderDynParas :: (_)
   -> Dynamic t [(Int,AnnotatedPara)]
   -> m (Event t ([VocabId], Text))
 renderDynParas rs dynParas = do
- --  let dynMap = Map.fromList <$> dynParas
- --      vIdDyn = constDyn []
- --      renderF = renderOnePara vIdDyn (_rubySize <$> rs) 0
- --      renderEachPara dt = do
- --        ev <- dyn (renderF <$> dt)
- --        switchPromptly never ev
+  let dynMap = Map.fromList <$> dynParas
+      vIdDyn = constDyn []
+      renderF = renderOnePara vIdDyn (_rubySize <$> rs) 0
+      renderEachPara dt = do
+        ev <- dyn (renderF <$> dt)
+        switchPromptly never ev
 
- -- -- (Dynamic t (Map k ((Event t ([VocabId], Text)))))
- --  v <- list dynMap renderEachPara
- --  let f = switchPromptlyDyn . (fmap (leftmost . Map.elems))
-  -- return (f v)
-  return never
+ -- (Dynamic t (Map k ((Event t ([VocabId], Text)))))
+  v <- list dynMap renderEachPara
+  let f = switchPromptlyDyn . (fmap (leftmost . Map.elems))
+  return (f v)
 
 widgetHoldWithRemoveAfterEvent :: (_)
   => Event t (m (Event t a))
