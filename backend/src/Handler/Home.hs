@@ -24,6 +24,7 @@ data FileForm = FileForm
 -- inclined, or create a single monolithic file.
 getHomeR :: Handler Html
 getHomeR = do
+    redirect WebSocketHandlerR
     (formWidget, formEnctype) <- generateFormPost sampleForm
     let submission = Nothing :: Maybe FileForm
         handlerName = "getHomeR" :: Text
