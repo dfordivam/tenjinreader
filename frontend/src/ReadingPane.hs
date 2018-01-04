@@ -842,7 +842,7 @@ renderVerticalBackwards rs divAttr fullscreenDyn (textContent, (ep,epOff)) = do
 
     (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
       text ""
-    elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
+    elAttr "div" ("style" =: "height: 2em; width: 3em;") $ do
       text ""
     (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
       text ""
