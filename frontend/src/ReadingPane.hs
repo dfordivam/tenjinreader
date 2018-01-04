@@ -435,7 +435,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     leftBtnAttr = btnCommonAttr "left: 10px;"
     rightBtnAttr = btnCommonAttr "right: 10px;"
     startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
-    initState = getState (getStart (annText, startPara))
+    initState = getState (getCurrentViewContent (annText, startPara))
     getState content = maybe ((0,1), []) (\p -> ((0,length p), [p])) $
       headMay content
 
@@ -471,8 +471,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
         , tagDyn prevParaMaybe prev]
 
       lastDisplayedPara :: Dynamic t (Int, Int)
-      lastDisplayedPara = (\v -> maybe (0,0) (\(pn,pt) -> (pn, length pt))
-                            (preview (_2 . to reverse . _head) v)) <$> row1Dyn
+      lastDisplayedPara = (\v (_,o) -> maybe (0,0) (\(pn,pt) -> (pn, o + length pt))
+                            (preview (_2 . to reverse . _head) v)) <$> row1Dyn <*> firstParaDyn
 
 
     nextParaMaybe <- combineDyn getNextParaMaybe lastDisplayedPara textContent
@@ -483,8 +483,9 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
                                              , False <$ closeEv])
 
-    textContentInThisView <- holdDyn (getStart (annText, startPara))
-      (getStart <$> attachDyn textContent newPageEv)
+    -- textContentInThisView has relative numbering for first para, wrt to the start point
+    textContentInThisView <- holdDyn (getCurrentViewContent (annText, startPara))
+      (getCurrentViewContent <$> attachDyn textContent newPageEv)
 
     let foldF st = foldDyn textAdjustF st (attachDyn textContentInThisView dEv)
         newStateEv = getState <$> (updated textContentInThisView)
@@ -504,8 +505,11 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       prevPageEv :: Event t (Int,Int)
       prevPageEv = fmapMaybe identity (tagDyn prevParaMaybe prev)
 
+    textContentInPreviousView <- holdDyn (getPrevViewContent (annText, startPara))
+      (getPrevViewContent <$> attachDyn textContent newPageEv)
+
     firstPara <- widgetHoldWithRemoveAfterEvent
-      (renderBackWidget <$> attachDyn textContent prevPageEv)
+      (renderBackWidget <$> attachDyn textContentInPreviousView prevPageEv)
 
 
   text "firstParaDyn:"
@@ -560,7 +564,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   time <- liftIO $ getCurrentTime
 
   let
-    -- TODO Stop if we hit end of text
+    -- TODO Stop if we hit end of text, close the document
       stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
       startTicksAgain = leftmost [() <$ updated rs, resizeEv, () <$ newPageEv]
       ticksWidget = do
@@ -618,12 +622,21 @@ moreContentAccF n@(n1:_) o@(o1:_)
   | (fst n1) > (fst o1) = (drop (length o - 30) o) ++ n -- More forward content
   | otherwise = n ++ (take 30 o) -- More previous paras
 
-getStart :: ([(Int,AnnotatedPara)], (Int, Int))
+getCurrentViewContent :: ([(Int,AnnotatedPara)], (Int, Int))
   -> [(Int,AnnotatedPara)]
-getStart (annText, (p,o)) = startP : restP
+getCurrentViewContent (annText, (p,o)) = startP : restP
   where
     startP = (p, maybe [] (drop o) (List.lookup p annText))
     restP = filter ((> p) . fst) annText
+
+-- Offsets are the Current start of page
+getPrevViewContent :: ([(Int,AnnotatedPara)], (Int, Int))
+  -> [(Int,AnnotatedPara)]
+getPrevViewContent (annText, (p,o)) =
+  if o == 0 then restP else reverse $ lastP : (reverse restP)
+  where
+    lastP = (p, maybe [] (take (o - 1)) (List.lookup p annText))
+    restP = filter ((< p) . fst) annText
 
 -- Start of next page (one after end of current page)
 getNextParaMaybe :: (Int, Int) -> [(Int,AnnotatedPara)]
@@ -651,6 +664,7 @@ getPrevParaMaybe (lp, lpOff) textContent =
 data TextAdjust = ShrinkText | GrowText
   deriving (Show, Eq)
 
+
 -- Converge on the text content size based on Events
 -- The Input events will toggle between shrink and grow
 -- This is equivalent to binary space search.
@@ -659,6 +673,10 @@ data TextAdjust = ShrinkText | GrowText
 -- Do binary search between these bounds
 -- When a resize occurs (ie event goes Nothing -> Just)
 -- The bounds will have to be re-calculated
+
+-- (li,ui) are wrt to the content given in the annText
+-- Therefore the annText is limited only to the content which has to be
+-- displayed in this view (> first char for normal, < Last Char for reverse)
 textAdjustF
   :: ([(Int,AnnotatedPara)], Maybe TextAdjust)
   -> ((Int,Int), [(Int,AnnotatedPara)])
@@ -685,9 +703,9 @@ textAdjustF (annText, (Just ShrinkText)) ((li,ui), ps)
     (lp:psRev) = reverse ps
 
 textAdjustF (annText, (Just GrowText)) v@(_,[])
-  = maybe v (\p -> ((0, length p), [(0,p)])) $ List.lookup 0 annText
+  = maybe v (\p -> ((0, length $ snd p), [p])) $ headMay annText
 
-textAdjustF (annText, (Just GrowText)) ((li,ui), ps) =
+textAdjustF (annText, (Just GrowText)) v@((li,ui), ps) =
   (\(i,n) -> (i, (reverse psRev) ++ n)) newLp
   where
     ((lpN, lpT):psRev) = reverse ps
@@ -696,7 +714,9 @@ textAdjustF (annText, (Just GrowText)) ((li,ui), ps) =
       -- Adjust lower bound
       then (,) (lenT, ui) [(lpN, lpTN)]
       -- This para content over, add a new Para
-      else (,) (0, length newPara) $ [(lpN, lpT)] ++ newPara
+      else case newPara of
+             Just np -> (,) (0, length np) $ (lpN, lpT): [(lpN + 1, np)] -- not reversed, so add at end
+             Nothing -> v -- TODO handle this case
 
     lpTN = take halfL lpOT
     halfL = lenT + (ceiling $ (fromIntegral (ui - lenT)) / 2)
@@ -706,8 +726,7 @@ textAdjustF (annText, (Just GrowText)) ((li,ui), ps) =
 
     lpOT = maybe [] identity $ List.lookup lpN annText
 
-    newPara = maybe [] (\p -> [(,) (lpN + 1) p])
-      $ List.lookup (lpN + 1) annText
+    newPara = List.lookup (lpN + 1) annText
 
 textAdjustF (annText, Nothing) (_, ps) = ((0,(length lpOT)),ps)
     where
