@@ -468,7 +468,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       newPageEv' :: Event t (Int,Int)
       newPageEv' = fmapMaybe identity $ leftmost
         [tagDyn nextParaMaybe next
-        , tagDyn prevParaMaybe prev]
+        , Just <$> firstPara] -- TODO
 
       lastDisplayedPara :: Dynamic t (Int, Int)
       lastDisplayedPara = (\v (_,o) -> maybe (0,0) (\(pn,pt) -> (pn, o + length pt))
@@ -698,7 +698,7 @@ textAdjustF (annText, (Just ShrinkText)) ((li,ui), ps)
           , (reverse psRev) ++ [(lpN, nlpT)])
         where halfL = assert (li < (length lpT)) $ li +
                 (floor $ (fromIntegral (length lpT - li)) / 2)
-              nlpT = take halfL $ lpT
+              nlpT = take halfL lpT
   where
     (lp:psRev) = reverse ps
 
@@ -733,7 +733,7 @@ textAdjustF (annText, Nothing) (_, ps) = ((0,(length lpOT)),ps)
       ((lpN, lpT):_) = reverse ps
       lpOT = maybe [] identity $ List.lookup lpN annText
 
--- lower bound causes Shrink event, upper bound causes Grow event
+-- lower bound is towards end, upper bound is towards start
 -- Do binary search between these bounds
 textAdjustRevF
   :: [(Int,AnnotatedPara)]
@@ -744,35 +744,37 @@ textAdjustRevF
 textAdjustRevF annText (Just ShrinkText) ((li,ui),(fp:ps)) = case (fp) of
   (_,[]) -> case ps of
     (fp':ps') -> textAdjustRevF annText (Just ShrinkText)
-      ((0,length fp'), (ps'))
+      ((0,length fp'), ps)
     [] -> error "textAdjustRevF error"
 
-  (fpN,fpT) -> (((length fpT), ui) -- Adjust lower bound
+  (fpN,fpT) -> ((li, (length fpT) )
       , (fpN, nfpT) : ps)
-    where halfL = (assert (ui > (length fpT))) $
-            (floor $ (fromIntegral (ui - (length fpT))) / 2)
-          nfpT = drop halfL $ fpT
+    where halfL = assert (li < (length fpT)) $ li +
+            (floor $ (fromIntegral (length fpT - li)) / 2)
+          nfpT = reverse $ take halfL $ reverse fpT
 
 textAdjustRevF annText (Just GrowText) v@(_,[])
   = error "textAdjustRevF error empty"
 
-textAdjustRevF annText (Just GrowText) ((li,ui), ((fpN, fpT):ps)) =
+textAdjustRevF annText (Just GrowText) v@((li,ui), ((fpN, fpT):ps)) =
   (\(i,n) -> (i, n ++ ps)) newFp
   where
     newFp = if lenT < lenOT
-      then (,) (li, lenT) [(fpN, fpTN)]
-      else (,) (0, length newPara) $ [(fpN,fpT)] ++ newPara
+      then (,) (lenT, ui) [(fpN, fpTN)]
+      -- This para content over, add a new Para
+      else case newPara of
+             Just np -> (,) (0, length np) $ (fpN - 1, np): [(fpN, fpT)]
+             Nothing -> v -- TODO handle this case
 
-    fpTN = drop (lenOT - halfL) fpOT
-    halfL = lenT + (ceiling $ (fromIntegral (lenT - li)) / 2)
+    fpTN = reverse $ take halfL $ reverse fpOT
+    halfL = lenT + (ceiling $ (fromIntegral (ui - lenT)) / 2)
 
     lenT = length fpT
     lenOT = length fpOT -- Full para / orig length
 
     fpOT = maybe [] identity $ List.lookup fpN annText
 
-    newPara = maybe [] (\p -> [(,) (fpN - 1) p])
-      $ List.lookup (fpN - 1) annText
+    newPara = List.lookup (fpN - 1) annText
 
 textAdjustRevF _ Nothing v = v
 
@@ -826,6 +828,13 @@ renderVerticalBackwards rs divAttr fullscreenDyn (textContent, (ep,epOff)) = do
     initState = (\t -> ((0,length t), [(ep, t)])) lastPara
     dEv = snd <$> (evVisible)
   row1Dyn <- foldDyn (textAdjustRevF textContent) initState dEv
+
+  let
+    firstDisplayedPara = (\v -> maybe (0,0) (\(pn,pt) -> (pn, length pt))
+                            (preview (_2 . _head) v)) <$> row1Dyn
+
+  text "First para num and length: "
+  display firstDisplayedPara
 
   (rowRoot, (inside, outside)) <- elDynAttr' "div" divAttr $ do
     el "div" $ do
