@@ -471,7 +471,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
         , Just <$> firstPara] -- TODO
 
       lastDisplayedPara :: Dynamic t (Int, Int)
-      lastDisplayedPara = (\v (_,o) -> maybe (0,0) (\(pn,pt) -> (pn, o + length pt))
+      lastDisplayedPara = (\v (_,o) -> maybe (0,0) (\(pn,pt) -> (pn, o + length pt - 1))
                             (preview (_2 . to reverse . _head) v)) <$> row1Dyn <*> firstParaDyn
 
 
@@ -626,7 +626,7 @@ getCurrentViewContent :: ([(Int,AnnotatedPara)], (Int, Int))
   -> [(Int,AnnotatedPara)]
 getCurrentViewContent (annText, (p,o)) = startP : restP
   where
-    startP = (p, maybe [] (drop o) (List.lookup p annText))
+    startP = (p, maybe [] (drop (o - 1)) (List.lookup p annText))
     restP = filter ((> p) . fst) annText
 
 -- Offsets are the Current start of page
