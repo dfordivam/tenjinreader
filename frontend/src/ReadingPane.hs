@@ -436,7 +436,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     rightBtnAttr = btnCommonAttr "right: 10px;"
     startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
     initState = getState (getCurrentViewContent (annText, startPara))
-    getState content = maybe ((0,1), []) (\p -> ((0,length p), [p])) $
+    getState content = maybe ((0,1), []) (\p -> ((0,length $ snd p), [p])) $
       headMay content
 
   -- Buttons
@@ -471,8 +471,9 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
         , Just <$> firstPara] -- TODO
 
       lastDisplayedPara :: Dynamic t (Int, Int)
-      lastDisplayedPara = (\v (_,o) -> maybe (0,0) (\(pn,pt) -> (pn, o + length pt - 1))
-                            (preview (_2 . to reverse . _head) v)) <$> row1Dyn <*> firstParaDyn
+      lastDisplayedPara = (\v (fpN,o) -> maybe (0,0)
+        (\(pn,pt) -> (pn, (if fpN == pn then o - 1 else 0) + length pt))
+        (preview (_2 . to reverse . _head) v)) <$> row1Dyn <*> firstParaDyn
 
 
     nextParaMaybe <- combineDyn getNextParaMaybe lastDisplayedPara textContent
