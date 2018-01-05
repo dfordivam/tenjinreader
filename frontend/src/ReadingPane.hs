@@ -419,18 +419,18 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     divAttr' = (\s l h fs -> ("style" =:
       ("font-size: " <> tshow s <>"%;"
         <> "line-height: " <> tshow l <> "%;"
-        <> "height: " <> tshow h <> "px;"
-        <> "width: 80vw;"
+        <> "height: " <> (if fs then "100%;" else tshow h <> "px;")
+        <> "width: " <> (if fs then "100%;" else "80vw;")
         <> "writing-mode: vertical-rl;"
         <> "word-wrap: break-word;"
-        <> (if fs then "position: fixed;" else "")
+        -- <> (if fs then "position: fixed;" else "")
         <> "display: block;" <> "padding: 40px;"))
            <> ("class" =: (if fs then "modal modal-content" else "")))
       <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
       <*> (_numOfLines <$> rs)
 
     btnCommonAttr stl = ("class" =: "btn btn-xs")
-       <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute;"
+       <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute; z-index: 1060;"
           <> stl ))
     leftBtnAttr = btnCommonAttr "left: 10px;"
     rightBtnAttr = btnCommonAttr "right: 10px;"
@@ -440,11 +440,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       headMay content
 
   -- Buttons
-  closeEv <- do
-    (e,_) <- elClass' "button" "close" $ do
-      --dispFullScr (text "Close")
-      (text "Close")
-    return (domEvent Click e)
   prev <- if False
     then return never
     else do
@@ -459,11 +454,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   --------------------------------
   rec
     let
-      -- dispFullScr m = do
-      --   dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
-
-      divAttr = divAttr' <*> fullscreenDyn
-
       dEv = snd <$> (evVisible)
       newPageEv' :: Event t (Int,Int)
       newPageEv' = fmapMaybe identity $ leftmost
@@ -481,8 +471,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
     newPageEv <- delay 1 newPageEv'
     firstParaDyn <- holdDyn startPara newPageEv
-    fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
-                                             , False <$ closeEv])
 
     -- textContentInThisView has relative numbering for first para, wrt to the start point
     textContentInThisView <- holdDyn (getCurrentViewContent (annText, startPara))
@@ -501,8 +489,9 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     -- Reverse render widget for finding first para of prev page
     -- Find the para num (from start) which is visible completely
     let
+      divAttr = divAttr' <*> (constDyn False)
       renderBackWidget :: _ -> AppMonadT t m (Event t (Int,Int))
-      renderBackWidget = renderVerticalBackwards rs divAttr fullscreenDyn
+      renderBackWidget = renderVerticalBackwards rs divAttr
       prevPageEv :: Event t (Int,Int)
       prevPageEv = fmapMaybe identity (tagDyn prevParaMaybe prev)
 
@@ -511,7 +500,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
     firstPara <- widgetHoldWithRemoveAfterEvent
       (renderBackWidget <$> attachDyn textContentInPreviousView prevPageEv)
-
 
   text "firstParaDyn:"
   display firstParaDyn
@@ -523,18 +511,39 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   display prevParaMaybe
 
   --------------------------------
-  (resizeEv, (rowRoot, (inside, outside, vIdEv))) <- resizeDetector $ elDynAttr' "div" divAttr $ do
-    vIdEv <- el "div" $ do
-      renderDynParas rs (snd <$> row1Dyn)
+  (resizeEv, (rowRoot, (inside, outside, vIdEv,_))) <- resizeDetector $ do
+    rec
+      let
+        divAttr = divAttr' <*> fullscreenDyn
 
-    (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
-      text ""
-    elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
-      text ""
-    (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
-      text ""
-      return ()
-    return (inside, outside, vIdEv)
+        wrapDynAttr = ffor fullscreenDyn $ \b -> if b
+          then ("style" =: "position: fixed; top: 0; bottom: 0; left: 0; right: 0;")
+          else Map.empty
+
+        closeEv = tup ^. _2 . _4
+        dispFullScr m = do
+          dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
+
+      fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
+                                             , False <$ closeEv])
+      tup <- elDynAttr "div" wrapDynAttr $ elDynAttr' "div" divAttr $ do
+        closeEv <- do
+          (e,_) <- elClass' "button" "close" $ do
+            dispFullScr (text "Close")
+          return (domEvent Click e)
+
+        vIdEv <- el "div" $ do
+          renderDynParas rs (snd <$> row1Dyn)
+
+        (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+          text ""
+        elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
+          text ""
+        (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+          text ""
+          return ()
+        return (inside, outside, vIdEv, closeEv)
+    return tup
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
@@ -816,10 +825,9 @@ renderVerticalBackwards :: (_)
   => _
   -> _
   -> _
-  -> _
   -> m (Event t (Int,Int))
 
-renderVerticalBackwards rs divAttr fullscreenDyn (textContent, (ep,epOff)) = do
+renderVerticalBackwards rs divAttr (textContent, (ep,epOff)) = do
   (evVisible, action) <- newTriggerEvent
   visDyn <- holdDyn (0,Nothing) evVisible
   display visDyn
