@@ -511,7 +511,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   display prevParaMaybe
 
   --------------------------------
-  (resizeEv, (rowRoot, (inside, outside, vIdEv,_))) <- resizeDetector $ do
+  (resizeEv, (rowRoot, (inside, outside, vIdEv, closeEv))) <- resizeDetector $ do
     rec
       let
         divAttr = divAttr' <*> fullscreenDyn
@@ -576,7 +576,10 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   let
     -- TODO Stop if we hit end of text, close the document
       stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
-      startTicksAgain = leftmost [() <$ updated rs, resizeEv, () <$ newPageEv]
+      startTicksAgain = leftmost [() <$ updated rs
+                                 , resizeEv
+                                 , closeEv, fullScrEv
+                                 , () <$ newPageEv]
       ticksWidget = do
         let init = widgetHold (tickLossy 1 time)
               (return never <$ stopTicks)
@@ -704,11 +707,13 @@ textAdjustF (annText, (Just ShrinkText)) ((li,ui), ps)
           ((0,length lp'), (reverse psRev))
         [] -> ((0,1),[])
 
-      (lpN,lpT) -> ((li, (length lpT)) -- Adjust upper bound
+      (lpN,lpT) -> ((liN, lenT) -- Adjust upper bound
           , (reverse psRev) ++ [(lpN, nlpT)])
-        where halfL = assert (li < (length lpT)) $ li +
-                (floor $ (fromIntegral (length lpT - li)) / 2)
+        where (liN,halfL) = if li < lenT
+                then (,) li (li + (floor $ (fromIntegral (lenT - li)) / 2))
+                else (,) 0 (floor $ (fromIntegral lenT) / 2)
               nlpT = take halfL lpT
+              lenT = length lpT
   where
     (lp:psRev) = reverse ps
 
@@ -722,14 +727,16 @@ textAdjustF (annText, (Just GrowText)) v@((li,ui), ps) =
     newLp = if lenT < lenOT
       -- Add content from this para
       -- Adjust lower bound
-      then (,) (lenT, ui) [(lpN, lpTN)]
+      then (,) (lenT, uiN) [(lpN, lpTN)]
       -- This para content over, add a new Para
       else case newPara of
              Just np -> (,) (0, length np) $ (lpN, lpT): [(lpN + 1, np)] -- not reversed, so add at end
              Nothing -> v -- TODO handle this case
 
     lpTN = take halfL lpOT
-    halfL = lenT + (ceiling $ (fromIntegral (ui - lenT)) / 2)
+    (uiN, halfL) = if ui > lenT
+      then (,) ui (lenT + (ceiling $ (fromIntegral (ui - lenT)) / 2))
+      else (,) lenOT lenOT
 
     lenT = length lpT
     lenOT = length lpOT -- Full para / orig length
@@ -759,9 +766,11 @@ textAdjustRevF annText (Just ShrinkText) ((li,ui),(fp:ps)) = case (fp) of
 
   (fpN,fpT) -> ((li, (length fpT) )
       , (fpN, nfpT) : ps)
-    where halfL = assert (li < (length fpT)) $ li +
-            (floor $ (fromIntegral (length fpT - li)) / 2)
+    where halfL = if li < lenT
+            then li + (floor $ (fromIntegral (lenT - li)) / 2)
+            else (floor $ (fromIntegral lenT) / 2)
           nfpT = reverse $ take halfL $ reverse fpT
+          lenT = length fpT
 
 textAdjustRevF annText (Just GrowText) v@(_,[])
   = error "textAdjustRevF error empty"
