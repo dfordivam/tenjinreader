@@ -23,7 +23,9 @@ import Control.Lens.TH
 import Data.Binary
 import Data.SearchEngine
 import Data.Ix
+import qualified Data.Vector as V
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Text.MeCab
@@ -57,7 +59,15 @@ data VocabData = VocabData
 
 type RadicalDb = Map RadicalId (Set KanjiId)
 
+type SentenceDb = Map SentenceId SentenceData
 
+type NonJpSentenceDb = Map NonJpSentenceId Text
+
+type VocabSentenceDb = Map EntryId (Set SentenceId)
+
+-- Sentence db
+-- Each sentence -> [Vocab] / [Entry]
+-- Entry -> [Sentence]
 instance Binary Kanji
 instance Value Kanji
 instance Binary Rank
@@ -152,6 +162,11 @@ instance Value LanguageSource
 instance Binary SenseField
 instance Value SenseField
 instance Binary (NonEmpty ReadingElement)
+
+instance Binary SentenceId
+instance Binary NonJpSentenceId
+instance Binary SentenceData
+instance Value SentenceId
 makeLenses ''KanjiData
 makeLenses ''VocabData
 --
@@ -429,3 +444,84 @@ vocabSearchRankParamsNG =
     featWeights VocabInfo = 1
     featFun VocabPriority = LogarithmicFunction 1
     featFun VocabInfo = LogarithmicFunction 1
+
+getSentenceDbs parseF sFp linkFp = do
+  let binFile = "sentencedb.bin"
+  ex <- doesFileExist binFile
+  if ex
+    then do
+      bs <- Data.ByteString.Lazy.readFile binFile
+      return $ Data.Binary.decode bs
+    else do
+      ret <- getSentenceDbsInt parseF sFp linkFp
+      Data.ByteString.Lazy.writeFile binFile (Data.Binary.encode ret)
+      return ret
+
+getSentenceDbsInt :: (Text -> IO AnnotatedDocument)
+  -> Text
+  -> Text
+  -> IO (SentenceDb, NonJpSentenceDb, VocabSentenceDb)
+getSentenceDbsInt parseF sFp linkFp = do
+  sT <- T.readFile $ T.unpack sFp
+  linkT <- T.readFile $ T.unpack linkFp
+
+  let
+    ffor = flip fmap
+    treadMaybe = readMaybe . T.unpack
+    ss :: [(Text,Text,Text)]
+    ss = ffor (T.lines sT) $ \t -> case T.splitOn "\t" t of
+      (t1:t2:t3:_) -> (t1,t2,t3)
+      _ -> error "Error parsing sentence.csv"
+
+    lks :: [(Int64, Int64)]
+    lks = ffor (T.lines linkT) $ \t -> case T.splitOn "\t" t of
+      (t1:t2:_) -> case (treadMaybe t1, treadMaybe t2) of
+        (Just t1, Just t2) -> (t1,t2)
+        _ -> error "Error parsing links.csv"
+      _ -> error "Error parsing links.csv"
+
+  ss2' <- forM ss $ \(i,l,s) -> case (l, treadMaybe i) of
+      ("jpn", Just i) -> do
+        a <- parseF s
+        return $ Just $ Right (SentenceId i, a V.! 0)
+      ("eng", Just i) -> return $ Just $ Left (NonJpSentenceId i, s)
+      _ -> return $ Nothing
+
+  let
+    ss2 = catMaybes ss2'
+    lkMapInit :: Map SentenceId (Set Int64) -- empty sets, only create for jp sentences
+    lkMapInit = Map.fromList $ [(fst x, Set.empty) | Right x <- ss2]
+
+    lkMap :: Map SentenceId (Set Int64)
+    lkMap = foldl' (\m (k,v) -> Map.adjust (Set.insert v) (SentenceId k) m)
+      lkMapInit lks
+
+    combinedMap :: Map Int64 (Either () ())
+    combinedMap = Map.fromList $ ffor ss2 $ either
+      (\(i,v) -> (unNonJpSentenceId i, Left ()))
+      (\(i,v) -> (unSentenceId i, Right ()))
+
+    makeSd (i,v) = SentenceData i v
+      [SentenceId x | (x, Right _) <- lk]
+      [NonJpSentenceId x | (x, Left _) <- lk]
+      where
+        lk = maybe [] (catMaybes .
+                       (map (\x -> (,) <$> pure x <*> Map.lookup x combinedMap))
+                       . Set.toList)
+          $ Map.lookup i lkMap
+
+    nonJpDbAll = Map.fromList $ [x | Left x <- ss2]
+    allNonJpIds = concat $ map _sentenceLinkedEng $ Map.elems sDb
+    sDb = Map.fromList [((fst x), makeSd x) | Right x <- ss2]
+    vocabSentDb = Map.foldl' getVocabSentenceDb Map.empty sDb
+    nonJpDb = Map.fromSet getItm (Set.fromList allNonJpIds)
+    getItm k = maybe "Not-Found" identity (Map.lookup k nonJpDbAll)
+  return (sDb, nonJpDb, vocabSentDb)
+
+getVocabSentenceDb :: VocabSentenceDb -> SentenceData -> VocabSentenceDb
+getVocabSentenceDb m s = foldl' (flip (Map.alter f)) m es
+  where
+    es = s ^.. sentenceContents . traverse . _Right . _2 . traverse
+    sId = s ^. sentenceId
+    f Nothing = Just $ Set.singleton sId
+    f (Just s) = Just $ Set.insert sId s

@@ -70,6 +70,7 @@ type AppRequest
   -- :<|> DeleteT ReaderDocument
 
   :<|> GetVocabDetails
+  :<|> GetVocabSentences
 
 ------------------------------------------------------------
 -- class CRUD t where
@@ -348,6 +349,14 @@ data GetVocabDetails = GetVocabDetails [VocabId]
 instance WebSocketMessage AppRequest GetVocabDetails where
   type ResponseT AppRequest GetVocabDetails =
     [(Entry, Maybe SrsEntryId)]
+
+----------------------------------------------------------------
+data GetVocabSentences = GetVocabSentences VocabId
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest GetVocabSentences where
+  type ResponseT AppRequest GetVocabSentences =
+    ([SentenceData], [(NonJpSentenceId,Text)])
 
 ----------------------------------------------------------------
 makeLenses ''ReviewItem

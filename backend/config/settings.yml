@@ -32,7 +32,9 @@ copyright: Insert copyright statement here
 #analytics: UA-YOURCODE
 
 mecab-files-dir: "/home/divam/nobup/mecab-tools/with_jmdict"
-srs-database-dir: "srsdb"
+srs-database-dir: "/home/divam/nobup/houhou-devel-data/srsdb"
+sentences-csv: "/home/divam/nobup/tatoeba/sentences.csv"
+links-csv: "/home/divam/nobup/tatoeba/links.csv"
 
 github-client-id: "_env:GITHUB_CLIENT_ID:invalidValue" 
 github-client-secret: "_env:GITHUB_CLIENT_SECRET:invalidValue"  

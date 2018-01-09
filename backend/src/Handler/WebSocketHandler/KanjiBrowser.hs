@@ -376,3 +376,23 @@ getVocabDetails (GetVocabDetails eIds) = do
           return $ (,) <$> e <*> (pure srsId)
     mapM findAll (_vocabSrsMap <$> rd)
   return $ maybe [] catMaybes es
+
+
+getVocabSentences :: GetVocabSentences
+  -> WsHandlerM ([SentenceData], [(NonJpSentenceId,Text)])
+getVocabSentences (GetVocabSentences eId) = do
+  vocabSentenceDb <- lift $ asks appVocabSentenceDb
+  nonJpSentDb <- lift $ asks appNonJpSentenceDb
+  sentenceDb <- lift $ asks appSentenceDb
+
+  let
+    ss = maybe [] (catMaybes .
+                   map (\sId -> Map.lookup sId sentenceDb) .
+                   Set.toList)
+      $ Map.lookup eId vocabSentenceDb
+
+    njps = catMaybes
+      $ map (\i -> (,) <$> pure i <*> Map.lookup i nonJpSentDb)
+      $ ordNub $ ss ^.. traverse . sentenceLinkedEng . traverse
+
+  return (ss,njps)

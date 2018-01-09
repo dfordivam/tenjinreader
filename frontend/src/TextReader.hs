@@ -167,7 +167,7 @@ quickAnalyzeTop = do
   v <- divClass "col-md-6" $ do
     rsDyn <- readerSettingsControls def
     let renderF = renderOnePara (constDyn [])
-          (_rubySize <$> rsDyn) 0
+          (_rubySize <$> rsDyn)
     divWrap rsDyn (constDyn False) $ do
       widgetHold (return [])
         ((\r -> mapM renderF $ map snd r) <$> resp)

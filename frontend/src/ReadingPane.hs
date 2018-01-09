@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -45,11 +46,11 @@ checkVerticalOverflow (ie,oe) r action = do
   ix <- DOM.getX =<< DOM.getBoundingClientRect ie
   ox <- DOM.getX =<< DOM.getBoundingClientRect oe
   liftIO $ putStrLn $ (show (rx,ix,ox) :: Text)
-  liftIO $ action $ if (rx > ox && rx < ix) -- Outside
-    then (0, Nothing)
-    else if rx > ix
-            then (0, Just ShrinkText)
-            else (0, Just GrowText)
+  liftIO $ action $ if
+    | (rx > ox && rx < ix) -> (0, Nothing) -- Outside
+    | ix < rx -> (0, Just ShrinkText)
+    | ox > rx -> (0, Just GrowText)
+    | otherwise -> (0, Nothing) -- hidden
 
 setupInterObs :: (DOM.MonadDOM m, DOM.IsElement e)
   => (e, e)
@@ -156,7 +157,7 @@ readingPaneView (ReaderDocument _ title annText _) = do
       rec
         (resEv,v) <- resizeDetector $ do
           el "h3" $ text title
-          V.imapM (renderOnePara vIdDyn (value rubySizeDD)) annText
+          V.mapM (renderOnePara vIdDyn (value rubySizeDD)) annText
       return v
 
   divClass "" $ do
@@ -196,7 +197,7 @@ renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr paraNum =
 
     renderPara paraCount para paraNum resizeEv = do
       (e,v1) <- el' "div" $
-        renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
+        renderOnePara vIdDyn (_rubySize <$> rs) para
 
       ev <- delay 0.2 =<< getPostBuild
       overFlowEv <- holdUniqDyn
@@ -384,7 +385,7 @@ getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr endParaEv 
             (prevParaWidget <$> updated overFlowEv)
 
       el "div" $
-        renderOnePara vIdDyn (_rubySize <$> rs) paraNum para
+        renderOnePara vIdDyn (_rubySize <$> rs) para
 
       return $ join v2
 
@@ -623,9 +624,13 @@ fetchMoreContentF docId annText firstPara newPageEv = do
     textContent <- foldDyn moreContentAccF annText ((\(_,_,_,c) -> c) <$>
                                     (fmapMaybe identity moreContentEv))
 
+  text "("
   display lastAvailablePara
   text ", "
+  display firstAvailablePara
+  text ", "
   display (length <$> textContent)
+  text ")"
 
   return textContent
 
@@ -804,7 +809,7 @@ renderDynParas :: (_)
 renderDynParas rs dynParas = do
   let dynMap = Map.fromList <$> dynParas
       vIdDyn = constDyn []
-      renderF = renderOnePara vIdDyn (_rubySize <$> rs) 0
+      renderF = renderOnePara vIdDyn (_rubySize <$> rs)
       renderEachPara dt = do
         ev <- dyn (renderF <$> dt)
         switchPromptly never ev
@@ -813,21 +818,6 @@ renderDynParas rs dynParas = do
   v <- list dynMap renderEachPara
   let f = switchPromptlyDyn . (fmap (leftmost . Map.elems))
   return (f v)
-
-widgetHoldWithRemoveAfterEvent :: (_)
-  => Event t (m (Event t a))
-  -> m (Event t a)
-widgetHoldWithRemoveAfterEvent w = do
-  let
-    w1 w = do
-      rec
-        let ev = switchPromptlyDyn evDyn
-        evDyn <- widgetHold (w)
-          (return never <$ ev)
-      return ev
-  evDyn <- widgetHold (return never)
-    (w1 <$> w)
-  return $ switchPromptlyDyn evDyn
 
 
 renderVerticalBackwards :: (_)
@@ -896,31 +886,6 @@ renderVerticalBackwards rs divAttr (textContent, (ep,epOff)) = do
   return $ getFPOffset . snd <$> tagDyn row1Dyn stopTicks
 
 ----------------------------------------------------------------------------------
-vocabRuby :: (_)
-  => Dynamic t Bool
-  -> Dynamic t Int
-  -> Dynamic t Bool
-  -> Vocab -> m (_)
-vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
-  let
-    elA t = do
-      (e,_) <- el' t $ mapM f ks
-      return (domEvent Click e, domEvent Mouseenter e, domEvent Mouseleave e)
-    elType = ffor markDyn $ \b -> if b then "mark" else "span"
-    rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
-    g r True = r
-    g _ _ = ""
-    f (Kana k) = text k
-    f (KanjiWithReading (Kanji k) r)
-      = elDynAttr "ruby" rubyAttr $ do
-          text k
-          el "rt" $ dynText (g r <$> visDyn)
-  v <- dyn (elA <$> elType)
-  e1 <- switchPromptly never (v & mapped %~ view _1)
-  e2 <- switchPromptly never (v & mapped %~ view _2)
-  e3 <- switchPromptly never (v & mapped %~ view _3)
-  return (e1,e2,e3)
-
 lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
   <$> ([100,150..400]  :: [Int])
 
@@ -934,213 +899,3 @@ writingModeOptions = Map.fromList $
 numOfLinesOptions = Map.fromList $ (\x -> (x, (tshow x) <> "px"))
   <$> ([100,150..2000]  :: [Int])
 
-renderOnePara :: (_)
-  => Dynamic t [VocabId] -- Used for mark
-  -> Dynamic t Int
-  -> Int
-  -> [Either Text (Vocab, [VocabId], Bool)]
-  -> m (Event t ([VocabId], Text))
-renderOnePara vIdDyn rubySize ind annTextPara = do
-  let showAllFurigana = constDyn True
-  el "p" $ do
-    let f (Left t) = never <$ text t
-        f (Right (v, vId, vis)) = do
-          rec
-            let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
-                markDyn = (any (\eId -> (elem eId vId))) <$> vIdDyn
-            visDyn <- holdDyn vis evVis
-            (ek, eme, eml) <-
-              vocabRuby markDyn rubySize visDyn v
-          return $ (vId, vocabToText v) <$ ek
-        -- onlyKana (Vocab ks) = (flip all) ks $ \case
-        --   (Kana _) -> True
-        --   _ -> False
-        -- addSpace [] = []
-        -- addSpace (l@(Left _):r@(Right _):rs) =
-        --   l : (Left "　") : (addSpace (r:rs))
-        -- addSpace (r1@(Right (v1,_,_)):r2@(Right _):rs)
-        --   | onlyKana v1 = r1 : (Left "　") : (addSpace (r2:rs))
-        --   | otherwise = r1:(addSpace (r2:rs))
-        -- addSpace (r:rs) = r : (addSpace rs)
-
-    leftmost <$> mapM f (annTextPara)
-
-showVocabDetailsWidget :: (AppMonad t m)
-  => Event t (Text, [(Entry, Maybe SrsEntryId)])
-  -> AppMonadT t m ()
-showVocabDetailsWidget detailsEv = do
-  let
-
-    attrBack = ("class" =: "modal")
-          <> ("style" =: "display: block;\
-              \opacity: 0%; z-index: 1050;")
-    attrFront = ("class" =: "nav navbar-fixed-bottom")
-          <> ("style" =: "z-index: 1060;\
-                         \padding: 10px;")
-
-    wrapper :: (_) => m a -> m (Event t ())
-    wrapper m = do
-      (e1,_) <- elAttr' "div" attrBack $ return ()
-      elAttr "div" attrFront $
-        divClass "container-fluid" $
-          elAttr "div" (("class" =: "panel panel-default")
-            <> ("style" =: "max-height: 200px;\
-                           \overflow-y: auto;\
-                           \padding: 15px;")) $ do
-            (e,_) <- elClass' "button" "close" $ text "Close"
-            m
-            return $ leftmost
-              [domEvent Click e
-              , domEvent Click e1]
-
-    wd :: AppMonad t m
-      => Maybe _
-      -> AppMonadT t m (Event t ())
-    wd (Just (s,es)) = wrapper
-      (mapM_ (showEntry s) (orderEntries (fst) es))
-    wd Nothing = return never
-
-  rec
-    let ev = leftmost [Just <$> detailsEv
-             , Nothing <$ (switchPromptlyDyn closeEv)]
-    closeEv <- widgetHold (return never)
-      (wd <$> ev)
-
-  return ()
-
-showEntry surface (e, sId) = do
-  divClass "" $ do
-    elClass "span" "" $ do
-      entryKanjiAndReading surface e
-    addEditSrsEntryWidget (Right $ e ^. entryUniqueId) (Just surface) sId
-
-  let
-    showGlosses ms = mapM_ text $ intersperse ", " $
-      map (\m -> T.unwords $ T.words m & _head  %~ capitalize)
-      ms
-    showInfo [] = return ()
-    showInfo is = do
-      mapM_ text $ ["("] ++ (intersperse ", " is) ++ [")"]
-    showSense s = divClass "" $ do
-      showPos $ s ^.. sensePartOfSpeech . traverse
-      showInfo $ s ^.. senseInfo . traverse
-      showGlosses $ take 5 $ s ^.. senseGlosses . traverse . glossDefinition
-
-  divClass "" $ do
-    mapM showSense $ take 3 $ e ^.. entrySenses . traverse
-
-capitalize t
-  | T.head t == ('-') = t
-  | elem t ignoreList = t
-  | otherwise = T.toTitle t
-  where ignoreList = ["to"]
-
-showPos ps = do
-  elClass "span" "small" $ do
-    mapM_ text $ p $ (intersperse ", ") psDesc
-  where
-    p [] = []
-    p c = ["("] ++ c ++ [") "]
-    psDesc = catMaybes $ map f ps
-    f PosNoun = Just $ "Noun"
-    f PosPronoun = Just $ "Pronoun"
-    f (PosVerb _ _) = Just $ "Verb"
-    f (PosAdverb _) = Just $ "Adv."
-    f (PosAdjective _) = Just $ "Adj."
-    f PosSuffix = Just $ "Suffix"
-    f PosPrefix = Just $ "Prefix"
-    f _ = Nothing
-
-entryKanjiAndReading :: (_) => Text -> Entry -> m ()
-entryKanjiAndReading surface e = do
-  sequenceA_ (intersperse sep els)
-  where
-  els = map (renderElement surface (restrictedKanjiPhrases e)
-    (e ^. entryReadingElements . to (NE.head) . readingPhrase))
-    (orderElements e)
-  sep = text ", "
-
-restrictedKanjiPhrases :: Entry
-  -> Map KanjiPhrase ReadingElement
-restrictedKanjiPhrases e = Map.fromList $ concat $
-  e ^.. entryReadingElements . traverse
-    . to (\re -> re ^.. readingRestrictKanji . traverse
-           . to (\kp -> (kp, re)))
-
--- Priority of entries
--- Entry with priority elements
--- Entry normal
--- Entry with Info elements
-orderEntries :: (a -> Entry) -> [a] -> [a]
-orderEntries g es = sortBy (comparing (f . g)) es
-  where
-    f e
-      | any (not . null) $
-        (ke ^.. traverse . kanjiPriority) ++
-        (re ^.. traverse . readingPriority)
-        = 1
-      | any (not . null)
-        (ke ^.. traverse . kanjiInfo) ||
-        any (not . null)
-        (re ^.. traverse . readingInfo)
-        = 3
-      | otherwise = 2
-      where
-        ke = e ^. entryKanjiElements
-        re = e ^. entryReadingElements
-
--- Priority of elements
--- Kanji with priority
--- Reading with priority
--- Kanji with reading
--- Kanji With restricted reading
--- Reading
--- Kanji with Info
--- Reading with Info
-orderElements
-  :: Entry
-  -> [(Either KanjiElement ReadingElement)]
-orderElements e = sortBy (comparing f)
-  ((e ^.. entryKanjiElements . traverse . to (Left)) ++
-  readingWithoutRes)
-
-  where
-    f (Left ke)
-      | (ke ^. kanjiPriority . to (not . null)) = 1
-      | (ke ^. kanjiInfo . to (not . null)) = 6
-      | Map.member (ke ^. kanjiPhrase)
-        (restrictedKanjiPhrases e) = 4
-      | otherwise = 3
-
-    f (Right re)
-      | (re ^. readingPriority . to (not . null)) = 2
-      | (re ^. readingInfo . to (not . null)) = 7
-      | otherwise = 5
-
-    readingWithoutRes = map Right $
-      filter (view $ readingRestrictKanji . to (null)) $
-      (e ^.. entryReadingElements . traverse)
-
-renderElement :: (_)
-  => Text
-  -> Map KanjiPhrase ReadingElement
-  -> ReadingPhrase
-  -> (Either KanjiElement ReadingElement)
-  -> m ()
-renderElement surface restMap defR (Left ke) = case v of
-  (Right v) -> dispInSpan (vocabToText v) $ displayVocabT v
-  (Left _) ->
-    (\t -> dispInSpan t $ text t) $ unKanjiPhrase $ ke ^. kanjiPhrase
-  where
-    dispInSpan t = el (spanAttr t)
-    spanAttr t = if (T.isPrefixOf surface t) then "strong" else "span"
-    kp = (ke ^. kanjiPhrase)
-    v = case Map.lookup kp restMap of
-          (Just r) -> makeFurigana kp (r ^. readingPhrase)
-          Nothing -> makeFurigana kp defR
-
-renderElement surface _ _ (Right re) =
-  (\t -> dispInSpan t $ text t) $ unReadingPhrase $ re ^. readingPhrase
-  where
-    dispInSpan t = el (spanAttr t)
-    spanAttr t = if (T.isPrefixOf surface t) then "strong" else "span"

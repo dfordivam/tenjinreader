@@ -18,7 +18,7 @@ import Common as X
 import Radicals as X
 
 import Protolude as X hiding (link, (&), list, Alt, to)
-import Control.Lens as X ((.~), (^.), (?~), (^?), (%~), _1, _2, _3, sets
+import Control.Lens as X ((.~), (^.), (?~), (^?), (%~), _1, _2, _3, _4, sets
   , _head, _Just, view, over, views, preview, (^..), to, mapped, forMOf_)
 import Control.Monad.Fix as X
 
@@ -290,3 +290,283 @@ showWSProcessing evStart evFinish = do
           (return () <$ evFinish)
   void $ widgetHold (return ())
     (waitForStart <$ evStart)
+
+openSentenceWidget :: AppMonad t m
+  => VocabId
+  -> AppMonadT t m ()
+openSentenceWidget i = do
+  open <- btn "" "Sentences"
+  resp <- getWebSocketResponse $ GetVocabSentences i <$ open
+  showWSProcessing open resp
+
+  widgetHoldWithRemoveAfterEvent (sentenceWidgetView i <$> resp)
+  return ()
+
+sentenceWidgetView :: AppMonad t m
+  => VocabId
+  -> ([SentenceData], [(NonJpSentenceId,Text)])
+  -> AppMonadT t m (Event t ())
+sentenceWidgetView vId (ss, njps) = modalDiv $ do
+  closeEvTop <- divClass "modal-header" $ el "h3" $ do
+    (e,_) <- elClass' "button" "close" $ text "Close"
+    text $ "Sentence "
+    return (domEvent Click e)
+
+  let bodyAttr = ("class" =: "modal-body")
+          <> ("style" =: "height: 400px;\
+              \overflow-y: auto")
+
+  vIdEvs <- elAttr "div" bodyAttr $ do
+    forM ss $ \s -> do
+      renderOnePara (constDyn [vId]) (constDyn 100) (s ^. sentenceContents)
+
+  let vIdEv = leftmost vIdEvs
+
+  divClass "" $ do
+    detailsEv <- getWebSocketResponse $ GetVocabDetails
+      <$> (fmap fst vIdEv)
+    surfDyn <- holdDyn "" (fmap snd vIdEv)
+    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
+
+  return closeEvTop
+
+vocabRuby :: (_)
+  => Dynamic t Bool
+  -> Dynamic t Int
+  -> Dynamic t Bool
+  -> Vocab -> m (_)
+vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
+  let
+    elA t = do
+      (e,_) <- el' t $ mapM f ks
+      return (domEvent Click e, domEvent Mouseenter e, domEvent Mouseleave e)
+    elType = ffor markDyn $ \b -> if b then "mark" else "span"
+    rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
+    g r True = r
+    g _ _ = ""
+    f (Kana k) = text k
+    f (KanjiWithReading (Kanji k) r)
+      = elDynAttr "ruby" rubyAttr $ do
+          text k
+          el "rt" $ dynText (g r <$> visDyn)
+  v <- dyn (elA <$> elType)
+  e1 <- switchPromptly never (v & mapped %~ view _1)
+  e2 <- switchPromptly never (v & mapped %~ view _2)
+  e3 <- switchPromptly never (v & mapped %~ view _3)
+  return (e1,e2,e3)
+
+renderOnePara :: (_)
+  => Dynamic t [VocabId] -- Used for mark
+  -> Dynamic t Int
+  -> [Either Text (Vocab, [VocabId], Bool)]
+  -> m (Event t ([VocabId], Text))
+renderOnePara vIdDyn rubySize annTextPara = do
+  let showAllFurigana = constDyn True
+  el "p" $ do
+    let f (Left t) = never <$ text t
+        f (Right (v, vId, vis)) = do
+          rec
+            let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
+                markDyn = (any (\eId -> (elem eId vId))) <$> vIdDyn
+            visDyn <- holdDyn vis evVis
+            (ek, eme, eml) <-
+              vocabRuby markDyn rubySize visDyn v
+          return $ (vId, vocabToText v) <$ ek
+
+    leftmost <$> mapM f (annTextPara)
+
+showVocabDetailsWidget :: (AppMonad t m)
+  => Event t (Text, [(Entry, Maybe SrsEntryId)])
+  -> AppMonadT t m ()
+showVocabDetailsWidget detailsEv = do
+  let
+
+    attrBack = ("class" =: "modal")
+          <> ("style" =: "display: block;\
+              \opacity: 0%; z-index: 1050;")
+    attrFront = ("class" =: "nav navbar-fixed-bottom")
+          <> ("style" =: "z-index: 1060;\
+                         \padding: 10px;")
+
+    wrapper :: (_) => m a -> m (Event t ())
+    wrapper m = do
+      (e1,_) <- elAttr' "div" attrBack $ return ()
+      elAttr "div" attrFront $
+        divClass "container-fluid" $
+          elAttr "div" (("class" =: "panel panel-default")
+            <> ("style" =: "max-height: 200px;\
+                           \overflow-y: auto;\
+                           \padding: 15px;")) $ do
+            (e,_) <- elClass' "button" "close" $ text "Close"
+            m
+            return $ leftmost
+              [domEvent Click e
+              , domEvent Click e1]
+
+    wd :: AppMonad t m
+      => Maybe _
+      -> AppMonadT t m (Event t ())
+    wd (Just (s,es)) = wrapper
+      (mapM_ (showEntry s) (orderEntries (fst) es))
+    wd Nothing = return never
+
+  rec
+    let ev = leftmost [Just <$> detailsEv
+             , Nothing <$ (switchPromptlyDyn closeEv)]
+    closeEv <- widgetHold (return never)
+      (wd <$> ev)
+
+  return ()
+
+showEntry surface (e, sId) = do
+  divClass "" $ do
+    elClass "span" "" $ do
+      entryKanjiAndReading surface e
+    addEditSrsEntryWidget (Right $ e ^. entryUniqueId) (Just surface) sId
+    openSentenceWidget (e ^. entryUniqueId)
+
+  let
+    showGlosses ms = mapM_ text $ intersperse ", " $
+      map (\m -> T.unwords $ T.words m & _head  %~ capitalize)
+      ms
+    showInfo [] = return ()
+    showInfo is = do
+      mapM_ text $ ["("] ++ (intersperse ", " is) ++ [")"]
+    showSense s = divClass "" $ do
+      showPos $ s ^.. sensePartOfSpeech . traverse
+      showInfo $ s ^.. senseInfo . traverse
+      showGlosses $ take 5 $ s ^.. senseGlosses . traverse . glossDefinition
+
+  divClass "" $ do
+    mapM showSense $ take 3 $ e ^.. entrySenses . traverse
+
+capitalize t
+  | T.head t == ('-') = t
+  | elem t ignoreList = t
+  | otherwise = T.toTitle t
+  where ignoreList = ["to"]
+
+showPos ps = do
+  elClass "span" "small" $ do
+    mapM_ text $ p $ (intersperse ", ") psDesc
+  where
+    p [] = []
+    p c = ["("] ++ c ++ [") "]
+    psDesc = catMaybes $ map f ps
+    f PosNoun = Just $ "Noun"
+    f PosPronoun = Just $ "Pronoun"
+    f (PosVerb _ _) = Just $ "Verb"
+    f (PosAdverb _) = Just $ "Adv."
+    f (PosAdjective _) = Just $ "Adj."
+    f PosSuffix = Just $ "Suffix"
+    f PosPrefix = Just $ "Prefix"
+    f _ = Nothing
+
+entryKanjiAndReading :: (_) => Text -> Entry -> m ()
+entryKanjiAndReading surface e = do
+  sequenceA_ (intersperse sep els)
+  where
+  els = map (renderElement surface (restrictedKanjiPhrases e)
+    (e ^. entryReadingElements . to (NE.head) . readingPhrase))
+    (orderElements e)
+  sep = text ", "
+
+restrictedKanjiPhrases :: Entry
+  -> Map KanjiPhrase ReadingElement
+restrictedKanjiPhrases e = Map.fromList $ concat $
+  e ^.. entryReadingElements . traverse
+    . to (\re -> re ^.. readingRestrictKanji . traverse
+           . to (\kp -> (kp, re)))
+
+-- Priority of entries
+-- Entry with priority elements
+-- Entry normal
+-- Entry with Info elements
+orderEntries :: (a -> Entry) -> [a] -> [a]
+orderEntries g es = sortBy (comparing (f . g)) es
+  where
+    f e
+      | any (not . null) $
+        (ke ^.. traverse . kanjiPriority) ++
+        (re ^.. traverse . readingPriority)
+        = 1
+      | any (not . null)
+        (ke ^.. traverse . kanjiInfo) ||
+        any (not . null)
+        (re ^.. traverse . readingInfo)
+        = 3
+      | otherwise = 2
+      where
+        ke = e ^. entryKanjiElements
+        re = e ^. entryReadingElements
+
+-- Priority of elements
+-- Kanji with priority
+-- Reading with priority
+-- Kanji with reading
+-- Kanji With restricted reading
+-- Reading
+-- Kanji with Info
+-- Reading with Info
+orderElements
+  :: Entry
+  -> [(Either KanjiElement ReadingElement)]
+orderElements e = sortBy (comparing f)
+  ((e ^.. entryKanjiElements . traverse . to (Left)) ++
+  readingWithoutRes)
+
+  where
+    f (Left ke)
+      | (ke ^. kanjiPriority . to (not . null)) = 1
+      | (ke ^. kanjiInfo . to (not . null)) = 6
+      | Map.member (ke ^. kanjiPhrase)
+        (restrictedKanjiPhrases e) = 4
+      | otherwise = 3
+
+    f (Right re)
+      | (re ^. readingPriority . to (not . null)) = 2
+      | (re ^. readingInfo . to (not . null)) = 7
+      | otherwise = 5
+
+    readingWithoutRes = map Right $
+      filter (view $ readingRestrictKanji . to (null)) $
+      (e ^.. entryReadingElements . traverse)
+
+renderElement :: (_)
+  => Text
+  -> Map KanjiPhrase ReadingElement
+  -> ReadingPhrase
+  -> (Either KanjiElement ReadingElement)
+  -> m ()
+renderElement surface restMap defR (Left ke) = case v of
+  (Right v) -> dispInSpan (vocabToText v) $ displayVocabT v
+  (Left _) ->
+    (\t -> dispInSpan t $ text t) $ unKanjiPhrase $ ke ^. kanjiPhrase
+  where
+    dispInSpan t = el (spanAttr t)
+    spanAttr t = if (T.isPrefixOf surface t) then "strong" else "span"
+    kp = (ke ^. kanjiPhrase)
+    v = case Map.lookup kp restMap of
+          (Just r) -> makeFurigana kp (r ^. readingPhrase)
+          Nothing -> makeFurigana kp defR
+
+renderElement surface _ _ (Right re) =
+  (\t -> dispInSpan t $ text t) $ unReadingPhrase $ re ^. readingPhrase
+  where
+    dispInSpan t = el (spanAttr t)
+    spanAttr t = if (T.isPrefixOf surface t) then "strong" else "span"
+
+widgetHoldWithRemoveAfterEvent :: (_)
+  => Event t (m (Event t a))
+  -> m (Event t a)
+widgetHoldWithRemoveAfterEvent w = do
+  let
+    w1 w = do
+      rec
+        let ev = switchPromptlyDyn evDyn
+        evDyn <- widgetHold (w)
+          (return never <$ ev)
+      return ev
+  evDyn <- widgetHold (return never)
+    (w1 <$> w)
+  return $ switchPromptlyDyn evDyn

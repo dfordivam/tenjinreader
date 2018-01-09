@@ -284,6 +284,8 @@ vocabListWindow req listEv = do
       divClass "col-md-2" $
         addEditSrsEntryWidget (Right $ v ^. vocabId)
           Nothing s
+      divClass "col-md-2" $
+        openSentenceWidget (v ^. vocabId)
 
     liWrap i = do
       dyn $ listItem <$> i

@@ -80,6 +80,12 @@ type VocabId = EntryId
 newtype SrsEntryId = SrsEntryId { unSrsEntryId :: Int64 }
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
+newtype SentenceId = SentenceId { unSentenceId :: Int64 }
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
+
+newtype NonJpSentenceId = NonJpSentenceId { unNonJpSentenceId :: Int64 }
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
+
 newtype SrsLevel = SrsLevel { unSrsLevel :: Int }
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
@@ -127,6 +133,14 @@ data VocabDetails = VocabDetails
   , _vocabIsCommon       :: Bool
   , _vocabFreqRank       :: Maybe Rank
   , _vocabMeanings       :: [Meaning]
+  }
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+data SentenceData = SentenceData
+  { _sentenceId       :: SentenceId
+  , _sentenceContents :: AnnotatedPara
+  , _sentenceLinkedJp :: [SentenceId]
+  , _sentenceLinkedEng :: [NonJpSentenceId]
   }
   deriving (Generic, Show, ToJSON, FromJSON)
 
@@ -318,6 +332,7 @@ makeLenses ''SrsEntryStats
 makeLenses ''SrsEntry
 makeLenses ''ReaderSettingsTree
 
+makeLenses ''SentenceData
 
 reviewStateL :: (Profunctor p, Contravariant f)
   => ReviewType

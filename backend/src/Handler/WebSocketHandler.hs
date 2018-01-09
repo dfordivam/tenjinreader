@@ -82,6 +82,7 @@ wsHandler = HandlerWrapper $
   :<&> h saveReadingProgress
 
   :<&> h getVocabDetails
+  :<&> h getVocabSentences
 
   where
   h :: (WebSocketMessage Message.AppRequest a, Monad m)

@@ -43,6 +43,7 @@ import Handler.Home
 import Handler.Comment
 import Handler.Profile
 import Handler.WebSocketHandler
+import Mecab
 
 import Text.MeCab (new)
 import SrsDB
@@ -76,6 +77,10 @@ makeFoundation appSettings = do
     let appKanjiSearchEng = getKanjiSE appKanjiDb
         appVocabSearchEng = getVocabSE appVocabDb
         appVocabSearchEngNoGloss = getVocabSENG appVocabDb
+
+    (appSentenceDb, appNonJpSentenceDb, appVocabSentenceDb) <-
+      getSentenceDbs (parseAndSearch appVocabDb appVocabSearchEngNoGloss appMecabPtr)
+        (appSentenceCsvPath appSettings) (appLinksCsvPath appSettings)
 
     appConcurrentDb <- openSrsDB (unpack $ appSrsDatabaseDir appSettings)
 

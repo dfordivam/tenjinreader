@@ -451,7 +451,7 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
       let colour c = ("style" =: ("color: " <> c <>";" ))
           labelText t = elClass "span" "small text-muted" $ text t
       labelText "Pending "
-      elAttr "span" (colour "black") $
+      el "span" $
         dynText $ (tshow . _srsReviewStats_pendingCount) <$> statsDyn
       text "\t|\t"
       labelText " Correct "
@@ -511,6 +511,7 @@ inputFieldWidget doRecog (ri@(ReviewItem i k m r), rt) = do
             & textInputConfig_attributes
             .~ constDyn (("style" =: style)
                         <> ("id" =: tiId)
+                        <> ("class" =: "form-control")
                         <> ("placeholder" =: ph)
                         <> ("autocapitalize" =: "none")
                         <> ("autocorrect" =: "none")
@@ -690,7 +691,7 @@ speechRecogWidget doRecog (ri@(ReviewItem i k m r),rt) = do
     evEv <- dyn $ (btn "btn-primary")
       <$> (btnText <$> stDyn)
     evClick <- switchPromptly never evEv
-    ev <- delay 1 ev'
+    ev <- delay 0.1 ev'
 
     recRes1 <- lift $ doRecog stRec
     recRes2 <- checkSpeechRecogResult (ri,rt) (traceEvent "Recog ->" recRes1)

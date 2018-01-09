@@ -64,6 +64,8 @@ data AppSettings = AppSettings
 
     , appMecabFilesDir          :: Text
     , appSrsDatabaseDir         :: Text
+    , appSentenceCsvPath        :: Text
+    , appLinksCsvPath           :: Text
     , appGithubClientId         :: Text
     , appGithubClientSecret     :: Text
     }
@@ -96,6 +98,8 @@ instance FromJSON AppSettings where
 
         appMecabFilesDir          <- o .:  "mecab-files-dir"
         appSrsDatabaseDir         <- o .:  "srs-database-dir"
+        appSentenceCsvPath        <- o .:  "sentences-csv"
+        appLinksCsvPath           <- o .:  "links-csv"
         appGithubClientId         <- o .:  "github-client-id"
         appGithubClientSecret     <- o .:  "github-client-secret"
         return AppSettings {..}
