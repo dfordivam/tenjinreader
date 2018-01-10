@@ -474,7 +474,7 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
          <> ("style" =: "height: 15em;\
              \display: table;")
       kanjiCellAttr = ("style" =: "vertical-align: middle;\
-             \display: table-cell;")
+             \max-width: 25em; display: table-cell;")
 
   elAttr "div" kanjiRowAttr $ elAttr "div" kanjiCellAttr $ do
     let
@@ -540,35 +540,44 @@ inputFieldWidget doRecog (ri@(ReviewItem i k m r), rt) = do
       reviewInputFieldHandler inpField rt ri
 
   -- Need dalay, otherwise focus doesn't work
-  ev <- delay 0.1 =<< getPostBuild
+  evPB <- delay 0.1 =<< getPostBuild
 
   let focusAndBind e = do
         DOM.focus e
         let ans = getAnswer ri rt
         when (isRight ans) bindWanaKana
 
-  widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ ev)
+  widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ evPB)
 
   let resultDisAttr = ("class" =: "")
           <> ("style" =: "height: 6em;\
               \overflow-y: auto")
-  elAttr "div" resultDisAttr $
-    widgetHold (return ()) (showResult <$> resEv)
+  rec
+    elAttr "div" resultDisAttr $
+      widgetHold (return ()) (showResult <$> (leftmost [resEv, shimesuEv]))
 
-  -- Footer
-  (wakaru, addEditEv, recogRes) <- divClass "row" $ do
-    addEditEv <- divClass "col-sm-2" $ do
-      ev <- btn "btn-primary" "Edit"
-      newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
-      return $ (\s -> AddItemsEv [getReviewItem s] 0) <$> newSrsEntryEv
-    wEv <- divClass "col-sm-2" $
-      btn "btn-primary" "分かる"
-    recogRes <- divClass "col-md-8" $
-      speechRecogWidget doRecog (ri, rt)
-    let wakaru = DoReviewEv (i, rt, True) <$ wEv
-    return (wakaru, addEditEv, recogRes)
+    -- Footer
+    (shiruResEv , addEditEv, recogResEv, shimesuEv) <- divClass "row" $ do
+      recogRes <- divClass "col-sm-2" $
+        speechRecogWidget doRecog (ri, rt)
+      shirimasu <- divClass "col-sm-2" $
+        btn "btn-primary" "知ります"
+      (shimesu, shiranai) <- divClass "col-sm-2" $ do
+        ev <- widgetHoldWithRemoveAfterEvent ((btn "btn-primary" "示す") <$ evPB)
+        ev2 <- widgetHoldWithRemoveAfterEvent ((btn "btn-primary" "知らない") <$ ev)
+        return (ev,ev2)
+      divClass "col-sm-2" $ do
+        openEv <- btn "btn-primary" "Sentences"
+        openSentenceWidget (NE.head k, map (unMeaning) $ NE.toList (fst m)) (Right i <$ openEv)
+      addEditEv <- divClass "col-sm-2" $ do
+        ev <- btn "btn-primary" "Edit"
+        newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
+        return $ (\s -> AddItemsEv [getReviewItem s] 0) <$> newSrsEntryEv
+      let shiruRes = (\b -> DoReviewEv (i, rt, b)) <$>
+            leftmost [True <$ shirimasu, False <$ shiranai]
+      return (shiruRes , addEditEv, recogRes, False <$ shimesu)
 
-  return $ leftmost [ wakaru, recogRes
+  return $ leftmost [ shiruResEv , recogResEv
                     , dr, addEditEv]
 
 reviewInputFieldHandler

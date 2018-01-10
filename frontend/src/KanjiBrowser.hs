@@ -284,8 +284,11 @@ vocabListWindow req listEv = do
       divClass "col-md-2" $
         addEditSrsEntryWidget (Right $ v ^. vocabId)
           Nothing s
-      divClass "col-md-2" $
-        openSentenceWidget (v ^. vocabId)
+      divClass "col-md-2" $ do
+        openEv <- btn "btn-xs btn-primary" "Sentences"
+        openSentenceWidget (vocabToText $ v ^. vocab
+                           , map unMeaning $ v ^. vocabMeanings)
+          ((Left $ v ^. vocabId) <$ openEv)
 
     liWrap i = do
       dyn $ listItem <$> i

@@ -379,20 +379,30 @@ getVocabDetails (GetVocabDetails eIds) = do
 
 
 getVocabSentences :: GetVocabSentences
-  -> WsHandlerM ([SentenceData], [(NonJpSentenceId,Text)])
-getVocabSentences (GetVocabSentences eId) = do
+  -> WsHandlerM ([VocabId], [SentenceData], [(NonJpSentenceId,Text)])
+getVocabSentences (GetVocabSentences svId) = do
+  uId <- asks currentUserId
   vocabSentenceDb <- lift $ asks appVocabSentenceDb
   nonJpSentDb <- lift $ asks appNonJpSentenceDb
   sentenceDb <- lift $ asks appSentenceDb
 
+  eId <- case svId of
+    (Left eId) -> return $ Just eId
+    (Right sId) -> lift $ transactReadOnlySrsDB $ \db ->
+      Tree.lookupTree uId (db ^. userData)
+        >>= mapM (\rd ->
+          Tree.lookupTree sId (rd ^. srsKanjiVocabMap))
+        >>= (\x -> return $ join x)
+        >>= mapM (\e -> return $ either (const Nothing) Just e)
+        >>= (\x -> return $ join x)
   let
-    ss = maybe [] (catMaybes .
+    ss = take 20 $ maybe [] (catMaybes .
                    map (\sId -> Map.lookup sId sentenceDb) .
                    Set.toList)
-      $ Map.lookup eId vocabSentenceDb
+      $ join ((\i -> Map.lookup i vocabSentenceDb) <$> eId)
 
     njps = catMaybes
       $ map (\i -> (,) <$> pure i <*> Map.lookup i nonJpSentDb)
       $ ordNub $ ss ^.. traverse . sentenceLinkedEng . traverse
 
-  return (ss,njps)
+  return (maybeToList eId, ss,njps)

@@ -134,10 +134,13 @@ openEditSrsItemWidget ev = do
 
 modalDiv m = do
   divClass "modal-backdrop fade in" $ return ()
-  elAttr "div" attr $ divClass "modal-dialog"
+  elAttr "div" attr $ elAttr "div" attr2
     $ divClass "modal-content" m
   where attr = ("class" =: "modal")
           <> ("style" =: "display: block;")
+        attr2 = ("style" =: "width 90vw; height 90vh;\
+                            \ max-width: 40em;\
+                            \ margin: 30px auto;")
 
 editWidgetView
   :: MonadWidget t m
@@ -292,33 +295,38 @@ showWSProcessing evStart evFinish = do
     (waitForStart <$ evStart)
 
 openSentenceWidget :: AppMonad t m
-  => VocabId
+  => (Text, [Text])
+  -> Event t (Either VocabId SrsEntryId)
   -> AppMonadT t m ()
-openSentenceWidget i = do
-  open <- btn "" "Sentences"
-  resp <- getWebSocketResponse $ GetVocabSentences i <$ open
+openSentenceWidget header open = do
+  resp <- getWebSocketResponse $ GetVocabSentences <$> open
   showWSProcessing open resp
 
-  widgetHoldWithRemoveAfterEvent (sentenceWidgetView i <$> resp)
+  widgetHoldWithRemoveAfterEvent (sentenceWidgetView header <$> resp)
   return ()
 
 sentenceWidgetView :: AppMonad t m
-  => VocabId
-  -> ([SentenceData], [(NonJpSentenceId,Text)])
+  => (Text, [Text])
+  -> ([VocabId], [SentenceData], [(NonJpSentenceId,Text)])
   -> AppMonadT t m (Event t ())
-sentenceWidgetView vId (ss, njps) = modalDiv $ do
-  closeEvTop <- divClass "modal-header" $ el "h3" $ do
+sentenceWidgetView (surface, meanings) (vIds, ss, njps) = modalDiv $ do
+  closeEvTop <- divClass "modal-header" $ do
+    text surface
+    text " : "
+    let m = mconcat $ intersperse ", " $ meanings
+    text $ if T.length m > 20
+      then (T.take 20 m) <> "..."
+      else m
     (e,_) <- elClass' "button" "close" $ text "Close"
-    text $ "Sentence "
     return (domEvent Click e)
 
   let bodyAttr = ("class" =: "modal-body")
-          <> ("style" =: "height: 400px;\
+          <> ("style" =: "height: 80vh;\
               \overflow-y: auto")
 
   vIdEvs <- elAttr "div" bodyAttr $ do
     forM ss $ \s -> do
-      renderOnePara (constDyn [vId]) (constDyn 100) (s ^. sentenceContents)
+      renderOnePara (constDyn vIds) (constDyn 100) (s ^. sentenceContents)
 
   let vIdEv = leftmost vIdEvs
 
@@ -396,6 +404,7 @@ showVocabDetailsWidget detailsEv = do
           elAttr "div" (("class" =: "panel panel-default")
             <> ("style" =: "max-height: 200px;\
                            \overflow-y: auto;\
+                           \overflow-x: hidden;\
                            \padding: 15px;")) $ do
             (e,_) <- elClass' "button" "close" $ text "Close"
             m
@@ -423,7 +432,10 @@ showEntry surface (e, sId) = do
     elClass "span" "" $ do
       entryKanjiAndReading surface e
     addEditSrsEntryWidget (Right $ e ^. entryUniqueId) (Just surface) sId
-    openSentenceWidget (e ^. entryUniqueId)
+    openEv <- btn "btn-xs btn-primary" "Sentences"
+    openSentenceWidget (surface, e ^.. entrySenses . traverse .
+                         senseGlosses . traverse . glossDefinition)
+      ((Left $ e ^. entryUniqueId) <$ openEv)
 
   let
     showGlosses ms = mapM_ text $ intersperse ", " $

@@ -52,26 +52,26 @@ checkVerticalOverflow (ie,oe) r action = do
     | ox > rx -> (0, Just GrowText)
     | otherwise -> (0, Nothing) -- hidden
 
-setupInterObs :: (DOM.MonadDOM m, DOM.IsElement e)
-  => (e, e)
-  -> _
-  -> ((Int, Maybe TextAdjust) -> IO ())
-  -> m DOM.IntersectionObserver
-setupInterObs ind options action = do
-  cb <- DOM.newIntersectionObserverCallback
-    (intersectionObsCallback ind action)
-  DOM.newIntersectionObserver cb (Just options)
+-- setupInterObs :: (DOM.MonadDOM m, DOM.IsElement e)
+--   => (e, e)
+--   -> _
+--   -> ((Int, Maybe TextAdjust) -> IO ())
+--   -> m DOM.IntersectionObserver
+-- setupInterObs ind options action = do
+--   cb <- DOM.newIntersectionObserverCallback
+--     (intersectionObsCallback ind action)
+--   DOM.newIntersectionObserver cb (Just options)
 
-intersectionObsCallback (ie,oe) action (e:_) _  = do
-  rx <- DOM.getX =<< DOM.getRootBounds e
-  ix <- DOM.getX =<< DOM.getBoundingClientRect ie
-  ox <- DOM.getX =<< DOM.getBoundingClientRect oe
-  liftIO $ putStrLn $ (show (rx,ix,ox) :: Text)
-  liftIO $ action $ if (rx > ox && rx < ix) -- Outside
-    then (0, Nothing)
-    else if rx > ix
-            then (0, Just ShrinkText)
-            else (0, Just GrowText)
+-- intersectionObsCallback (ie,oe) action (e:_) _  = do
+--   rx <- DOM.getX =<< DOM.getRootBounds e
+--   ix <- DOM.getX =<< DOM.getBoundingClientRect ie
+--   ox <- DOM.getX =<< DOM.getBoundingClientRect oe
+--   liftIO $ putStrLn $ (show (rx,ix,ox) :: Text)
+--   liftIO $ action $ if (rx > ox && rx < ix) -- Outside
+--     then (0, Nothing)
+--     else if rx > ix
+--             then (0, Just ShrinkText)
+--             else (0, Just GrowText)
 
 readingPane :: AppMonad t m
   => Event t (ReaderDocumentData)
