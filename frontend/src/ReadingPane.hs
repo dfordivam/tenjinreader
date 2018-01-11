@@ -405,6 +405,7 @@ getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr endParaEv 
 -- Vertical rendering
 
 data TextAdjustDirection = ForwardGrow | BackwardGrow
+  deriving (Show, Eq)
 
 verticalReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
@@ -468,8 +469,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   --------------------------------
   rec
     let
-      newPageEv' :: Event t (Int,Int)
-      newPageEv' = fmapMaybe identity $ leftmost
+      firstParaEv :: Event t (Int,Int)
+      firstParaEv = fmapMaybe identity $ leftmost
         [tagDyn nextParaMaybe next
         , Just <$> firstPara] -- TODO
 
@@ -484,7 +485,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       nextParaMaybe = getNextParaMaybe <$> lastDisplayedPara <*> textContent
       prevParaMaybe = getPrevParaMaybe <$> firstParaDyn <*> textContent
 
-    newPageEv <- delay 1 newPageEv'
+    newPageEv <- delay 1 firstParaEv
     firstParaDyn <- holdDyn startPara newPageEv
 
     let foldF (d, tc) =
@@ -507,7 +508,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
-    textContent <- fetchMoreContentF docId annText firstPara newPageEv
+    textContent <- fetchMoreContentF docId annText (attachDyn firstParaDyn pageChangeEv)
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
@@ -574,7 +575,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       startTicksAgain = leftmost [() <$ updated rs
                                  , resizeEv
                                  , closeEv, fullScrEv
-                                 , () <$ newPageEv]
+                                 , () <$ pageChangeEv]
       ticksWidget = do
         let init = widgetHold (tickLossy 1 time)
               (return never <$ stopTicks)
@@ -592,10 +593,9 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 fetchMoreContentF :: (AppMonad t m)
   => _
   -> [(Int,AnnotatedPara)]
-  -> Event t (Int,Int)
-  -> Event t (Int,Int)
+  -> Event t ((Int,Int), TextAdjustDirection)
   -> AppMonadT t m (Dynamic t [(Int,AnnotatedPara)])
-fetchMoreContentF docId annText firstPara newPageEv = do
+fetchMoreContentF docId annText pageChangeEv = do
   rec
     -- Fetch more contents
     -- Keep at most 60 paras in memory, length n == 30
@@ -603,13 +603,13 @@ fetchMoreContentF docId annText firstPara newPageEv = do
 
         lastAvailablePara = ((\(p:_) -> fst p) . reverse) <$> textContent
         firstAvailablePara = ((\(p:_) -> fst p)) <$> textContent
-        hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara newPageEv)
-        hitEndF (l,(n,_))
-          | l - n < 10 = Just (l + 1)
+        hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara pageChangeEv)
+        hitEndF (l,((n,_), d))
+          | d == ForwardGrow && (l - n < 10) = Just (l + 1)
           | otherwise = Nothing
-        hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara firstPara)
-        hitStartF (f,(n,_))
-          | n - f < 10 = Just (max 0 (f - 30))
+        hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara pageChangeEv)
+        hitStartF (f,((n,_), d))
+          | d == BackwardGrow && (n - f < 10) = Just (max 0 (f - 30))
           | otherwise = Nothing
 
     moreContentEv <- getWebSocketResponse $
