@@ -264,36 +264,46 @@ data SrsEntry = SrsEntry
 
 makeFurigana :: KanjiPhrase -> ReadingPhrase -> Either Text Vocab
 makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab
-  <$> (g (map katakanaToHiragana kgs) (katakanaToHiragana r))
+  <$> (g kgs (katakanaToHiragana r))
   where
     g kgs r = case reverse kgs of
-      (kl:krev) -> case T.stripSuffix kl r of
-        (Just prfx) -> (\x -> x ++ [Kana kl]) <$> f (reverse krev) prfx
-        Nothing -> f kgs r
+      ((kl, Just klr):krev) -> case T.stripSuffix kl r of
+        (Just prfx) -> (\x -> x ++ [Kana klr]) <$> f (reverse krev) prfx
+        Nothing -> Left "stripSuffix issue"
+      _ -> f kgs r
 
-    kgs = T.groupBy (\ a b -> (isKana a) == (isKana b)) k
-    f :: [Text] -> Text -> Either Text [KanjiOrKana]
+    kgs1 = T.groupBy (\ a b -> (isKana a) == (isKana b)) k
+
+    kgs :: [(Text, Maybe Text)]
+    kgs = (flip map) kgs1 (\grp -> if (isKana $ T.head grp)
+                     then (katakanaToHiragana grp, Just grp) -- Store original kana form
+                     else (grp, Nothing))
+
+    f :: [(Text, Maybe Text)] -> Text -> Either Text [KanjiOrKana]
     f [] r
       | T.null r = Right []
       | otherwise = Right [Kana r]
 
-    f (kg:[]) r
+    f ((kg, Just kgr):[]) r
       | T.null r = Left "Found kg, but r is T.null"
       | otherwise = if kg == r
-        then Right [Kana r]
-        else if (isKana (T.head kg))
-          then Left $ "Found kana not equal to r: " <> kg <> ", " <> r
-          else Right [KanjiWithReading (Kanji kg) r]
+        then Right [Kana kgr] -- Take the original
+        else Left $ "Founf Just kgr but not equal to r"
 
-    f (kg:kg2:kgs) r
+    f ((kg, Nothing):[]) r = Right [KanjiWithReading (Kanji kg) r]
+
+    f ((kg, Just kgr):(kg2, Nothing):kgs) r
       | T.null r = Left "r is null"
-      | otherwise = if (isKana (T.head kg))
-        then case (T.stripPrefix kg r) of
-          (Just rs) -> ((Kana kg) :) <$> (f (kg2:kgs) rs)
+      | otherwise = case (T.stripPrefix kg r) of
+          (Just rs) -> ((Kana kgr) :) <$> (f ((kg2, Nothing):kgs) rs)
           Nothing -> Left $ "stripPrefix: " <> kg <> ", " <> r
-        else case (T.breakOn kg2 (T.tail r)) of
+
+    f ((kg, Nothing):(kg2, Just kgr2):kgs) r
+      | T.null r = Left "r is null"
+      | otherwise = case (T.breakOn kg2 (T.tail r)) of
           (rk, rs)
-            -> (KanjiWithReading (Kanji kg) (T.cons (T.head r) rk) :) <$> (f (kg2:kgs) rs)
+            -> (KanjiWithReading (Kanji kg) (T.cons (T.head r) rk) :)
+            <$> (f ((kg2, Just kgr2):kgs) rs)
 
 testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b))
   [("いじり回す", "いじりまわす")
@@ -309,6 +319,7 @@ testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b)
   , ("二酸化ケイ素", "にさんかケイそ")
   , ("ページ違反", "ぺーじいはん")
   , ("シェリー酒", "シェリーしゅ")
+  , ("パン屋", "ぱんや")
   ]
 
 -- isSameAs t1 t2
