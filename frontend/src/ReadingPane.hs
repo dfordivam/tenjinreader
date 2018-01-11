@@ -487,14 +487,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     newPageEv <- delay 1 newPageEv'
     firstParaDyn <- holdDyn startPara newPageEv
 
-    -- textContentInThisView has relative numbering for first para, wrt to the start point
-    -- textContentInThisView <- holdDyn (getCurrentViewContent (annText, startPara))
-    --   (getCurrentViewContent <$> attachDyn textContent newPageEv)
-
-    -- textContentInPreviousView may have truncated last para
-    -- textContentInPreviousView <- holdDyn (getPrevViewContent (annText, startPara))
-    --   (getPrevViewContent <$> attachDyn textContent newPageEv)
-
     let foldF (d, tc) =
           foldDyn f st ((\d -> (tc,d)) <$> dEv)
           where f = case d of
@@ -517,21 +509,11 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
     textContent <- fetchMoreContentF docId annText firstPara newPageEv
 
-    -- Reverse render widget for finding first para of prev page
-    -- Find the para num (from start) which is visible completely
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
         then ("style" =: "position: fixed; top: 0; bottom: 0; left: 0; right: 0;")
         else Map.empty
       divAttr = divAttr' <*> fullscreenDyn
-      -- renderBackWidget :: _ -> AppMonadT t m (Event t (Int,Int))
-      -- renderBackWidget v = elDynAttr "div" wrapDynAttr $
-      --   renderVerticalBackwards rs divAttr v
-      -- prevPageEv :: Event t (Int,Int)
-      -- prevPageEv = fmapMaybe identity (tagDyn prevParaMaybe prev)
-
-    -- firstPara <- widgetHoldWithRemoveAfterEvent
-    --   (renderBackWidget <$> attachDyn textContentInPreviousView prevPageEv)
 
     text "firstParaDyn:"
     display firstParaDyn
@@ -582,21 +564,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
   --------------------------------
 
-  -- v <- liftJSM $ do
-  --   o <- create
-  --   m <- toJSVal (0.9 :: Double)
-  --   t <- toJSVal (1 :: Double)
-  --   r <- toJSVal (_element_raw rowRoot)
-  --   setProp "root" r o
-  --   setProp "margin" m o
-  --   setProp "threshold" t o
-  --   toJSVal (ValObject o)
-
   let inEl = _element_raw inside
       outEl = _element_raw outside
-  -- io <- setupInterObs (inEl, outEl) (DOM.IntersectionObserverInit v) action
-  -- DOM.observe io inEl
-  -- DOM.observe io outEl
 
   time <- liftIO $ getCurrentTime
 
@@ -848,79 +817,12 @@ renderDynParas rs dynParas = do
         ev <- dyn (renderF vIdDyn<$> dt)
         switchPromptly never ev
 
- -- (Dynamic t (Map k ((Event t ([VocabId], Text)))))
   rec
     let
       vIdEv = switchPromptlyDyn $ (fmap (leftmost . Map.elems)) v
     v <- list dynMap (renderEachPara vIdDyn)
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
   return (vIdEv)
-
-
--- renderVerticalBackwards :: (_)
---   => _
---   -> _
---   -> _
---   -> m (Event t (Int,Int))
-
--- renderVerticalBackwards rs divAttr (textContent, (ep,epOff)) = do
---   (evVisible, action) <- newTriggerEvent
---   visDyn <- holdDyn (0,Nothing) evVisible
---   display visDyn
-
---   let
---     lastPara = maybe [] (take epOff) (List.lookup ep textContent)
---     initState = (\t -> ((0,length t), [(ep, t)])) lastPara
---     dEv = snd <$> (evVisible)
---   row1Dyn <- foldDyn (textAdjustRevF textContent) initState dEv
-
---   let
---     firstDisplayedPara = (\v -> maybe (0,0) (\(pn,pt) -> (pn, length pt))
---                             (preview (_2 . _head) v)) <$> row1Dyn
-
---   text "First para num and length: "
---   display firstDisplayedPara
-
---   (rowRoot, (inside, outside)) <- elDynAttr' "div" divAttr $ do
---     el "div" $ do
---       renderDynParas rs (snd <$> row1Dyn)
-
---     (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
---       text ""
---     elAttr "div" ("style" =: "height: 2em; width: 3em;") $ do
---       text ""
---     (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
---       text ""
---       return ()
---     return (inside, outside)
-
---   let inEl = _element_raw inside
---       outEl = _element_raw outside
-
---   time <- liftIO $ getCurrentTime
-
---   let
---     -- TODO Stop if we hit end of text
---       stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
---       startTicksAgain = updated rs -- resizeEv
---       ticksWidget = do
---         let init = widgetHold (tickLossy 1 time)
---               (return never <$ stopTicks)
---         t <- widgetHold init
---           (init <$ startTicksAgain)
---         return (switchPromptlyDyn $ join t)
-
---   tickEv <- ticksWidget
-
---   performEvent (checkVerticalOverflow (inEl, outEl)
---                 (_element_raw rowRoot) action <$ tickEv)
-
---   let
---     getFPOffset ((fpN, fpT):_) = (fpN, lenOT - (length fpT))
---       where
---         lenOT = length fpOT -- Full para / orig length
---         fpOT = maybe [] identity $ List.lookup fpN textContent
---   return $ getFPOffset . snd <$> tagDyn row1Dyn stopTicks
 
 ----------------------------------------------------------------------------------
 lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
