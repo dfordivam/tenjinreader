@@ -177,6 +177,6 @@ quickAnalyzeTop = do
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
       <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn "" (fmap snd vIdEv)
+    surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
   return ()

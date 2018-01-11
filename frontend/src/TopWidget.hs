@@ -37,6 +37,7 @@ import qualified Data.Text as T
 import GHCJS.DOM
 import GHCJS.DOM.Document
 import GHCJS.DOM.Element
+import qualified Language.Javascript.JSaddle.Types as X
 
 topWidget :: MonadWidget t m => m ()
 topWidget = do
@@ -97,7 +98,7 @@ toggleTheme ev = do
     d <- holdDyn False (not <$> (tag (current d) ev))
 
   let
-    toggle b = liftJSM $ do
+    toggle b = X.liftJSM $ do
       let css = custom_css <> if b
             then slate_bootstrap_css
             else readable_bootstrap_css

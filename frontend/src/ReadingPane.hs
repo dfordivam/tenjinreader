@@ -163,84 +163,84 @@ readingPaneView (ReaderDocument _ title annText _) = do
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
       <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn "" (fmap snd vIdEv)
+    surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
   return ()
 
 -- Remove itself on prev page click
 
-renderParaWrap ::
-     forall t m b . (AppMonad t m)
-  => Dynamic t (ReaderSettingsTree CurrentDb)
-  -> Event t b
-  -> Dynamic t [VocabId]
-  -> Dynamic t [(Int,AnnotatedPara)]
-  -> (AppMonadT t m () -> AppMonadT t m (Event t ()))
-  -> Dynamic t (Map Text Text)
-  -> Int
-  -> AppMonadT t m (Dynamic t ( (Event t (), Event t ())
-                              , (Event t Int, Event t ([VocabId], Text))))
+-- renderParaWrap ::
+--      forall t m b . (AppMonad t m)
+--   => Dynamic t (ReaderSettingsTree CurrentDb)
+--   -> Event t b
+--   -> Dynamic t [VocabId]
+--   -> Dynamic t [(Int,AnnotatedPara)]
+--   -> (AppMonadT t m () -> AppMonadT t m (Event t ()))
+--   -> Dynamic t (Map Text Text)
+--   -> Int
+--   -> AppMonadT t m (Dynamic t ( (Event t (), Event t ())
+--                               , (Event t Int, Event t ([VocabId], Text))))
 
-renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr paraNum =
-  widgetHold (renderFromPara paraNum)
-    ((return nVal) <$ prev)
-  where
-    nVal = ((never,never), (never, never))
+-- renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr paraNum =
+--   widgetHold (renderFromPara paraNum)
+--     ((return nVal) <$ prev)
+--   where
+--     nVal = ((never,never), (never, never))
 
-    renderParaNum 0 paraNum resizeEv = return (never,never)
-    renderParaNum paraCount paraNum resizeEv = do
-      cntnt <- sample $ current textContent
-      let para = List.lookup paraNum cntnt
-      case para of
-        Nothing -> text "--- End of Text ---" >> return (never, never)
-        (Just p) -> renderPara paraCount p paraNum resizeEv
+--     renderParaNum 0 paraNum resizeEv = return (never,never)
+--     renderParaNum paraCount paraNum resizeEv = do
+--       cntnt <- sample $ current textContent
+--       let para = List.lookup paraNum cntnt
+--       case para of
+--         Nothing -> text "--- End of Text ---" >> return (never, never)
+--         (Just p) -> renderPara paraCount p paraNum resizeEv
 
-    renderPara paraCount para paraNum resizeEv = do
-      (e,v1) <- el' "div" $
-        renderOnePara vIdDyn (_rubySize <$> rs) para
+--     renderPara paraCount para paraNum resizeEv = do
+--       (e,v1) <- el' "div" $
+--         renderOnePara vIdDyn (_rubySize <$> rs) para
 
-      ev <- delay 0.2 =<< getPostBuild
-      overFlowEv <- holdUniqDyn
-        =<< widgetHold (checkOverFlow e (_numOfLines <$> rs))
-        (checkOverFlow e (_numOfLines <$> rs)
-           <$ (leftmost [ev,resizeEv]))
-      -- display overFlowEv
+--       ev <- delay 0.2 =<< getPostBuild
+--       overFlowEv <- holdUniqDyn
+--         =<< widgetHold (checkOverFlow e (_numOfLines <$> rs))
+--         (checkOverFlow e (_numOfLines <$> rs)
+--            <$ (leftmost [ev,resizeEv]))
+--       -- display overFlowEv
 
-      let
-        nextParaWidget b = if b
-          then do
-             (e,_) <- elAttr' "button" rightBtnAttr $ text ">"
-             return ((paraNum + 1) <$ domEvent Click e, never)
-          else renderParaNum (paraCount - 1) (paraNum + 1) resizeEv
+--       let
+--         nextParaWidget b = if b
+--           then do
+--              (e,_) <- elAttr' "button" rightBtnAttr $ text ">"
+--              return ((paraNum + 1) <$ domEvent Click e, never)
+--           else renderParaNum (paraCount - 1) (paraNum + 1) resizeEv
 
-      v2 <- widgetHold (nextParaWidget False)
-            (nextParaWidget <$> updated overFlowEv)
-      return $ (\(a,b) -> (a, leftmost [v1,b]))
-        (switchPromptlyDyn $ fst <$> v2
-        , switchPromptlyDyn $ snd <$> v2)
+--       v2 <- widgetHold (nextParaWidget False)
+--             (nextParaWidget <$> updated overFlowEv)
+--       return $ (\(a,b) -> (a, leftmost [v1,b]))
+--         (switchPromptlyDyn $ fst <$> v2
+--         , switchPromptlyDyn $ snd <$> v2)
 
-    btnCommonAttr stl = ("class" =: "btn btn-xs")
-       <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute;"
-          <> stl ))
-    leftBtnAttr = btnCommonAttr "left: 10px;"
-    rightBtnAttr = btnCommonAttr "right: 10px;"
-    renderFromPara :: (_) => Int
-      -> AppMonadT t m ((Event t () -- Close Full Screen
-                       , Event t ()) -- Previous Page
-      , (Event t Int, Event t ([VocabId], Text)))
-    renderFromPara startPara = do
-      rec
-        (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $ do
-          (e,_) <- elClass' "button" "close" $
-            dispFullScr (text "Close")
-          prev <- if startPara == 0
-            then return never
-            else do
-              (e,_) <- elAttr' "button" leftBtnAttr $ text "<"
-              return (domEvent Click e)
-          v1 <- renderParaNum 20 startPara resizeEv
-          return ((domEvent Click e, prev), v1)
-      return v
+--     btnCommonAttr stl = ("class" =: "btn btn-xs")
+--        <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute;"
+--           <> stl ))
+--     leftBtnAttr = btnCommonAttr "left: 10px;"
+--     rightBtnAttr = btnCommonAttr "right: 10px;"
+--     renderFromPara :: (_) => Int
+--       -> AppMonadT t m ((Event t () -- Close Full Screen
+--                        , Event t ()) -- Previous Page
+--       , (Event t Int, Event t ([VocabId], Text)))
+--     renderFromPara startPara = do
+--       rec
+--         (resizeEv,v) <- resizeDetector $ elDynAttr "div" divAttr $ do
+--           (e,_) <- elClass' "button" "close" $
+--             dispFullScr (text "Close")
+--           prev <- if startPara == 0
+--             then return never
+--             else do
+--               (e,_) <- elAttr' "button" leftBtnAttr $ text "<"
+--               return (domEvent Click e)
+--           v1 <- renderParaNum 20 startPara resizeEv
+--           return ((domEvent Click e, prev), v1)
+--       return v
 
 
 -- Auto paginate text
@@ -251,84 +251,84 @@ renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr paraNum =
 -- variable height / content on page
 -- store the page number (or para number) and restore progress
 -- Bookmarks
-paginatedReader :: forall t m . AppMonad t m
-  => Dynamic t (ReaderSettings CurrentDb)
-  -> Event t ()
-  -> (ReaderDocumentData)
-  -> AppMonadT t m ()
-paginatedReader rs fullScrEv (docId, title, (startPara, _), annText) = do
-  -- render one para then see check its height
+-- paginatedReader :: forall t m . AppMonad t m
+--   => Dynamic t (ReaderSettings CurrentDb)
+--   -> Event t ()
+--   -> (ReaderDocumentData)
+--   -> AppMonadT t m ()
+-- paginatedReader rs fullScrEv (docId, title, (startPara, _), annText) = do
+--   -- render one para then see check its height
 
-  rec
-    let
-      dispFullScr m = do
-        dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
+--   rec
+--     let
+--       dispFullScr m = do
+--         dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
 
-      divAttr = (\s l h fs -> ("style" =:
-        ("font-size: " <> tshow s <>"%;"
-          <> "line-height: " <> tshow l <> "%;"
-          -- <> "height: " <> tshow h <> "px;"
-          <> (if fs then "position: fixed;" else "")
-          <> "display: block;" <> "padding: 40px;"))
-             <> ("class" =: (if fs then "modal modal-content" else "")))
-        <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
-        <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
+--       divAttr = (\s l h fs -> ("style" =:
+--         ("font-size: " <> tshow s <>"%;"
+--           <> "line-height: " <> tshow l <> "%;"
+--           -- <> "height: " <> tshow h <> "px;"
+--           <> (if fs then "position: fixed;" else "")
+--           <> "display: block;" <> "padding: 40px;"))
+--              <> ("class" =: (if fs then "modal modal-content" else "")))
+--         <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
+--         <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
 
-      vIdEv = switchPromptlyDyn (snd . snd <$> val)
-      fullScrCloseEv = switchPromptlyDyn (fst . fst <$> val)
+--       vIdEv = switchPromptlyDyn (snd . snd <$> val)
+--       fullScrCloseEv = switchPromptlyDyn (fst . fst <$> val)
 
-      val = join valDDyn
-      newPageEv :: Event t Int
-      newPageEv = leftmost [switchPromptlyDyn (fst . snd <$> val), firstPara]
+--       val = join valDDyn
+--       newPageEv :: Event t Int
+--       newPageEv = leftmost [switchPromptlyDyn (fst . snd <$> val), firstPara]
 
-    vIdDyn <- holdDyn [] (fmap fst vIdEv)
-    fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
-                                             , False <$ fullScrCloseEv])
+--     vIdDyn <- holdDyn [] (fmap fst vIdEv)
+--     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
+--                                              , False <$ fullScrCloseEv])
 
-    firstParaDyn <- holdDyn startPara newPageEv
-    let lastAvailablePara = ((\(p:_) -> fst p) . reverse) <$> textContent
-        firstAvailablePara = ((\(p:_) -> fst p)) <$> textContent
-        hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara newPageEv)
-        hitEndF (l,n)
-          | l - n < 10 = Just (l + 1)
-          | otherwise = Nothing
-        hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara firstPara)
-        hitStartF (f,n)
-          | n - f < 10 = Just (max 0 (f - 30))
-          | otherwise = Nothing
+--     firstParaDyn <- holdDyn startPara newPageEv
+--     let lastAvailablePara = ((\(p:_) -> fst p) . reverse) <$> textContent
+--         firstAvailablePara = ((\(p:_) -> fst p)) <$> textContent
+--         hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara newPageEv)
+--         hitEndF (l,n)
+--           | l - n < 10 = Just (l + 1)
+--           | otherwise = Nothing
+--         hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara firstPara)
+--         hitStartF (f,n)
+--           | n - f < 10 = Just (max 0 (f - 30))
+--           | otherwise = Nothing
 
-    moreContentEv <- getWebSocketResponse $
-      (\p -> ViewDocument docId (Just p)) <$> (leftmost [hitEndEv, hitStartEv])
+--     moreContentEv <- getWebSocketResponse $
+--       (\p -> ViewDocument docId (Just p)) <$> (leftmost [hitEndEv, hitStartEv])
 
-    display firstParaDyn
-    text ", "
-    display lastAvailablePara
-    text ", "
-    display (length <$> textContent)
-    -- Keep at most 60 paras in memory, length n == 30
-    let
-    textContent <- foldDyn moreContentAccF annText ((\(_,_,_,c) -> c) <$>
-                                    (fmapMaybe identity moreContentEv))
+--     display firstParaDyn
+--     text ", "
+--     display lastAvailablePara
+--     text ", "
+--     display (length <$> textContent)
+--     -- Keep at most 60 paras in memory, length n == 30
+--     let
+--     textContent <- foldDyn moreContentAccF annText ((\(_,_,_,c) -> c) <$>
+--                                     (fmapMaybe identity moreContentEv))
 
-    -- Temporary render to find firstPara
-    let prev = switchPromptlyDyn (snd . fst <$> val)
-    firstPara <- (getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr
-      ((\p -> max 0 (p - 1)) <$> tagDyn firstParaDyn prev))
+--     -- Temporary render to find firstPara
+--     let prev = switchPromptlyDyn (snd . fst <$> val)
+--     firstPara <- (getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr
+--       ((\p -> max 0 (p - 1)) <$> tagDyn firstParaDyn prev))
 
-    let renderParaF = renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr
-    -- Render Actual content
-    valDDyn <- widgetHold (renderParaF startPara)
-      (renderParaF <$> newPageEv)
+--     let renderParaF = renderParaWrap rs prev vIdDyn textContent dispFullScr divAttr
+--     -- Render Actual content
+--     valDDyn <- widgetHold (renderParaF startPara)
+--       (renderParaF <$> newPageEv)
 
-  divClass "" $ do
-    detailsEv <- getWebSocketResponse $ GetVocabDetails
-      <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn "" (fmap snd vIdEv)
-    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
+--   divClass "" $ do
+--     detailsEv <- getWebSocketResponse $ GetVocabDetails
+--       <$> (fmap fst vIdEv)
+--     surfDyn <- holdDyn "" (fmap snd vIdEv)
+--     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
 
-  getWebSocketResponse ((\p -> SaveReadingProgress docId (p,Nothing)) <$> newPageEv)
-  return ()
+--   getWebSocketResponse ((\p -> SaveReadingProgress docId (p,Nothing)) <$> newPageEv)
+--   return ()
 
 
 getFirstParaOfPrevPage ::
@@ -549,7 +549,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
       <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn "" (fmap snd vIdEv)
+    surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
 
   getWebSocketResponse ((\(p,o) -> SaveReadingProgress docId (p,Just o)) <$> newPageEv)
@@ -805,19 +805,21 @@ textAdjustRevF _ Nothing v = v
 renderDynParas :: (_)
   => Dynamic t (ReaderSettings CurrentDb) -- Used for mark
   -> Dynamic t [(Int,AnnotatedPara)]
-  -> m (Event t ([VocabId], Text))
+  -> m (Event t ([VocabId], (Text, Maybe e)))
 renderDynParas rs dynParas = do
   let dynMap = Map.fromList <$> dynParas
-      vIdDyn = constDyn []
-      renderF = renderOnePara vIdDyn (_rubySize <$> rs)
-      renderEachPara dt = do
-        ev <- dyn (renderF <$> dt)
+      renderF vIdDyn = renderOnePara vIdDyn (_rubySize <$> rs)
+      renderEachPara vIdDyn dt = do
+        ev <- dyn (renderF vIdDyn<$> dt)
         switchPromptly never ev
 
  -- (Dynamic t (Map k ((Event t ([VocabId], Text)))))
-  v <- list dynMap renderEachPara
-  let f = switchPromptlyDyn . (fmap (leftmost . Map.elems))
-  return (f v)
+  rec
+    let
+      vIdEv = switchPromptlyDyn $ (fmap (leftmost . Map.elems)) v
+    v <- list dynMap (renderEachPara vIdDyn)
+    vIdDyn <- holdDyn [] (fmap fst vIdEv)
+  return (vIdEv)
 
 
 renderVerticalBackwards :: (_)

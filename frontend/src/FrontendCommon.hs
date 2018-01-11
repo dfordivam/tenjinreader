@@ -10,6 +10,7 @@
 module FrontendCommon
   ( module FrontendCommon
   , module X
+  , module DOM
   )
   where
 
@@ -34,15 +35,17 @@ import Data.These as X
 import Data.Align as X
 
 import Language.Javascript.JSaddle as X (call, eval)
-import GHCJS.DOM.Types as X
-       (liftJSM, askJSM, runJSM, JSM, MonadJSM)
-
+import qualified GHCJS.DOM.DOMRectReadOnly as DOM
+import qualified GHCJS.DOM.Element as DOM
+import qualified GHCJS.DOM.Document as DOM
+import qualified GHCJS.DOM as DOM
+import qualified GHCJS.DOM.Types as DOM
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty)
 
 --
 type AppMonadT t m = WithWebSocketT AppRequest t m
-type AppMonad t m = (MonadWidget t m, MonadJSM m)
+type AppMonad t m = (MonadWidget t m, DOM.MonadJSM m)
 
 handleVisibility
   :: (DomBuilder t m, PostBuild t m, Eq a)
@@ -333,7 +336,7 @@ sentenceWidgetView (surface, meanings) (vIds, ss, njps) = modalDiv $ do
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
       <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn "" (fmap snd vIdEv)
+    surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
 
   return closeEvTop
@@ -345,10 +348,7 @@ vocabRuby :: (_)
   -> Vocab -> m (_)
 vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
   let
-    elA t = do
-      (e,_) <- el' t $ mapM f ks
-      return (domEvent Click e, domEvent Mouseenter e, domEvent Mouseleave e)
-    elType = ffor markDyn $ \b -> if b then "mark" else "span"
+    attr = ffor markDyn $ \b -> if b then ("class" =: "highlight-word") else Map.empty
     rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
     g r True = r
     g _ _ = ""
@@ -357,17 +357,18 @@ vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
       = elDynAttr "ruby" rubyAttr $ do
           text k
           el "rt" $ dynText (g r <$> visDyn)
-  v <- dyn (elA <$> elType)
-  e1 <- switchPromptly never (v & mapped %~ view _1)
-  e2 <- switchPromptly never (v & mapped %~ view _2)
-  e3 <- switchPromptly never (v & mapped %~ view _3)
-  return (e1,e2,e3)
+
+  (e,_) <- elDynAttr' "span" attr $ mapM f ks
+  return (Just $ _element_raw e
+         , domEvent Click e
+         , domEvent Mouseenter e
+         , domEvent Mouseleave e)
 
 renderOnePara :: (_)
   => Dynamic t [VocabId] -- Used for mark
   -> Dynamic t Int
   -> [Either Text (Vocab, [VocabId], Bool)]
-  -> m (Event t ([VocabId], Text))
+  -> m (Event t ([VocabId], (Text,_)))
 renderOnePara vIdDyn rubySize annTextPara = do
   let showAllFurigana = constDyn True
   el "p" $ do
@@ -377,14 +378,14 @@ renderOnePara vIdDyn rubySize annTextPara = do
             let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
                 markDyn = (any (\eId -> (elem eId vId))) <$> vIdDyn
             visDyn <- holdDyn vis evVis
-            (ek, eme, eml) <-
+            (e, ek, eme, eml) <-
               vocabRuby markDyn rubySize visDyn v
-          return $ (vId, vocabToText v) <$ ek
+          return $ (vId, (vocabToText v, e)) <$ ek
 
     leftmost <$> mapM f (annTextPara)
 
-showVocabDetailsWidget :: (AppMonad t m)
-  => Event t (Text, [(Entry, Maybe SrsEntryId)])
+showVocabDetailsWidget :: forall t m e . (AppMonad t m, DOM.IsElement e)
+  => Event t ((Text, Maybe e) , [(Entry, Maybe SrsEntryId)])
   -> AppMonadT t m ()
 showVocabDetailsWidget detailsEv = do
   let
@@ -392,14 +393,25 @@ showVocabDetailsWidget detailsEv = do
     attrBack = ("class" =: "modal")
           <> ("style" =: "display: block;\
               \opacity: 0%; z-index: 1050;")
-    attrFront = ("class" =: "nav navbar-fixed-bottom")
-          <> ("style" =: "z-index: 1060;\
+    attrFront y h
+      | h > 300 && y < 300 = f "navbar-fixed-top" -- Should be middle?
+      | y > 300 = f "navbar-fixed-top"
+      | otherwise = f "navbar-fixed-bottom"
+      where f p = ("class" =: ("nav " <> p))
+              <> ("style" =: "z-index: 1060;\
                          \padding: 10px;")
 
-    wrapper :: (_) => m a -> m (Event t ())
-    wrapper m = do
+    wrapper :: (_) => _ -> AppMonadT t m a -> AppMonadT t m (Event t ())
+    wrapper e m = do
+      (y,h) <- case e of
+        Nothing -> return (0,0)
+        (Just e) -> DOM.liftJSM $ do
+          rect <- DOM.getBoundingClientRect (e)
+          y <- DOM.getY rect
+          h <- DOM.getHeight rect
+          return (y,h)
       (e1,_) <- elAttr' "div" attrBack $ return ()
-      elAttr "div" attrFront $
+      elAttr "div" (attrFront y h) $
         divClass "container-fluid" $
           elAttr "div" (("class" =: "panel panel-default")
             <> ("style" =: "max-height: 200px;\
@@ -407,15 +419,16 @@ showVocabDetailsWidget detailsEv = do
                            \overflow-x: hidden;\
                            \padding: 15px;")) $ do
             (e,_) <- elClass' "button" "close" $ text "Close"
+            -- text $ ("(" <> tshow y <> "," <> tshow h <> ")")
             m
             return $ leftmost
               [domEvent Click e
               , domEvent Click e1]
 
     wd :: AppMonad t m
-      => Maybe _
+      => Maybe ((Text, Maybe e) , [(Entry, Maybe SrsEntryId)])
       -> AppMonadT t m (Event t ())
-    wd (Just (s,es)) = wrapper
+    wd (Just ((s,e),es)) = (wrapper e)
       (mapM_ (showEntry s) (orderEntries (fst) es))
     wd Nothing = return never
 
