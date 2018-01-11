@@ -404,6 +404,7 @@ getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr endParaEv 
 ----------------------------------------------------------------------------------
 -- Vertical rendering
 
+data TextAdjustDirection = ForwardGrow | BackwardGrow
 
 verticalReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
@@ -436,9 +437,13 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     leftBtnAttr = btnCommonAttr "left: 10px;"
     rightBtnAttr = btnCommonAttr "right: 10px;"
     startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
-    initState = getState (getCurrentViewContent (annText, startPara))
-    getState content = maybe ((0,1), []) (\p -> ((0,length $ snd p), [p])) $
-      headMay content
+    initState = (ForwardGrow, (getCurrentViewContent annText (Just startPara)))
+    getState d content = maybe ((0,1), []) (\p -> ((0,length $ snd p), [p])) $
+      case d of
+        ForwardGrow -> headMay content
+        BackwardGrow -> headMay $ reverse content
+
+    stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
 
   -- Buttons
   prev <- if False
@@ -452,99 +457,120 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       (e,_) <- elAttr' "button" leftBtnAttr $ text "<"
       return (domEvent Click e)
 
+  let
+    getFPOffset (tc, ((fpN, fpT):_)) = (fpN, lenOT - (length fpT) + 1)
+      where
+        lenOT = length fpOT -- Full para / orig length
+        fpOT = maybe [] identity $ List.lookup fpN tc
+    pageChangeEv = leftmost [BackwardGrow <$ prev, ForwardGrow <$ next]
+    dEv = snd <$> (evVisible)
+
   --------------------------------
   rec
     let
-      dEv = snd <$> (evVisible)
       newPageEv' :: Event t (Int,Int)
       newPageEv' = fmapMaybe identity $ leftmost
         [tagDyn nextParaMaybe next
         , Just <$> firstPara] -- TODO
+
+      firstPara = getFPOffset <$>
+        (attachDyn textContent (snd <$> tagDyn row1Dyn stopTicks))
 
       lastDisplayedPara :: Dynamic t (Int, Int)
       lastDisplayedPara = (\v (fpN,o) -> maybe (0,0)
         (\(pn,pt) -> (pn, (if fpN == pn then o - 1 else 0) + length pt))
         (preview (_2 . to reverse . _head) v)) <$> row1Dyn <*> firstParaDyn
 
-
-    nextParaMaybe <- combineDyn getNextParaMaybe lastDisplayedPara textContent
-    prevParaMaybe <- combineDyn getPrevParaMaybe firstParaDyn textContent
+      nextParaMaybe = getNextParaMaybe <$> lastDisplayedPara <*> textContent
+      prevParaMaybe = getPrevParaMaybe <$> firstParaDyn <*> textContent
 
     newPageEv <- delay 1 newPageEv'
     firstParaDyn <- holdDyn startPara newPageEv
 
     -- textContentInThisView has relative numbering for first para, wrt to the start point
-    textContentInThisView <- holdDyn (getCurrentViewContent (annText, startPara))
-      (getCurrentViewContent <$> attachDyn textContent newPageEv)
+    -- textContentInThisView <- holdDyn (getCurrentViewContent (annText, startPara))
+    --   (getCurrentViewContent <$> attachDyn textContent newPageEv)
 
-    let foldF st = foldDyn textAdjustF st (attachDyn textContentInThisView dEv)
-        newStateEv = getState <$> (updated textContentInThisView)
+    -- textContentInPreviousView may have truncated last para
+    -- textContentInPreviousView <- holdDyn (getPrevViewContent (annText, startPara))
+    --   (getPrevViewContent <$> attachDyn textContent newPageEv)
+
+    let foldF (d, tc) =
+          foldDyn f st ((\d -> (tc,d)) <$> dEv)
+          where f = case d of
+                  ForwardGrow -> textAdjustF
+                  BackwardGrow -> textAdjustRevF
+                st = getState d tc
+
+        newStateEv = attachWith af (current
+          ((,) <$> (getCurrentViewContent <$> textContent <*> nextParaMaybe)
+               <*> (getPrevViewContent <$> textContent <*> prevParaMaybe)))
+                     pageChangeEv
+          where
+            af (c,_) ForwardGrow = (ForwardGrow,c)
+            af (_,c) BackwardGrow = (BackwardGrow,c)
+
         row1Dyn :: Dynamic t ((Int,Int), [(Int,AnnotatedPara)])
         row1Dyn = join row1Dyn'
 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
-
 
     textContent <- fetchMoreContentF docId annText firstPara newPageEv
 
     -- Reverse render widget for finding first para of prev page
     -- Find the para num (from start) which is visible completely
     let
-      divAttr = divAttr' <*> (constDyn False)
-      renderBackWidget :: _ -> AppMonadT t m (Event t (Int,Int))
-      renderBackWidget = renderVerticalBackwards rs divAttr
-      prevPageEv :: Event t (Int,Int)
-      prevPageEv = fmapMaybe identity (tagDyn prevParaMaybe prev)
+      wrapDynAttr = ffor fullscreenDyn $ \b -> if b
+        then ("style" =: "position: fixed; top: 0; bottom: 0; left: 0; right: 0;")
+        else Map.empty
+      divAttr = divAttr' <*> fullscreenDyn
+      -- renderBackWidget :: _ -> AppMonadT t m (Event t (Int,Int))
+      -- renderBackWidget v = elDynAttr "div" wrapDynAttr $
+      --   renderVerticalBackwards rs divAttr v
+      -- prevPageEv :: Event t (Int,Int)
+      -- prevPageEv = fmapMaybe identity (tagDyn prevParaMaybe prev)
 
-    textContentInPreviousView <- holdDyn (getPrevViewContent (annText, startPara))
-      (getPrevViewContent <$> attachDyn textContent newPageEv)
+    -- firstPara <- widgetHoldWithRemoveAfterEvent
+    --   (renderBackWidget <$> attachDyn textContentInPreviousView prevPageEv)
 
-    firstPara <- widgetHoldWithRemoveAfterEvent
-      (renderBackWidget <$> attachDyn textContentInPreviousView prevPageEv)
+    text "firstParaDyn:"
+    display firstParaDyn
+    text " lastDisplayedPara:"
+    display lastDisplayedPara
+    text " nextParaMaybe:"
+    display nextParaMaybe
+    text " prevParaMaybe:"
+    display prevParaMaybe
 
-  text "firstParaDyn:"
-  display firstParaDyn
-  text " lastDisplayedPara:"
-  display lastDisplayedPara
-  text " nextParaMaybe:"
-  display nextParaMaybe
-  text " prevParaMaybe:"
-  display prevParaMaybe
+    fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
+                                           , False <$ closeEv])
 
-  --------------------------------
-  (resizeEv, (rowRoot, (inside, outside, vIdEv, closeEv))) <- resizeDetector $ do
-    rec
-      let
-        divAttr = divAttr' <*> fullscreenDyn
+    --------------------------------
+    (resizeEv, (rowRoot, (inside, outside, vIdEv, closeEv))) <- resizeDetector $ do
+      rec
+        let
+          closeEv = tup ^. _2 . _4
+          dispFullScr m = do
+            dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
 
-        wrapDynAttr = ffor fullscreenDyn $ \b -> if b
-          then ("style" =: "position: fixed; top: 0; bottom: 0; left: 0; right: 0;")
-          else Map.empty
+        tup <- elDynAttr "div" wrapDynAttr $ elDynAttr' "div" divAttr $ do
+          closeEv <- do
+            (e,_) <- elClass' "button" "close" $ do
+              dispFullScr (text "Close")
+            return (domEvent Click e)
 
-        closeEv = tup ^. _2 . _4
-        dispFullScr m = do
-          dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
+          vIdEv <- el "div" $ do
+            renderDynParas rs (snd <$> row1Dyn)
 
-      fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
-                                             , False <$ closeEv])
-      tup <- elDynAttr "div" wrapDynAttr $ elDynAttr' "div" divAttr $ do
-        closeEv <- do
-          (e,_) <- elClass' "button" "close" $ do
-            dispFullScr (text "Close")
-          return (domEvent Click e)
-
-        vIdEv <- el "div" $ do
-          renderDynParas rs (snd <$> row1Dyn)
-
-        (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
-          text ""
-        elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
-          text ""
-        (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
-          text ""
-          return ()
-        return (inside, outside, vIdEv, closeEv)
-    return tup
+          (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+            text ""
+          elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
+            text ""
+          (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+            text ""
+            return ()
+          return (inside, outside, vIdEv, closeEv)
+      return tup
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
@@ -576,7 +602,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
   let
     -- TODO Stop if we hit end of text, close the document
-      stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
       startTicksAgain = leftmost [() <$ updated rs
                                  , resizeEv
                                  , closeEv, fullScrEv
@@ -640,20 +665,27 @@ moreContentAccF n@(n1:_) o@(o1:_)
   | (fst n1) > (fst o1) = (drop (length o - 30) o) ++ n -- More forward content
   | otherwise = n ++ (take 30 o) -- More previous paras
 
-getCurrentViewContent :: ([(Int,AnnotatedPara)], (Int, Int))
+getCurrentViewContent
+  :: [(Int,AnnotatedPara)]
+  -> Maybe (Int, Int)
   -> [(Int,AnnotatedPara)]
-getCurrentViewContent (annText, (p,o)) = startP : restP
+getCurrentViewContent annText Nothing = annText
+getCurrentViewContent annText (Just (p,o)) = startP : restP
   where
     startP = (p, maybe [] (drop (o - 1)) (List.lookup p annText))
     restP = filter ((> p) . fst) annText
 
 -- Offsets are the Current start of page
-getPrevViewContent :: ([(Int,AnnotatedPara)], (Int, Int))
+getPrevViewContent
+  :: [(Int,AnnotatedPara)]
+  -> Maybe (Int, Int)
   -> [(Int,AnnotatedPara)]
-getPrevViewContent (annText, (p,o)) =
-  if o == 0 then restP else reverse $ lastP : (reverse restP)
+getPrevViewContent annText Nothing = annText
+getPrevViewContent annText (Just (p,o)) =
+  -- if o == 0 then restP else
+  reverse $ lastP : (reverse restP)
   where
-    lastP = (p, maybe [] (take (o - 1)) (List.lookup p annText))
+    lastP = (p, maybe [] (take o) (List.lookup p annText))
     restP = filter ((< p) . fst) annText
 
 -- Start of next page (one after end of current page)
@@ -758,14 +790,13 @@ textAdjustF (annText, Nothing) (_, ps) = ((0,(length lpOT)),ps)
 -- lower bound is towards end, upper bound is towards start
 -- Do binary search between these bounds
 textAdjustRevF
-  :: [(Int,AnnotatedPara)]
-  -> Maybe TextAdjust
+  :: ([(Int,AnnotatedPara)], Maybe TextAdjust)
   -> ((Int,Int), [(Int,AnnotatedPara)])
   -> ((Int,Int), [(Int,AnnotatedPara)])
 
-textAdjustRevF annText (Just ShrinkText) ((li,ui),(fp:ps)) = case (fp) of
+textAdjustRevF (annText, (Just ShrinkText)) ((li,ui),(fp:ps)) = case (fp) of
   (_,[]) -> case ps of
-    (fp':ps') -> textAdjustRevF annText (Just ShrinkText)
+    (fp':ps') -> textAdjustRevF (annText, (Just ShrinkText))
       ((0,length fp'), ps)
     [] -> error "textAdjustRevF error"
 
@@ -777,10 +808,10 @@ textAdjustRevF annText (Just ShrinkText) ((li,ui),(fp:ps)) = case (fp) of
           nfpT = reverse $ take halfL $ reverse fpT
           lenT = length fpT
 
-textAdjustRevF annText (Just GrowText) v@(_,[])
+textAdjustRevF (annText, (Just GrowText)) v@(_,[])
   = error "textAdjustRevF error empty"
 
-textAdjustRevF annText (Just GrowText) v@((li,ui), ((fpN, fpT):ps)) =
+textAdjustRevF (annText, (Just GrowText)) v@((li,ui), ((fpN, fpT):ps)) =
   (\(i,n) -> (i, n ++ ps)) newFp
   where
     newFp = if lenT < lenOT
@@ -800,7 +831,11 @@ textAdjustRevF annText (Just GrowText) v@((li,ui), ((fpN, fpT):ps)) =
 
     newPara = List.lookup (fpN - 1) annText
 
-textAdjustRevF _ Nothing v = v
+
+textAdjustRevF (annText, Nothing) (_, ps) = ((0,(length lpOT)),ps)
+    where
+      ((lpN, lpT):_) = reverse ps
+      lpOT = maybe [] identity $ List.lookup lpN annText
 
 renderDynParas :: (_)
   => Dynamic t (ReaderSettings CurrentDb) -- Used for mark
@@ -822,70 +857,70 @@ renderDynParas rs dynParas = do
   return (vIdEv)
 
 
-renderVerticalBackwards :: (_)
-  => _
-  -> _
-  -> _
-  -> m (Event t (Int,Int))
+-- renderVerticalBackwards :: (_)
+--   => _
+--   -> _
+--   -> _
+--   -> m (Event t (Int,Int))
 
-renderVerticalBackwards rs divAttr (textContent, (ep,epOff)) = do
-  (evVisible, action) <- newTriggerEvent
-  visDyn <- holdDyn (0,Nothing) evVisible
-  display visDyn
+-- renderVerticalBackwards rs divAttr (textContent, (ep,epOff)) = do
+--   (evVisible, action) <- newTriggerEvent
+--   visDyn <- holdDyn (0,Nothing) evVisible
+--   display visDyn
 
-  let
-    lastPara = maybe [] (take epOff) (List.lookup ep textContent)
-    initState = (\t -> ((0,length t), [(ep, t)])) lastPara
-    dEv = snd <$> (evVisible)
-  row1Dyn <- foldDyn (textAdjustRevF textContent) initState dEv
+--   let
+--     lastPara = maybe [] (take epOff) (List.lookup ep textContent)
+--     initState = (\t -> ((0,length t), [(ep, t)])) lastPara
+--     dEv = snd <$> (evVisible)
+--   row1Dyn <- foldDyn (textAdjustRevF textContent) initState dEv
 
-  let
-    firstDisplayedPara = (\v -> maybe (0,0) (\(pn,pt) -> (pn, length pt))
-                            (preview (_2 . _head) v)) <$> row1Dyn
+--   let
+--     firstDisplayedPara = (\v -> maybe (0,0) (\(pn,pt) -> (pn, length pt))
+--                             (preview (_2 . _head) v)) <$> row1Dyn
 
-  text "First para num and length: "
-  display firstDisplayedPara
+--   text "First para num and length: "
+--   display firstDisplayedPara
 
-  (rowRoot, (inside, outside)) <- elDynAttr' "div" divAttr $ do
-    el "div" $ do
-      renderDynParas rs (snd <$> row1Dyn)
+--   (rowRoot, (inside, outside)) <- elDynAttr' "div" divAttr $ do
+--     el "div" $ do
+--       renderDynParas rs (snd <$> row1Dyn)
 
-    (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
-      text ""
-    elAttr "div" ("style" =: "height: 2em; width: 3em;") $ do
-      text ""
-    (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
-      text ""
-      return ()
-    return (inside, outside)
+--     (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+--       text ""
+--     elAttr "div" ("style" =: "height: 2em; width: 3em;") $ do
+--       text ""
+--     (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+--       text ""
+--       return ()
+--     return (inside, outside)
 
-  let inEl = _element_raw inside
-      outEl = _element_raw outside
+--   let inEl = _element_raw inside
+--       outEl = _element_raw outside
 
-  time <- liftIO $ getCurrentTime
+--   time <- liftIO $ getCurrentTime
 
-  let
-    -- TODO Stop if we hit end of text
-      stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
-      startTicksAgain = updated rs -- resizeEv
-      ticksWidget = do
-        let init = widgetHold (tickLossy 1 time)
-              (return never <$ stopTicks)
-        t <- widgetHold init
-          (init <$ startTicksAgain)
-        return (switchPromptlyDyn $ join t)
+--   let
+--     -- TODO Stop if we hit end of text
+--       stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
+--       startTicksAgain = updated rs -- resizeEv
+--       ticksWidget = do
+--         let init = widgetHold (tickLossy 1 time)
+--               (return never <$ stopTicks)
+--         t <- widgetHold init
+--           (init <$ startTicksAgain)
+--         return (switchPromptlyDyn $ join t)
 
-  tickEv <- ticksWidget
+--   tickEv <- ticksWidget
 
-  performEvent (checkVerticalOverflow (inEl, outEl)
-                (_element_raw rowRoot) action <$ tickEv)
+--   performEvent (checkVerticalOverflow (inEl, outEl)
+--                 (_element_raw rowRoot) action <$ tickEv)
 
-  let
-    getFPOffset ((fpN, fpT):_) = (fpN, lenOT - (length fpT))
-      where
-        lenOT = length fpOT -- Full para / orig length
-        fpOT = maybe [] identity $ List.lookup fpN textContent
-  return $ getFPOffset . snd <$> tagDyn row1Dyn stopTicks
+--   let
+--     getFPOffset ((fpN, fpT):_) = (fpN, lenOT - (length fpT))
+--       where
+--         lenOT = length fpOT -- Full para / orig length
+--         fpOT = maybe [] identity $ List.lookup fpN textContent
+--   return $ getFPOffset . snd <$> tagDyn row1Dyn stopTicks
 
 ----------------------------------------------------------------------------------
 lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
