@@ -485,8 +485,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       nextParaMaybe = getNextParaMaybe <$> lastDisplayedPara <*> textContent
       prevParaMaybe = getPrevParaMaybe <$> firstParaDyn <*> textContent
 
-    newPageEv <- delay 1 firstParaEv
-    firstParaDyn <- holdDyn startPara newPageEv
+    firstParaDyn <- holdDyn startPara
+      =<< delay 1 firstParaEv
 
     let foldF (d, tc) =
           foldDyn f st ((\d -> (tc,d)) <$> dEv)
@@ -561,7 +561,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
 
-  getWebSocketResponse ((\(p,o) -> SaveReadingProgress docId (p,Just o)) <$> newPageEv)
+  getWebSocketResponse ((\(p,o) -> SaveReadingProgress docId (p,Just o)) <$> firstParaEv)
 
   --------------------------------
 
