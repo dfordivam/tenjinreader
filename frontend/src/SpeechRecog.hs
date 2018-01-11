@@ -21,6 +21,7 @@ import GHCJS.DOM.SpeechRecognitionEvent
 import GHCJS.DOM.SpeechGrammar
 import GHCJS.DOM.EventM
 import Language.Javascript.JSaddle.Object
+import Language.Javascript.JSaddle.Types
 #endif
 
 -- speechRecogWidget readings = do
