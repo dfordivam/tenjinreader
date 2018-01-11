@@ -444,7 +444,23 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
         ForwardGrow -> headMay content
         BackwardGrow -> headMay $ reverse content
 
-    stopTicks = fmapMaybe (\(_,a) -> if isNothing a then Just () else Nothing) evVisible
+  rec
+    let doStop (Just GrowText) Nothing = Just 1
+        doStop (Just GrowText) (Just c) = Just (c + 1)
+        doStop (Just ShrinkText) _ = Nothing
+        doStop Nothing _ = Nothing
+        stopTicks = traceEvent "stop" $ leftmost [stopTicks1
+                             , fforMaybe evVisible (\(_,a) -> if isNothing a
+                                                     then Just ()
+                                                     else Nothing)
+                             ]
+
+        stopTicks1 = fforMaybe (tag (current stopTicksMaybe) evVisible) $ \case
+          Nothing -> Nothing
+          (Just c) -> if c > 20 then Just () else Nothing
+
+    stopTicksMaybe <- foldDyn doStop Nothing $
+      leftmost [Nothing <$ stopTicks,(snd <$> evVisible)]
 
   -- Buttons
   prev <- if False
@@ -486,7 +502,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       prevParaMaybe = getPrevParaMaybe <$> firstParaDyn <*> textContent
 
     firstParaDyn <- holdDyn startPara
-      =<< delay 1 firstParaEv
+      =<< delay 1 firstParaEv -- without this stack overflow
 
     let foldF (d, tc) =
           foldDyn f st ((\d -> (tc,d)) <$> dEv)
@@ -508,7 +524,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
-    textContent <- fetchMoreContentF docId annText (attachDyn firstParaDyn pageChangeEv)
+    textContent <- fetchMoreContentF docId annText
+      (traceEvent "fetchEv: " (attachDyn firstParaDyn pageChangeEv))
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
@@ -577,7 +594,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
                                  , closeEv, fullScrEv
                                  , () <$ pageChangeEv]
       ticksWidget = do
-        let init = widgetHold (tickLossy 1 time)
+        let init = widgetHold (tickLossy 0.5 time)
               (return never <$ stopTicks)
         t <- widgetHold init
           (init <$ startTicksAgain)
