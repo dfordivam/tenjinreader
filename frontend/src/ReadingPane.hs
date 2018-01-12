@@ -460,6 +460,14 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
       leftmost [Nothing <$ stopTicks,(snd <$> evVisible)]
 
   let
+    -- Dirty HACK
+    getFPOffset (tc, ((fpN, fpT):[])) = (fpN, length prefix)
+      where
+        (Just (prefix,_)) = headMay $ catMaybes $
+          fmap (\(v,l) -> (,) v <$> List.stripPrefix fpT l) $
+          fmap (\s -> splitAt s fpOT) [0..lenOT]
+        lenOT = length fpOT -- Full para / orig length
+        fpOT = maybe [] identity $ List.lookup fpN tc
     getFPOffset (tc, ((fpN, fpT):_)) = (fpN, lenOT - (length fpT))
       where
         lenOT = length fpOT -- Full para / orig length
