@@ -554,11 +554,11 @@ inputFieldWidget doRecog (ri@(ReviewItem i k m r), rt) = do
               \overflow-y: auto")
   rec
     elAttr "div" resultDisAttr $
-      widgetHold (return ()) (showResult <$> (leftmost [resEv, shimesuEv]))
+      widgetHold (return ()) (showResult <$> (leftmost [resEv, shimesuEv, recogCorrectEv]))
 
     -- Footer
-    (shiruResEv , addEditEv, recogResEv, shimesuEv) <- divClass "row" $ do
-      recogRes <- divClass "col-sm-2" $
+    (shiruResEv , addEditEv, (recogCorrectEv, recogResEv), shimesuEv) <- divClass "row" $ do
+      recog <- divClass "col-sm-2" $
         speechRecogWidget doRecog (ri, rt)
       shirimasu <- divClass "col-sm-2" $
         btn "btn-primary" "知ります"
@@ -575,7 +575,7 @@ inputFieldWidget doRecog (ri@(ReviewItem i k m r), rt) = do
         return $ (\s -> AddItemsEv [getReviewItem s] 0) <$> newSrsEntryEv
       let shiruRes = (\b -> DoReviewEv (i, rt, b)) <$>
             leftmost [True <$ shirimasu, False <$ shiranai]
-      return (shiruRes , addEditEv, recogRes, False <$ shimesu)
+      return (shiruRes , addEditEv, recog, False <$ shimesu)
 
   return $ leftmost [ shiruResEv , recogResEv
                     , dr, addEditEv]
@@ -674,7 +674,7 @@ btnText AnswerWrong = "Not quite, Try Again?"
 speechRecogWidget :: forall t m rt . (AppMonad t m, SrsReviewType rt)
   => (Event t () -> m (Event t Result))
   -> (ReviewItem, ActualReviewType rt)
-  -> AppMonadT t m (Event t (ReviewStateEvent rt))
+  -> AppMonadT t m (Event t Bool, Event t (ReviewStateEvent rt))
 speechRecogWidget doRecog (ri@(ReviewItem i k m r),rt) = do
   let startRecogEv st ev =
         fforMaybe (tagDyn st ev) $ \case
@@ -696,6 +696,7 @@ speechRecogWidget doRecog (ri@(ReviewItem i k m r),rt) = do
       ev2 = WaitingForRecogResponse <$ stRec
       ev3 = WaitingForServerResponse <$ recRes1
       stRec = (startRecogEv stDyn evClick)
+      correctEv = fmapMaybe identity $ ffor recRes2 $ \b -> if b then Just True else Nothing
 
     evEv <- dyn $ (btn "btn-primary")
       <$> (btnText <$> stDyn)
@@ -707,4 +708,4 @@ speechRecogWidget doRecog (ri@(ReviewItem i k m r),rt) = do
 
     stDyn <- holdDyn NewReviewStart ev
 
-  return $ (DoReviewEv (i,rt,True)) <$ doReviewEv stDyn evClick
+  return $ (correctEv, DoReviewEv (i,rt,True) <$ doReviewEv stDyn evClick)

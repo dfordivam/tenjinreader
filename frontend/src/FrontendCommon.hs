@@ -19,7 +19,7 @@ import Common as X
 import Radicals as X
 
 import Protolude as X hiding (link, (&), list, Alt, to)
-import Control.Lens as X ((.~), (^.), (?~), (^?), (%~), _1, _2, _3, _4, sets
+import Control.Lens as X ((.~), (^.), (?~), (^?), (%~), _1, _2, _3, _4, sets, each
   , _head, _Just, view, over, views, preview, (^..), to, mapped, forMOf_)
 import Control.Monad.Fix as X
 
@@ -31,6 +31,7 @@ import Data.Time.Clock as X
 import Data.Time.Calendar as X
 import qualified Data.Map as Map
 import qualified Data.Text as T
+import qualified Data.List as List
 import Data.These as X
 import Data.Align as X
 
@@ -317,8 +318,8 @@ sentenceWidgetView (surface, meanings) (vIds, ss, njps) = modalDiv $ do
     text surface
     text " : "
     let m = mconcat $ intersperse ", " $ meanings
-    text $ if T.length m > 20
-      then (T.take 20 m) <> "..."
+    text $ if T.length m > 40
+      then (T.take 40 m) <> "..."
       else m
     (e,_) <- elClass' "button" "close" $ text "Close"
     return (domEvent Click e)
@@ -326,12 +327,33 @@ sentenceWidgetView (surface, meanings) (vIds, ss, njps) = modalDiv $ do
   let bodyAttr = ("class" =: "modal-body")
           <> ("style" =: "height: 80vh;\
               \overflow-y: auto")
+      sMap :: Map SentenceId SentenceData
+      sMap = Map.fromList $ map (\sd -> (sd ^. sentenceId,sd)) ss
+      njpMap = Map.fromList njps
+      sentenceGroups :: [([SentenceData],[Text])]
+      sentenceGroups = over (each . _1 . each) (view _2) $
+        ff  $ map (\sd -> (sd ^. sentenceId,sd)) ss
+      ff [] = []
+      ff (s:[]) = [([s], njs)]
+        where
+          njs = catMaybes $ map (\k -> Map.lookup k njpMap) $ s ^. _2 . sentenceLinkedEng
+      ff (s:sss) = (s:linked, njs) : ff ss2
+        where
+          linked = map (\sd -> (sd ^. sentenceId,sd)) $
+            catMaybes $ map (\i -> List.lookup i sss) $
+            s ^. _2 . sentenceLinkedJp
+          ss2 = List.deleteFirstsBy (\a b -> fst a == fst b) sss linked
+          njs = catMaybes $ map (\k -> Map.lookup k njpMap) $ s ^. _2 . sentenceLinkedEng
 
   vIdEvs <- elAttr "div" bodyAttr $ do
-    forM ss $ \s -> do
-      renderOnePara (constDyn vIds) (constDyn 100) (s ^. sentenceContents)
+    forM sentenceGroups $ \(sg, njps) -> do
+      evs <- divClass "" $ forM sg $ \s -> do
+        renderOnePara (constDyn vIds) (constDyn 100) (s ^. sentenceContents)
+      divClass "" $ forM njps $ \t -> do
+        el "p" $ text t
+      return evs
 
-  let vIdEv = leftmost vIdEvs
+  let vIdEv = leftmost $ concat vIdEvs
 
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
