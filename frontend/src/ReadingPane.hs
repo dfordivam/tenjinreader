@@ -389,6 +389,8 @@ getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr endParaEv 
 
       return $ join v2
 
+-- Starting of para is 0
+-- So document start is (0,0)
 -- Algo
 -- Start of page
   -- (ParaId, Maybe Offset) -- (Int , Maybe Int)
@@ -458,12 +460,13 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
       leftmost [Nothing <$ stopTicks,(snd <$> evVisible)]
 
   let
-    getFPOffset (tc, ((fpN, fpT):_)) = (fpN, lenOT - (length fpT) + 1)
+    getFPOffset (tc, ((fpN, fpT):_)) = (fpN, lenOT - (length fpT))
       where
         lenOT = length fpOT -- Full para / orig length
         fpOT = maybe [] identity $ List.lookup fpN tc
     dEv = snd <$> (evVisible)
 
+  text $ "Start Para:" <> tshow startPara
   --------------------------------
   rec
     let
@@ -669,7 +672,7 @@ getPrevViewContent annText (Just (p,o)) =
 getNextParaMaybe :: (Int, Int) -> [(Int,AnnotatedPara)]
   -> Maybe (Int, Int)
 getNextParaMaybe (lp, lpOff) textContent = lpOT >>= \l ->
-  case (drop lpOff l, nextP) of
+  case (drop (lpOff + 1) l, nextP) of
     ([],Nothing) -> Nothing
     ([],Just _) -> Just (lp + 1, 0)
     (ls,_) -> Just $ (lp,lpOff + 1)
