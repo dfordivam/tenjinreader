@@ -412,7 +412,7 @@ verticalReader :: forall t m . AppMonad t m
   -> Event t ()
   -> (ReaderDocumentData)
   -> AppMonadT t m ()
-verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
+verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) = do
   (evVisible, action) <- newTriggerEvent
 
   visDyn <- holdDyn (0,Nothing) evVisible
@@ -432,11 +432,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
       <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
       <*> (_numOfLines <$> rs)
 
-    btnCommonAttr stl = ("class" =: "btn btn-xs")
-       <> ("style" =: ("height: 80%; top: 10%; width: 20px; position: absolute; z-index: 1060;"
-          <> stl ))
-    leftBtnAttr = btnCommonAttr "left: 10px;"
-    rightBtnAttr = btnCommonAttr "right: 10px;"
     startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
     initState = (ForwardGrow, (getCurrentViewContent annText (Just startPara)))
     getState d content = maybe ((0,1), []) (\p -> ((0,length $ snd p), [p])) $
@@ -462,29 +457,17 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
     stopTicksMaybe <- foldDyn doStop Nothing $
       leftmost [Nothing <$ stopTicks,(snd <$> evVisible)]
 
-  -- Buttons
-  prev <- if False
-    then return never
-    else do
-      (e,_) <- elAttr' "button" rightBtnAttr $ text ">"
-      return (domEvent Click e)
-  next <- if False
-    then return never
-    else do
-      (e,_) <- elAttr' "button" leftBtnAttr $ text "<"
-      return (domEvent Click e)
-
   let
     getFPOffset (tc, ((fpN, fpT):_)) = (fpN, lenOT - (length fpT) + 1)
       where
         lenOT = length fpOT -- Full para / orig length
         fpOT = maybe [] identity $ List.lookup fpN tc
-    pageChangeEv = leftmost [BackwardGrow <$ prev, ForwardGrow <$ next]
     dEv = snd <$> (evVisible)
 
   --------------------------------
   rec
     let
+      pageChangeEv = leftmost [BackwardGrow <$ prev, ForwardGrow <$ next]
       firstParaEv :: Event t (Int,Int)
       firstParaEv = fmapMaybe identity $ leftmost
         [tagDyn nextParaMaybe next
@@ -524,12 +507,12 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
-    textContent <- fetchMoreContentF docId annText
+    textContent <- fetchMoreContentF docId annText endParaNum
       (traceEvent "fetchEv: " (attachDyn firstParaDyn pageChangeEv))
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
-        then ("style" =: "position: fixed; top: 0; bottom: 0; left: 0; right: 0;")
+        then ("style" =: "position: fixed; padding 1em; top: 0; bottom: 0; left: 0; right: 0;")
         else Map.empty
       divAttr = divAttr' <*> fullscreenDyn
 
@@ -572,6 +555,9 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
           return (inside, outside, vIdEv, closeEv)
       return tup
 
+    (next,prev) <- leftRightButtons fullscreenDyn nextParaMaybe prevParaMaybe stopTicks
+
+
   divClass "" $ do
     detailsEv <- getWebSocketResponse $ GetVocabDetails
       <$> (fmap fst vIdEv)
@@ -594,8 +580,12 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
                                  , closeEv, fullScrEv
                                  , () <$ pageChangeEv]
       ticksWidget = do
-        let init = widgetHold (tickLossy 0.5 time)
+        let init = widgetHold (tickW)
               (return never <$ stopTicks)
+            tickW = do
+              ev <- getPostBuild
+              de <- delay 0.2 $ leftmost [ev, () <$ evVisible]
+              return $ de
         t <- widgetHold init
           (init <$ startTicksAgain)
         return (switchPromptlyDyn $ join t)
@@ -610,9 +600,10 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, annText) = do
 fetchMoreContentF :: (AppMonad t m)
   => _
   -> [(Int,AnnotatedPara)]
+  -> Int
   -> Event t ((Int,Int), TextAdjustDirection)
   -> AppMonadT t m (Dynamic t [(Int,AnnotatedPara)])
-fetchMoreContentF docId annText pageChangeEv = do
+fetchMoreContentF docId annText endParaNum pageChangeEv = do
   rec
     -- Fetch more contents
     -- Keep at most 60 paras in memory, length n == 30
@@ -622,17 +613,17 @@ fetchMoreContentF docId annText pageChangeEv = do
         firstAvailablePara = ((\(p:_) -> fst p)) <$> textContent
         hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara pageChangeEv)
         hitEndF (l,((n,_), d))
-          | d == ForwardGrow && (l - n < 10) = Just (l + 1)
+          | l < endParaNum && d == ForwardGrow && (l - n < 10) = Just (l + 1)
           | otherwise = Nothing
         hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara pageChangeEv)
         hitStartF (f,((n,_), d))
-          | d == BackwardGrow && (n - f < 10) = Just (max 0 (f - 30))
+          | f > 0 && d == BackwardGrow && (n - f < 10) = Just (max 0 (f - 30))
           | otherwise = Nothing
 
     moreContentEv <- getWebSocketResponse $
       (\p -> ViewDocument docId (Just p)) <$> (leftmost [hitEndEv, hitStartEv])
 
-    textContent <- foldDyn moreContentAccF annText ((\(_,_,_,c) -> c) <$>
+    textContent <- foldDyn moreContentAccF annText ((\(_,_,_,_,c) -> c) <$>
                                     (fmapMaybe identity moreContentEv))
 
   text "("
@@ -658,7 +649,7 @@ getCurrentViewContent
 getCurrentViewContent annText Nothing = annText
 getCurrentViewContent annText (Just (p,o)) = startP : restP
   where
-    startP = (p, maybe [] (drop (o - 1)) (List.lookup p annText))
+    startP = (p, maybe [] (drop o) (List.lookup p annText))
     restP = filter ((> p) . fst) annText
 
 -- Offsets are the Current start of page
@@ -696,6 +687,43 @@ getPrevParaMaybe (lp, lpOff) textContent =
     (_,_) -> Just (lp, lpOff - 1 )
   where
     prevP = List.lookup (lp - 1) textContent
+
+-- On click of left or right button hide both
+-- wait for stopTicks, then show the button again if the next/prev value is Just
+-- Change the button size if full screen
+leftRightButtons fullscreenDyn nextParaMaybe prevParaMaybe stopTicks = do
+
+  let
+    btnCommonAttr stl vis = (\fs -> ("class" =: "btn btn-xs")
+       <> ("style" =: ("height: " <> tshow (if fs then 80 else 60) <> "%;\
+            \top: "<> tshow (if fs then 10 else 30) <> "%; width: 20px;"
+            <> visV <>
+            "position: absolute; z-index: 1060;"
+          <> stl ))) <$> fullscreenDyn
+       where
+         visV = if vis then "" else "display: none;"
+
+    leftBtnAttr vis = btnCommonAttr "left: 10px;" =<< vis
+    rightBtnAttr vis = btnCommonAttr "right: 10px;" =<< vis
+
+  -- Buttons
+  rec
+    let btnPress = leftmost [next,prev]
+    leftBtnVis <- holdDyn (False) $
+      leftmost [tagDyn (isJust <$> nextParaMaybe) stopTicks
+               , False <$ btnPress]
+    rightBtnVis <- holdDyn (False) $
+      leftmost [tagDyn (isJust <$> prevParaMaybe) stopTicks
+               , False <$ btnPress]
+
+    prev <- do
+      (e,_) <- elDynAttr' "button" (rightBtnAttr rightBtnVis) $ text ">"
+      return (domEvent Click e)
+    next <- do
+      (e,_) <- elDynAttr' "button" (leftBtnAttr leftBtnVis) $ text "<"
+      return (domEvent Click e)
+
+  return (next,prev)
 
 data TextAdjust = ShrinkText | GrowText
   deriving (Show, Eq)
@@ -854,4 +882,3 @@ writingModeOptions = Map.fromList $
 
 numOfLinesOptions = Map.fromList $ (\x -> (x, (tshow x) <> "px"))
   <$> ([100,150..2000]  :: [Int])
-

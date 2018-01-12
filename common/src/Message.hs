@@ -295,7 +295,7 @@ instance WebSocketMessage AppRequest ViewDocument where
   type ResponseT AppRequest ViewDocument = (Maybe (ReaderDocumentData))
 
 type ReaderDocumentData =
-  (ReaderDocumentId, Text, (Int, Maybe Int)
+  (ReaderDocumentId, Text, (Int, Maybe Int), Int
    , [(Int, AnnotatedPara)])
 
 ----------------------------------------------------------------
