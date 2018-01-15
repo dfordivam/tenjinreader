@@ -327,30 +327,22 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
   let bodyAttr = ("class" =: "modal-body")
           <> ("style" =: "height: 80vh;\
               \overflow-y: auto")
-      -- sMap :: Map SentenceId SentenceData
-      -- sMap = Map.fromList $ map (\sd -> (sd ^. sentenceId,sd)) ss
-      -- njpMap = Map.fromList njps
-      -- sentenceGroups :: [([SentenceData],[Text])]
-      -- sentenceGroups = over (each . _1 . each) (view _2) $
-      --   ff  $ map (\sd -> (sd ^. sentenceId,sd)) ss
-      -- ff [] = []
-      -- ff (s:[]) = [([s], njs)]
-      --   where
-      --     njs = catMaybes $ map (\k -> Map.lookup k njpMap) $ s ^. _2 . sentenceLinkedEng
-      -- ff (s:sss) = (s:linked, njs) : ff ss2
-      --   where
-      --     linked = map (\sd -> (sd ^. sentenceId,sd)) $
-      --       catMaybes $ map (\i -> List.lookup i sss) $
-      --       s ^. _2 . sentenceLinkedJp
-      --     ss2 = List.deleteFirstsBy (\a b -> fst a == fst b) sss linked
-      --     njs = catMaybes $ map (\k -> Map.lookup k njpMap) $ s ^. _2 . sentenceLinkedEng
 
   vIdEvs <- elAttr "div" bodyAttr $ do
     forM ss $ \(SentenceData sg njps) -> do
-      evs <- divClass "" $ forM sg $ \s -> do
-        renderOnePara (constDyn vIds) (constDyn 100) s
-      divClass "" $ forM njps $ \t -> do
-        el "p" $ text t
+      let hasEng = not $ null njps
+      (evs, visDyn) <- divClass "row" $ do
+        evs <- divClass (if hasEng then "col-sm-11" else "col-sm-12") $
+          forM sg $ \s -> do
+            renderOnePara (constDyn vIds) (constDyn 100) s
+        visDyn <- if hasEng
+          then toggle False =<< (divClass "col-sm-1" $ btn "btn-xs btn-primary" "意味")
+          else return $ constDyn False
+        return (evs,visDyn)
+
+      if hasEng
+        then handleVisibility True visDyn $ forM njps $ \t -> el "p" $ text t
+        else return []
       return $ NE.toList evs
 
   let vIdEv = leftmost $ concat vIdEvs
@@ -378,7 +370,7 @@ vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
     f (KanjiWithReading (Kanji k) r)
       = elDynAttr "ruby" rubyAttr $ do
           text k
-          el "rt" $ dynText (g r <$> visDyn)
+          elDynAttr "rt" attr $ dynText (g r <$> visDyn)
 
   (e,_) <- elDynAttr' "span" attr $ mapM f ks
   return (Just $ _element_raw e
