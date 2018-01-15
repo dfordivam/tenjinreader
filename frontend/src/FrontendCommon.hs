@@ -311,9 +311,9 @@ openSentenceWidget header open = do
 
 sentenceWidgetView :: AppMonad t m
   => (Text, [Text])
-  -> ([VocabId], [SentenceData], [(NonJpSentenceId,Text)])
+  -> ([VocabId], [SentenceData])
   -> AppMonadT t m (Event t ())
-sentenceWidgetView (surface, meanings) (vIds, ss, njps) = modalDiv $ do
+sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
   closeEvTop <- divClass "modal-header" $ do
     text surface
     text " : "
@@ -327,31 +327,31 @@ sentenceWidgetView (surface, meanings) (vIds, ss, njps) = modalDiv $ do
   let bodyAttr = ("class" =: "modal-body")
           <> ("style" =: "height: 80vh;\
               \overflow-y: auto")
-      sMap :: Map SentenceId SentenceData
-      sMap = Map.fromList $ map (\sd -> (sd ^. sentenceId,sd)) ss
-      njpMap = Map.fromList njps
-      sentenceGroups :: [([SentenceData],[Text])]
-      sentenceGroups = over (each . _1 . each) (view _2) $
-        ff  $ map (\sd -> (sd ^. sentenceId,sd)) ss
-      ff [] = []
-      ff (s:[]) = [([s], njs)]
-        where
-          njs = catMaybes $ map (\k -> Map.lookup k njpMap) $ s ^. _2 . sentenceLinkedEng
-      ff (s:sss) = (s:linked, njs) : ff ss2
-        where
-          linked = map (\sd -> (sd ^. sentenceId,sd)) $
-            catMaybes $ map (\i -> List.lookup i sss) $
-            s ^. _2 . sentenceLinkedJp
-          ss2 = List.deleteFirstsBy (\a b -> fst a == fst b) sss linked
-          njs = catMaybes $ map (\k -> Map.lookup k njpMap) $ s ^. _2 . sentenceLinkedEng
+      -- sMap :: Map SentenceId SentenceData
+      -- sMap = Map.fromList $ map (\sd -> (sd ^. sentenceId,sd)) ss
+      -- njpMap = Map.fromList njps
+      -- sentenceGroups :: [([SentenceData],[Text])]
+      -- sentenceGroups = over (each . _1 . each) (view _2) $
+      --   ff  $ map (\sd -> (sd ^. sentenceId,sd)) ss
+      -- ff [] = []
+      -- ff (s:[]) = [([s], njs)]
+      --   where
+      --     njs = catMaybes $ map (\k -> Map.lookup k njpMap) $ s ^. _2 . sentenceLinkedEng
+      -- ff (s:sss) = (s:linked, njs) : ff ss2
+      --   where
+      --     linked = map (\sd -> (sd ^. sentenceId,sd)) $
+      --       catMaybes $ map (\i -> List.lookup i sss) $
+      --       s ^. _2 . sentenceLinkedJp
+      --     ss2 = List.deleteFirstsBy (\a b -> fst a == fst b) sss linked
+      --     njs = catMaybes $ map (\k -> Map.lookup k njpMap) $ s ^. _2 . sentenceLinkedEng
 
   vIdEvs <- elAttr "div" bodyAttr $ do
-    forM sentenceGroups $ \(sg, njps) -> do
+    forM ss $ \(SentenceData sg njps) -> do
       evs <- divClass "" $ forM sg $ \s -> do
-        renderOnePara (constDyn vIds) (constDyn 100) (s ^. sentenceContents)
+        renderOnePara (constDyn vIds) (constDyn 100) s
       divClass "" $ forM njps $ \t -> do
         el "p" $ text t
-      return evs
+      return $ NE.toList evs
 
   let vIdEv = leftmost $ concat vIdEvs
 

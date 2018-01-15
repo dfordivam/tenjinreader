@@ -9,6 +9,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module KanjiDB where
 
 import Common
@@ -167,10 +168,10 @@ instance Value SenseField
 instance Binary SentenceId
 instance Binary SentenceData
 instance Value SentenceId
-instance Ix SentenceId
-instance Ix RadicalId
-instance Ix EntryId
-instance Ix KanjiId
+deriving instance Ix SentenceId
+deriving instance Ix RadicalId
+deriving instance Ix EntryId
+deriving instance Ix KanjiId
 makeLenses ''KanjiData
 makeLenses ''VocabData
 --

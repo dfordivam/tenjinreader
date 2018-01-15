@@ -14,6 +14,7 @@ import Handler.WebSocketHandler.Utils
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.List.NonEmpty as NE
 import Data.Time.Clock
 import Data.Time.Calendar
 import Text.Pretty.Simple
@@ -28,6 +29,7 @@ import Data.These
 import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 import Control.Monad.State hiding (foldM)
 import NLP.Japanese.Utils
+import Data.SearchEngine
 
 
 getSrsStats :: GetSrsStats
@@ -407,5 +409,31 @@ initSrsDb = do
             (Just _) -> return db
             Nothing -> db & userData %%~ (Tree.insertTree uId d)
     foldM f db users
+
+  return ()
+
+fixSrsDb :: Handler ()
+fixSrsDb = do
+  se <- asks appVocabSearchEngNoGloss
+  let uId = 1
+  let
+    upFun :: (AllocM m) => AppUserDataTree CurrentDb
+      -> m (AppUserDataTree CurrentDb)
+    upFun rd = do
+      rws <- Tree.toList (rd ^. reviews)
+      let
+
+        getF (ri,r) = (,) <$> pure ri <*> listToMaybe eIds
+          where f = NE.head (r ^. field)
+                eIds = query se [f]
+        newIds :: [(SrsEntryId, EntryId)]
+        newIds = catMaybes $ map getF rws
+
+        ff rd (s,e) = rd & srsKanjiVocabMap %%~ Tree.insertTree s (Right e)
+          >>= vocabSrsMap %%~ Tree.insertTree e s
+
+      foldlM ff rd newIds
+
+  transactSrsDB_ $ userData %%~ updateTreeM uId upFun
 
   return ()
