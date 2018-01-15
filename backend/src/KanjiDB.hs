@@ -24,9 +24,12 @@ import Data.Binary
 import Data.SearchEngine
 import Data.Ix
 import qualified Data.Vector as V
+import qualified Data.Array as A
+import Data.Array (Array)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Set as Set
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import Text.MeCab
 import NLP.Romkan as NLP
@@ -38,8 +41,9 @@ import qualified Data.ByteString.Lazy
 import Data.JMDict.AST
 import Data.BTree.Primitives (Value, Key)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Binary.Orphans
 
-type KanjiDb = Map KanjiId KanjiData
+type KanjiDb = Array KanjiId KanjiData
 
 data KanjiData = KanjiData
   { _kanjiDetails    :: KanjiDetails
@@ -48,7 +52,7 @@ data KanjiData = KanjiData
   }
   deriving (Generic, Binary)
 
-type VocabDb = Map VocabId VocabData
+type VocabDb = Array VocabId VocabData
 
 data VocabData = VocabData
   { _vocabDetails    :: VocabDetails
@@ -57,11 +61,9 @@ data VocabData = VocabData
   }
   deriving (Generic, Binary)
 
-type RadicalDb = Map RadicalId (Set KanjiId)
+type RadicalDb = Array RadicalId (Set KanjiId)
 
-type SentenceDb = Map SentenceId SentenceData
-
-type NonJpSentenceDb = Map NonJpSentenceId Text
+type SentenceDb = Array SentenceId SentenceData
 
 type VocabSentenceDb = Map EntryId (Set SentenceId)
 
@@ -161,15 +163,19 @@ instance Binary LanguageSource
 instance Value LanguageSource
 instance Binary SenseField
 instance Value SenseField
-instance Binary (NonEmpty ReadingElement)
 
 instance Binary SentenceId
-instance Binary NonJpSentenceId
 instance Binary SentenceData
 instance Value SentenceId
+instance Ix SentenceId
+instance Ix RadicalId
+instance Ix EntryId
+instance Ix KanjiId
 makeLenses ''KanjiData
 makeLenses ''VocabData
 --
+makeArray ls = A.array (minimum $ map fst ls, maximum $ map fst ls) ls
+
 createDBs ::
   MeCab
   -> IO (KanjiDb, VocabDb, RadicalDb)
@@ -192,12 +198,12 @@ createDBs mecab = do
           let
             ksMap = Map.fromList $
               ks & each %~ (view swapped) . (_2 %~ _kanjiCharacter)
-            vDb = Map.fromList $
-              map (getVocabData ksMap) es
+            vDb = makeArray $
+              map (getVocabData ksMap) (zip [1..] es)
 
-          kDb <- Map.fromList <$> getKanjiData vDb ks
+          kDb <- makeArray <$> getKanjiData vDb ks
 
-          rDb <- Map.fromList <$> mapM
+          rDb <- makeArray <$> mapM
             (\r -> do
                 ks <- getRadicalKanjis r
                 return (r, Set.fromList ks))
@@ -210,11 +216,13 @@ createDBs mecab = do
 
 getVocabData
   :: Map Kanji KanjiId
-  -> (Entry, VocabDetails)
+  -> (Int, (Entry, VocabDetails))
   -> (VocabId, VocabData)
-getVocabData ksMap (e,v) =
-  (v ^. vocabId, VocabData v e kSet)
+getVocabData ksMap (i, (e,v)) =
+  (EntryId i, VocabData nv ne kSet)
   where
+    nv = v & vocabId .~ (EntryId i)
+    ne = e & entryUniqueId .~ (EntryId i)
     kSet = Set.fromList $ e ^.. entryKanjiElements . traverse
       . kanjiPhrase . to kFind . traverse
     kFind (KanjiPhrase kp) = catMaybes $ map (flip Map.lookup $ ksMap)
@@ -227,7 +235,7 @@ getKanjiData
 getKanjiData vDb ks = mapM getKD ks
   where
     ksMap :: Map KanjiId (Set VocabId)
-    ksMap = Map.foldl' f (Map.empty) vDb
+    ksMap = foldl' f (Map.empty) vDb
     f m v = Set.foldr' (Map.alter p) m (v ^. vocabKanjiSet)
       where
         p (Just s) = Just $ Set.insert vId s
@@ -258,7 +266,7 @@ getKanjiSE kDb = insertDocs docs init
   where
     init = initSearchEngine conf kanjiSearchRankParams
     conf = SearchConfig _kanjiId extractTerms transformQry kanjiFeatureFun
-    docs = map _kanjiDetails $ Map.elems kDb
+    docs = map _kanjiDetails $ A.elems kDb
     extractTerms :: KanjiDetails -> KanjiSearchFields -> [Term]
     extractTerms ks kf = case kf of
       KanjiCharacter -> [unKanji $ ks ^. kanjiCharacter]
@@ -460,7 +468,7 @@ getSentenceDbs parseF sFp linkFp = do
 getSentenceDbsInt :: (Text -> IO AnnotatedDocument)
   -> Text
   -> Text
-  -> IO (SentenceDb, NonJpSentenceDb, VocabSentenceDb)
+  -> IO (SentenceDb, VocabSentenceDb)
 getSentenceDbsInt parseF sFp linkFp = do
   sT <- T.readFile $ T.unpack sFp
   linkT <- T.readFile $ T.unpack linkFp
@@ -483,45 +491,59 @@ getSentenceDbsInt parseF sFp linkFp = do
   ss2' <- forM ss $ \(i,l,s) -> case (l, treadMaybe i) of
       ("jpn", Just i) -> do
         a <- parseF s
-        return $ Just $ Right (SentenceId i, a V.! 0)
-      ("eng", Just i) -> return $ Just $ Left (NonJpSentenceId i, s)
+        return $ Just $ Right (i, a V.! 0)
+      ("eng", Just i) -> return $ Just $ Left (i, s)
       _ -> return $ Nothing
 
   let
     ss2 = catMaybes ss2'
-    lkMapInit :: Map SentenceId (Set Int64) -- empty sets, only create for jp sentences
-    lkMapInit = Map.fromList $ [(fst x, Set.empty) | Right x <- ss2]
+    -- lkMapInit :: Map Int64 (Set Int64) -- empty sets, only create for jp sentences
+    -- lkMapInit = Map.fromList $ [(fst x, Set.empty) | Right x <- ss2]
 
-    lkMap :: Map SentenceId (Set Int64)
-    lkMap = foldl' (\m (k,v) -> Map.adjust (Set.insert v) (SentenceId k) m)
-      lkMapInit lks
+    -- lkMap :: Map SentenceId (Set Int64)
+    -- lkMap = foldl' (\m (k,v) -> Map.adjust (Set.insert v) (SentenceId k) m)
+    --   lkMapInit lks
 
-    combinedMap :: Map Int64 (Either () ())
-    combinedMap = Map.fromList $ ffor ss2 $ either
-      (\(i,v) -> (unNonJpSentenceId i, Left ()))
-      (\(i,v) -> (unSentenceId i, Right ()))
-
-    makeSd (i,v) = SentenceData i v
-      [SentenceId x | (x, Right _) <- lk]
-      [NonJpSentenceId x | (x, Left _) <- lk]
+    allValidLinks :: Map Int64 (Set Int64)
+    allValidLinks = foldl' ff Map.empty lks
       where
-        lk = maybe [] (catMaybes .
-                       (map (\x -> (,) <$> pure x <*> Map.lookup x combinedMap))
-                       . Set.toList)
-          $ Map.lookup i lkMap
+        ff m (i,l) = case (Map.lookup i combinedMap, Map.lookup l combinedMap) of
+          (Just _, Just _) -> Map.alter (alterInsert l) i m
+          _ -> m
+        alterInsert l Nothing = Just $ Set.singleton l
+        alterInsert l (Just s) = Just $ Set.insert l s
 
-    nonJpDbAll = Map.fromList $ [x | Left x <- ss2]
-    allNonJpIds = concat $ map _sentenceLinkedEng $ Map.elems sDb
-    sDb = Map.fromList [((fst x), makeSd x) | Right x <- ss2]
-    vocabSentDb = Map.foldl' getVocabSentenceDb Map.empty sDb
-    nonJpDb = Map.fromSet getItm (Set.fromList allNonJpIds)
-    getItm k = maybe "Not-Found" identity (Map.lookup k nonJpDbAll)
-  return (sDb, nonJpDb, vocabSentDb)
+    combinedMap :: Map Int64 (Either Text AnnotatedPara)
+    combinedMap = Map.fromList $ ffor ss2 $ either
+      (\(i,v) -> (i, Left v))
+      (\(i,v) -> (i, Right v))
 
-getVocabSentenceDb :: VocabSentenceDb -> SentenceData -> VocabSentenceDb
-getVocabSentenceDb m s = foldl' (flip (Map.alter f)) m es
+    allValidSets :: [Set Int64]
+    allValidSets = snd $ foldl' ff ((allValidLinks, Set.empty), []) [(fst x) | Right x <- ss2]
+      where
+        ff ((m,done), sls) i = if Set.member i done
+          then ((m,done), sls)
+          else case Map.lookup i m of
+            Nothing -> ((m, Set.insert i done), Set.singleton i : sls)
+            (Just s) -> ((nm, Set.union done fullSet), fullSet : sls)
+              where rSets = snd $ foldl' ff ((Map.delete i m, Set.insert i done), [])
+                      (Set.toList s)
+                    fullSet = Set.unions ((Set.insert i s):rSets)
+                    nm = foldr Map.delete m (Set.toList fullSet)
+
+    makeSd s = SentenceData <$> jp <*> pure njp
+      where
+        jp = NE.nonEmpty [x | (Right x) <- els]
+        njp = [x | (Left x) <- els]
+        els = catMaybes $ map (\i -> Map.lookup i combinedMap) $ Set.toList s
+
+    sDb = makeArray $ zip (map SentenceId [1..]) $ catMaybes $ map makeSd allValidSets
+    vocabSentDb = foldl' getVocabSentenceDb Map.empty $ A.assocs sDb
+  return (sDb, vocabSentDb)
+
+getVocabSentenceDb :: VocabSentenceDb -> (SentenceId, SentenceData) -> VocabSentenceDb
+getVocabSentenceDb m (sId, s) = foldl' (flip (Map.alter f)) m es
   where
-    es = s ^.. sentenceContents . traverse . _Right . _2 . traverse
-    sId = s ^. sentenceId
+    es = s ^.. sentenceContents . traverse . traverse . _Right . _2 . traverse
     f Nothing = Just $ Set.singleton sId
     f (Just s) = Just $ Set.insert sId s

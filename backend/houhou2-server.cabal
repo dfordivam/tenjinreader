@@ -83,6 +83,7 @@ library
     , mtl
     , transformers
     , these
+    , array
     , common
   if (flag(dev)) || (flag(library-only))
     ghc-options: -Wall -fwarn-tabs -O0
@@ -229,6 +230,7 @@ executable houhou2-db-migrate
     , mtl
     , transformers
     , these
+    , array
     , common
   if flag(library-only)
     buildable: False

@@ -356,7 +356,7 @@ data GetVocabSentences = GetVocabSentences (Either VocabId SrsEntryId)
 
 instance WebSocketMessage AppRequest GetVocabSentences where
   type ResponseT AppRequest GetVocabSentences =
-    ([VocabId], [SentenceData], [(NonJpSentenceId,Text)])
+    ([VocabId], [SentenceData])
 
 ----------------------------------------------------------------
 makeLenses ''ReviewItem

@@ -341,7 +341,7 @@ makeSrsEntry v surface = do
   tmp <- case v of
     (Left kId) -> do
       kanjiDb <- asks appKanjiDb
-      let k = Map.lookup kId kanjiDb
+      let k = arrayLookupMaybe kanjiDb kId
           r = nonEmpty =<< (++)
             <$> k ^? _Just . kanjiDetails . kanjiOnyomi
             <*> k ^? _Just . kanjiDetails . kanjiKunyomi
@@ -352,7 +352,7 @@ makeSrsEntry v surface = do
 
     (Right vId) -> do
       vocabDb <- asks appVocabDb
-      let v = Map.lookup vId vocabDb
+      let v = arrayLookupMaybe vocabDb vId
           r = nonEmpty $ v ^.. _Just . vocabEntry . entryReadingElements
             . traverse . readingPhrase . to (Reading . unReadingPhrase)
           m = nonEmpty $ v ^.. _Just . vocabEntry . entrySenses

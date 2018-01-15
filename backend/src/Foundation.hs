@@ -54,7 +54,6 @@ data App = App
     , appRadicalDb   :: RadicalDb
     , appSentenceDb  :: SentenceDb
     , appVocabSentenceDb :: VocabSentenceDb
-    , appNonJpSentenceDb :: NonJpSentenceDb
     , appMecabPtr    :: MeCab
     , appKanjiSearchEng :: KanjiSearchEngine
     , appVocabSearchEng :: VocabSearchEngine

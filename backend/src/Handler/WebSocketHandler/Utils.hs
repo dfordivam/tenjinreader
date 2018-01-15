@@ -19,6 +19,9 @@ import NLP.Japanese.Utils
 import qualified Data.BTree.Impure as Tree
 import Data.BTree.Alloc (AllocM, AllocReaderM)
 import Control.Monad.State hiding (foldM)
+import qualified Data.Array as A
+import Data.Array (Array)
+import Data.Ix (inRange)
 
 type WsHandlerM = ReaderT WsHandlerEnv Handler
 
@@ -63,3 +66,12 @@ updateTreeLiftedM k fun tree = do
   >>= (\t -> return $ maybe tree id t)
 
 runStateWithNothing m s = (flip runStateT Nothing) $ m s
+
+arrayLookup :: (A.Ix i) => Array i e -> [i] -> [e]
+arrayLookup a ids = map (a A.!) validIds
+  where validIds = filter (inRange $ A.bounds a) ids
+
+arrayLookupMaybe :: (A.Ix i) => Array i e -> i -> Maybe e
+arrayLookupMaybe a i = listToMaybe $ arrayLookup a [i]
+
+

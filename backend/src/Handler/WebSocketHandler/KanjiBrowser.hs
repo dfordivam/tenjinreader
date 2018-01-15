@@ -22,13 +22,15 @@ import qualified Data.BTree.Impure as Tree
 import NLP.Japanese.Utils
 import Control.Monad.State hiding (foldM)
 import Data.BTree.Alloc (AllocM, AllocReaderM)
+import qualified Data.Array as A
+import Data.Array (Array)
 import Mecab
 
 searchResultCount = 20
 
 mostUsedKanjis kanjiDb = take 1000 $ map _kanjiId
   $ sortBy (comparing f) $ map _kanjiDetails
-  $ Map.elems kanjiDb
+  $ A.elems kanjiDb
   where f k = case (_kanjiMostUsedRank k) of
           (Just r) -> r
           Nothing -> Rank $ 1000000
@@ -51,7 +53,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
   -- 2. Reading filter
   -- 3. Radicals
   let
-    kanjiFullSet = Map.keysSet kanjiDb
+    kanjiFullSet = Set.fromList $ A.indices kanjiDb
     fun :: [KanjiId]
     fun
       | (T.null inpTxt) && (T.null filtTxt)
@@ -61,7 +63,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
       | (T.null inpTxt) && (T.null filtTxt) =
         Set.toList
           $ foldl Set.intersection kanjiFullSet
-          $ catMaybes $ map (flip Map.lookup radicalDb) rads
+          $ arrayLookup radicalDb rads
 
       | (T.null inpTxt) && (null rads) =
         query kanjiSearchEng (T.words filtTxt)
@@ -78,14 +80,14 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
         Set.toList $ Set.intersection
           (Set.fromList $ query kanjiSearchEng uniqKanji)
           (foldl Set.intersection kanjiFullSet
-            $ catMaybes $ map (flip Map.lookup radicalDb) rads)
+            $ arrayLookup radicalDb rads)
 
       | otherwise = do
         Set.toList $ Set.intersection
           (Set.fromList $ query kanjiSearchEng uniqKanji)
           (foldl Set.intersection
             (Set.fromList $ query kanjiSearchEng (T.words filtTxt))
-            $ catMaybes $ map (flip Map.lookup radicalDb) rads)
+            $ arrayLookup radicalDb rads)
 
 
   let
@@ -97,8 +99,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
   let
     kanjiList = take searchResultCount $ getKanjiList kanjiDb kanjisFilteredIds
 
-    kanjisFiltered = catMaybes $
-        (flip Map.lookup) kanjiDb <$> kanjisFilteredIds
+    kanjisFiltered = arrayLookup kanjiDb kanjisFilteredIds
     validRadicals = Set.toList $ Set.unions
       (map _kanjiRadicalSet kanjisFiltered)
 
@@ -107,8 +108,7 @@ getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) r
 getKanjiList :: KanjiDb -> [KanjiId] -> KanjiList
 getKanjiList kanjiDb ks = map convertKanji $ map _kanjiDetails kanjisFiltered
   where
-    kanjisFiltered = catMaybes $
-        (flip Map.lookup) kanjiDb <$> ks
+    kanjisFiltered = arrayLookup kanjiDb ks
     convertKanji
       :: KanjiDetails
       -> (KanjiId, Kanji, Maybe Rank, [Meaning])
@@ -132,7 +132,7 @@ getLoadMoreKanjiResults _ = do
 getKanjiDetails :: GetKanjiDetails -> WsHandlerM (Maybe KanjiSelectionDetails)
 getKanjiDetails (GetKanjiDetails kId _) = do
   kanjiDb <- lift $ asks appKanjiDb
-  let kd = Map.lookup kId kanjiDb
+  let kd = arrayLookupMaybe kanjiDb kId
 
       keys = maybe [] (Set.toList . _kanjiVocabSet) kd
 
@@ -151,8 +151,7 @@ getKanjiDetails (GetKanjiDetails kId _) = do
 loadVocabList keys = do
   vocabDb <- lift $ asks appVocabDb
   let
-      vocabs = map _vocabDetails $
-        catMaybes ((flip Map.lookup) vocabDb <$> keys)
+      vocabs = map _vocabDetails $ arrayLookup vocabDb keys
 
   uId <- asks currentUserId
   s <- lift $ transactReadOnlySrsDB $ \db ->
@@ -185,8 +184,7 @@ getVocabSearch (VocabSearch m filt) = do
       terms = (T.words m)
 
   let
-      es = map _vocabEntry $
-        catMaybes ((flip Map.lookup) vocabDb <$> keys1)
+      es = map _vocabEntry $ arrayLookup vocabDb keys1
       allVs = filter (filterPOS filt) es
       keys = map _entryUniqueId allVs
       vs = (take searchResultCount allVs)
@@ -373,18 +371,17 @@ getVocabDetails (GetVocabDetails eIds) = do
           mapM (findOne vmap) eIds
         findOne vmap eId = do
           srsId <- Tree.lookupTree eId vmap
-          let e = _vocabEntry <$> Map.lookup eId vocabDb
+          let e = _vocabEntry <$> arrayLookupMaybe vocabDb eId
           return $ (,) <$> e <*> (pure srsId)
     mapM findAll (_vocabSrsMap <$> rd)
   return $ maybe [] catMaybes es
 
 
 getVocabSentences :: GetVocabSentences
-  -> WsHandlerM ([VocabId], [SentenceData], [(NonJpSentenceId,Text)])
+  -> WsHandlerM ([VocabId], [SentenceData])
 getVocabSentences (GetVocabSentences svId) = do
   uId <- asks currentUserId
   vocabSentenceDb <- lift $ asks appVocabSentenceDb
-  nonJpSentDb <- lift $ asks appNonJpSentenceDb
   sentenceDb <- lift $ asks appSentenceDb
 
   eId <- case svId of
@@ -397,14 +394,7 @@ getVocabSentences (GetVocabSentences svId) = do
         >>= mapM (\e -> return $ either (const Nothing) Just e)
         >>= (\x -> return $ join x)
   let
-    ss = take 20 $ maybe [] (catMaybes .
-                   map (\sId -> Map.lookup sId sentenceDb) .
-                   Set.toList)
+    ss = take 20 $ maybe [] ( arrayLookup sentenceDb . Set.toList)
       $ join ((\i -> Map.lookup i vocabSentenceDb) <$> eId)
 
-    njps = catMaybes
-      $ map (\i -> (,) <$> pure i <*> Map.lookup i nonJpSentDb)
-      $ ordNub $ ss ^.. traverse . sentenceLinkedEng . traverse
-
-  return (maybeToList eId, ss,njps)
-
+  return (maybeToList eId, ss)

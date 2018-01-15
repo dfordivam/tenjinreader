@@ -30,8 +30,11 @@ import Data.Ix
 import Text.MeCab
 import Data.SearchEngine
 import qualified Data.Vector as V
+import qualified Data.Array as A
+import Data.Array (Array)
+import Handler.WebSocketHandler.Utils
 
-parseAndSearch :: Map EntryId VocabData
+parseAndSearch :: Array EntryId VocabData
   -> VocabSearchEngineNoGloss
   -> MeCab
   -> Text
@@ -48,8 +51,7 @@ parseAndSearch es se m t = do
         term = (_mecabNodeFeat7 feat)
         reading = (_mecabNodeFeat8 feat)
         eIds = query se [term]
-        e = catMaybes $
-          fmap ((flip Map.lookup) es) eIds
+        e = arrayLookup es eIds
         gs = take 5 $ e ^.. (traverse . vocabEntry
                     . entrySenses . traverse
                     . senseGlosses . traverse

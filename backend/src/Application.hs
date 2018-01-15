@@ -78,7 +78,7 @@ makeFoundation appSettings = do
         appVocabSearchEng = getVocabSE appVocabDb
         appVocabSearchEngNoGloss = getVocabSENG appVocabDb
 
-    (appSentenceDb, appNonJpSentenceDb, appVocabSentenceDb) <-
+    (appSentenceDb, appVocabSentenceDb) <-
       getSentenceDbs (parseAndSearch appVocabDb appVocabSearchEngNoGloss appMecabPtr)
         (appSentenceCsvPath appSettings) (appLinksCsvPath appSettings)
 
