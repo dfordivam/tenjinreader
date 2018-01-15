@@ -384,12 +384,12 @@ renderOnePara :: (_)
   -> [Either Text (Vocab, [VocabId], Bool)]
   -> m (Event t ([VocabId], (Text,_)))
 renderOnePara vIdDyn rubySize annTextPara = do
-  let showAllFurigana = constDyn False
+  -- let showAllFurigana = constDyn False
   el "p" $ do
     let f (Left t) = never <$ text t
         f (Right (v, vId, vis)) = do
           rec
-            let evVis = leftmost [True <$ eme, tagDyn showAllFurigana eml]
+            let evVis = leftmost [True <$ eme, vis <$ eml]
                 markDyn = (any (\eId -> (elem eId vId))) <$> vIdDyn
             visDyn <- holdDyn vis evVis
             (e, ek, eme, eml) <-
