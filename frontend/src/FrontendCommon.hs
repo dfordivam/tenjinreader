@@ -384,7 +384,7 @@ renderOnePara :: (_)
   -> [Either Text (Vocab, [VocabId], Bool)]
   -> m (Event t ([VocabId], (Text,_)))
 renderOnePara vIdDyn rubySize annTextPara = do
-  let showAllFurigana = constDyn True
+  let showAllFurigana = constDyn False
   el "p" $ do
     let f (Left t) = never <$ text t
         f (Right (v, vId, vis)) = do

@@ -297,7 +297,22 @@ getViewDocument (ViewDocument i paraNum) = do
     Tree.lookupTree uId (db ^. userData)
       >>= mapM (\rd ->
         Tree.lookupTree i (rd ^. readerDocuments))
-  return $ flip getReaderDocumentData paraNum <$> join s
+  let
+    ret :: Maybe ReaderDocumentData
+    ret = flip getReaderDocumentData paraNum <$> join s
+
+  lift $ transactReadOnlySrsDB $ \db ->
+    Tree.lookupTree uId (db ^. userData)
+      >>= mapM (\rd -> do
+        let
+          f :: (AllocReaderM m)
+            => (Vocab, [VocabId], Bool)
+            -> m (Vocab, [VocabId], Bool)
+          f v@(_,vIds,_) = do
+            sIds <- mapM (\i -> Tree.lookupTree i (rd ^. vocabSrsMap)) vIds
+            return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
+        ret & _Just . _5 . each . _2 . each . _Right %%~ f)
+      >>= (\x -> return $ join x)
 
 getReaderDocumentData r paraNum = (r ^. readerDocId, r ^. readerDocTitle
                                   , p, endParaNum, slice)
