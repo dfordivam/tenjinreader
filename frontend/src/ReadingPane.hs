@@ -556,11 +556,11 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
           vIdEv <- el "div" $ do
             renderDynParas rs (snd <$> row1Dyn)
 
-          (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+          (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
             text ""
-          elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
+          elAttr "div" ("style" =: "height: 1em; width: 2em;") $ do
             text ""
-          (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+          (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 2em;") $ do
             text ""
             return ()
           return (inside, outside, vIdEv, closeEv)
