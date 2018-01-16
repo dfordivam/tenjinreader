@@ -209,7 +209,7 @@ data ReaderSettingsTree t = ReaderSettings
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance Default (ReaderSettingsTree t) where
-  def = ReaderSettings 120 120 150 False 20
+  def = ReaderSettings 120 105 150 False 400
 -- SrsEntry
 
 newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }
