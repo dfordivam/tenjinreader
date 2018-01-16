@@ -160,6 +160,7 @@ editWidgetView s savedEv = modalDiv $ do
 
   let bodyAttr = ("class" =: "modal-body")
           <> ("style" =: "height: 400px;\
+              \overflow-x: hidden;\
               \overflow-y: auto")
       formAttr = ("class" =: "form-horizontal")
         <> ("onsubmit" =: "return false;")

@@ -56,6 +56,8 @@
         beam-sqlite = self.callCabal2nix "beam-core" "${beam-src}/beam-sqlite" {};
         beam-migrate = self.callCabal2nix "beam-core" "${beam-src}/beam-migrate" {};
 
+        frontend = pkgs.haskell.lib.dontHaddock super.frontend;
+        backend = pkgs.haskell.lib.dontHaddock super.backend;
     };
 
 })

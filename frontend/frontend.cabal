@@ -39,7 +39,6 @@ executable frontend
                      , containers
                      , reflex
                      , jsaddle
-                     , jsaddle-dom
                      , romkan
                      , bytestring
                      , these
@@ -54,6 +53,7 @@ executable frontend
   if impl(ghcjs)
      build-depends: ghcjs-base
                     , ghcjs-dom-jsffi
-
+  else
+     build-depends: jsaddle-dom
   hs-source-dirs:      src
   default-language:    Haskell2010

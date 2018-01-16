@@ -529,6 +529,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
+    text "row1Dyn fst :"
+    display $ fst <$> row1Dyn
     textContent <- fetchMoreContentF docId annText endParaNum
       (traceEvent "fetchEv: " (attachDyn firstParaDyn pageChangeEv))
 
