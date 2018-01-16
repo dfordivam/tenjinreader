@@ -58,6 +58,11 @@
 
         frontend = pkgs.haskell.lib.dontHaddock super.frontend;
         backend = pkgs.haskell.lib.dontHaddock super.backend;
+        common = pkgs.haskell.lib.dontHaddock super.common;
+        kanjidbreader = pkgs.haskell.lib.dontHaddock super.kanjidbreader;
+        jmdict-xml-parser = pkgs.haskell.lib.dontHaddock super.jmdict-xml-parser;
+        jmdict-ast = pkgs.haskell.lib.dontHaddock super.jmdict-ast;
+        hs-nlp-jp-utils = pkgs.haskell.lib.dontHaddock super.hs-nlp-jp-utils;
     };
 
 })
