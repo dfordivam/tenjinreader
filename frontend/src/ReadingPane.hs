@@ -84,19 +84,28 @@ readingPane docEv = do
   return (switchPromptlyDyn (fst <$> v)
          , switchPromptlyDyn (snd <$> v))
 
-readerSettingsControls rsDef = divClass "form-inline" $ divClass "form-group" $ do
+readerSettingsControls rsDef = divClass "col-sm-10 form-inline" $ divClass "" $ do
   let
     ddConf :: _
     ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
     ddAttr = ("class" =: "form-control input-sm")
-  fontSizeDD <- dropdown (rsDef ^. fontSize) (constDyn fontSizeOptions) ddConf
-  rubySizeDD <- dropdown (rsDef ^. rubySize) (constDyn fontSizeOptions) ddConf
-  lineHeightDD <- dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) ddConf
-  writingModeDD <- dropdown (rsDef ^. verticalMode) (constDyn writingModeOptions) ddConf
-  heightDD <- dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) ddConf
+  fontSizeDD <- divClass "col-sm-3" $ do
+    el "label" $ text "ぁあ："
+    dropdown (rsDef ^. fontSize) (constDyn fontSizeOptions) ddConf
+  rubySizeDD <- divClass "col-sm-3" $ do
+    el "label" $ text "漢字："
+    dropdown (rsDef ^. rubySize) (constDyn fontSizeOptions) ddConf
+  lineHeightDD <- divClass "col-sm-3" $ do
+    el "label" $ text "間："
+    dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) ddConf
+  heightDD <- divClass "col-sm-3" $ do
+    el "label" $ text "高さ："
+    dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) ddConf
+  -- writingModeDD <- dropdown (rsDef ^. verticalMode) (constDyn writingModeOptions) ddConf
   let rsDyn = ReaderSettings <$> (value fontSizeDD) <*> (value rubySizeDD)
-                <*> (value lineHeightDD) <*> (value writingModeDD)
+                <*> (value lineHeightDD) <*> (writingModeDD)
                 <*> (value heightDD)
+      writingModeDD = constDyn True
   return rsDyn
 
 divWrap rs fullscreenDyn w = do
@@ -118,11 +127,13 @@ readingPaneInt :: AppMonad t m
   -> ReaderSettings CurrentDb
   -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
 readingPaneInt docEv rsDef = do
-  closeEv <- btn "btn-default" "Close"
-  -- editEv <- btn "btn-default" "Edit"
-  fullScrEv <- btn "btn-default" "Full Screen"
+  (closeEv,fullScrEv, rsDyn) <- divClass "row" $ do
+    closeEv <- btn "btn-default btn-sm" "Close"
+    -- editEv <- btn "btn-default" "Edit"
+    fullScrEv <- btn "btn-default btn-sm" "Full Screen"
 
-  rsDyn <- readerSettingsControls rsDef
+    rsDyn <- readerSettingsControls rsDef
+    return (closeEv,fullScrEv, rsDyn)
 
   getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
 
