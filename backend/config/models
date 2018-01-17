@@ -14,31 +14,4 @@ Comment json -- Adding "json" causes ToJSON and FromJSON instances to be derived
     deriving Eq
     deriving Show
 
--- SrsEntry
---     Id
---     item Text
---     userId UserId
---     created UTCTime default=now()
---     nextAnswerDate UTCTime Maybe
---     suspensionDate UTCTime Maybe
---     currentGrade Int Maybe
---     failureCount Int
---     successCount Int
---     tags Text Maybe
---     readings [Text]
---     meaning [Text]
---     readingNotes Text Maybe
---     meaningNotes Text Maybe
---     isDeleted Bool
---     deriving Eq
---     deriving Show
-
--- +SrsEntryAssoc
---     Id
---     kanji Int
---     vocab Int
---     custom Text
---     deriving Eq
---     deriving Show
-
  -- By default this file is used in Model.hs (which is imported by Foundation.hs)

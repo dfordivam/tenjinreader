@@ -5,7 +5,7 @@ name:                frontend
 version:             0.1.0.0
 -- synopsis:
 -- description:
-license:             BSD3
+license:             AllRightsReserved
 license-file:        LICENSE
 author:              Divam
 maintainer:          dfordivam@gmail.com

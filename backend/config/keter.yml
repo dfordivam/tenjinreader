@@ -15,8 +15,7 @@ stanzas:
     #
     # The path given is for Stack projects. If you're still using cabal, change
     # to
-    # exec: ../dist/build/houhou2-server/houhou2-server
-    exec: ../dist/bin/houhou2-server
+    exec: ../dist/bin/server
 
     # Command line options passed to your application.
     args: []
@@ -25,7 +24,7 @@ stanzas:
       # You can specify one or more hostnames for your application to respond
       # to. The primary hostname will be used for generating your application
       # root.
-      - www.houhou2-server.com
+      - www.server.com
 
     # Enable to force Keter to redirect to https
     # Can be added to any stanza
@@ -34,7 +33,7 @@ stanzas:
   # Static files.
   - type: static-files
     hosts:
-      - static.houhou2-server.com
+      - static.server.com
     root: ../static
 
     # Uncomment to turn on directory listings.
@@ -44,9 +43,9 @@ stanzas:
   - type: redirect
 
     hosts:
-      - houhou2-server.com
+      - server.com
     actions:
-      - host: www.houhou2-server.com
+      - host: www.server.com
         # secure: false
         # port: 80
 

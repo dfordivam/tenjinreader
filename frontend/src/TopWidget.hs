@@ -79,7 +79,7 @@ widget = divClass "container" $ do
 wrapper m = elClass "nav" "navbar navbar-default" $
   divClass "container-fluid" $ do
     divClass "navbar-header" $
-      elClass "a" "navbar-brand" $ text "HH Name"
+      elClass "a" "navbar-brand" $ text "てんじん Reader"
     a <- m
     elClass "ul" "nav navbar-nav navbar-right" $ do
       ev <- btn "btn-default" "Toggle"

@@ -1,5 +1,5 @@
 {-# LANGUAGE PackageImports #-}
-import "houhou2-server" Application (develMain)
+import "server" Application (develMain)
 import Prelude (IO)
 
 main :: IO ()
