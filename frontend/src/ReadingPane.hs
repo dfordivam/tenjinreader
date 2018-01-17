@@ -608,7 +608,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
               (return never <$ stopTicks)
             tickW = do
               ev <- getPostBuild
-              de <- delay 0.2 $ leftmost [ev, () <$ evVisible]
+              de <- delay 1 $ leftmost [ev, () <$ evVisible]
               return $ de
         t <- widgetHold init
           (init <$ startTicksAgain)
