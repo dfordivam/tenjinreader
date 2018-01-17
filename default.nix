@@ -5,10 +5,7 @@
     common = ./common;
     backend = ./backend;
     kanjidbreader = ./backend/kanjiDbReader;
-    jmdict-xml-parser = ./backend/jmdict-parser;
-    jmdict-ast = ./common/jmdict-ast;
     frontend = ./frontend;
-    hs-nlp-jp-utils = ./common/hs-nlp-jp-utils;
   };
 
   android.frontend = {
@@ -18,7 +15,7 @@
   };
 
   shells = {
-    ghc = ["common" "backend" "frontend" "kanjidbreader" "jmdict-xml-parser"];
+    ghc = ["common" "backend" "frontend" "kanjidbreader"];
     ghcjs = ["common" "frontend"];
   };
 
@@ -60,9 +57,30 @@
         backend = pkgs.haskell.lib.dontHaddock super.backend;
         common = pkgs.haskell.lib.dontHaddock super.common;
         kanjidbreader = pkgs.haskell.lib.dontHaddock super.kanjidbreader;
-        jmdict-xml-parser = pkgs.haskell.lib.dontHaddock super.jmdict-xml-parser;
-        jmdict-ast = pkgs.haskell.lib.dontHaddock super.jmdict-ast;
-        hs-nlp-jp-utils = pkgs.haskell.lib.dontHaddock super.hs-nlp-jp-utils;
+
+        jmdict-ast = self.callCabal2nix "jmdict-ast"
+          (pkgs.fetchFromGitHub {
+            owner = "dfordivam";
+            repo = "jmdict-ast";
+            rev = "3cbcf5e780d1dd9ba5040a9cc9eb1f2f149cb5e7";
+            sha256 = "1fdagcf1gjs0asq7p0nbyv2ar6js9z86crkxrhd28r7mdg33v2kq";
+          }) {};
+
+        jmdict-xml-parser = self.callCabal2nix "jmdict-xml-parser"
+          (pkgs.fetchFromGitHub {
+            owner = "dfordivam";
+            repo = "jmdict-parser";
+            rev = "fc1d700fd97dc3be053c87cfa5625111c788835f";
+            sha256 = "19m8ykvwg8nl5a327lwg7axd7dp9988f0y3lli0a322w2g7q5d25";
+          }) {};
+
+        hs-nlp-jp-utils = self.callCabal2nix "hs-nlp-jp-utils"
+          (pkgs.fetchFromGitHub {
+            owner = "dfordivam";
+            repo = "hs-nlp-jp-utils";
+            rev = "92c3a1ee168f121935ad8090f495c777df6a464c";
+            sha256 = "1k754dkzns90bznrl6yp0vnjvd707bai3v6gi7vik2dynvc2g7z0";
+          }) {};
     };
 
 })

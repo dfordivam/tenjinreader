@@ -1,7 +1,5 @@
 packages:
   common/
-  common/jmdict-ast
   backend/
   backend/kanjiDbReader
-  backend/jmdict-parser
   frontend/
