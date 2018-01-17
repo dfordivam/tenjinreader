@@ -1,4 +1,4 @@
-# Tenzin Reader
+# てんじん (Tenjin) Reader
 
 ## Details coming soon...
 
