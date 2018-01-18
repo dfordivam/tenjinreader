@@ -18,6 +18,7 @@ import FrontendCommon
 import SrsWidget
 import KanjiBrowser
 import TextReader
+import ImportWidget
 
 -- from package common
 import Common
@@ -74,7 +75,9 @@ widget = divClass "container" $ do
       ,(1, ("Kanji", kanjiBrowseWidget))
       , (2, ("Vocab", vocabSearchWidget))
       , (3, ("Reader", textReaderTop))
-      , (4, ("Sentence", quickAnalyzeTop))]
+      , (4, ("Sentence", quickAnalyzeTop))
+      , (5, ("Import", importWidgetTop))
+      ]
 
 wrapper m = elClass "nav" "navbar navbar-default" $
   divClass "container-fluid" $ do
