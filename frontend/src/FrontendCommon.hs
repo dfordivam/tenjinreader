@@ -330,9 +330,10 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
               \overflow-y: auto")
 
   vIdEvs <- elAttr "div" bodyAttr $ do
-    forM ss $ \(SentenceData sg njps) -> do
+    forM ss $ \(SentenceData sg njps) -> divClass "well well-sm" $ do
       let hasEng = not $ null njps
-      (evs, visDyn) <- divClass "row" $ do
+          rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
+      (evs, visDyn) <- elAttr "div" rowAttr $ do
         evs <- divClass (if hasEng then "col-sm-11" else "col-sm-12") $
           forM sg $ \s -> do
             renderOnePara (constDyn vIds) (constDyn 100) s
