@@ -109,31 +109,34 @@ coloumnSelectionWidget vs = do
       cnum = V.length v
       attr = ("style" =: "width: 100%; overflow-x: auto;")
 
-  elAttr "div" attr $ elClass "table" "table table-striped table-bordered" $ do
-    fDynV <- el "thead" $ do
-      V.forM v $ \f -> do
-        d <- el "th" $
-          dropdown (guessType f) (constDyn $ validChoices f) $ def
-            & dropdownConfig_attributes .~ (constDyn ("style" =: "width: 8em;"))
-        return (value d)
-
-    let fDyn = sequence fDynV
-
+  rec
     c <- dyn ((\f -> if (isValid f)
            then btn "btn-primary" "Next"
            else never <$ (text "Please select main field and meaning")) <$> fDyn)
     checkEv <- switchPromptly never c
 
-    el "tbody" $ do
-      V.forM_ (V.take 10 vs) $ \v -> do
-        el "tr" $ V.forM_ v $ \f -> do
-          el "td" $ text $ mconcat $ intersperse ", " f
+    fDyn <- elAttr "div" attr $
+      elClass "table" "table table-striped table-bordered" $ do
+        fDynV <- el "thead" $ do
+          V.forM v $ \f -> do
+            d <- el "th" $
+              dropdown (guessType f) (constDyn $ validChoices f) $ def
+                & dropdownConfig_attributes .~ (constDyn ("style" =: "width: 8em;"))
+            return (value d)
 
-    widgetHold (return ())
-      (checkDataWidget vs <$> tagDyn fDyn checkEv)
+        let fDyn = sequence fDynV
+
+        el "tbody" $ do
+          V.forM_ (V.take 10 vs) $ \v -> do
+            el "tr" $ V.forM_ v $ \f -> do
+              el "td" $ text $ mconcat $ intersperse ", " f
+        return fDyn
+
+  widgetHold (return ())
+    (previewDataWidget vs <$> tagDyn fDyn checkEv)
   return ()
 
-checkDataWidget vs fs = do
+previewDataWidget vs fs = do
   let
     mf = V.elemIndices MainField fs
     rf = V.elemIndices ReadingField fs
@@ -142,23 +145,61 @@ checkDataWidget vs fs = do
     mnf = V.elemIndices MeaningNoteField fs
     nrd = V.elemIndices NextReviewDateField fs
 
-    checkOne :: Vector [Text] -> Bool
-    checkOne v = c1 && c2 && c3 && c4
+    isNonJp t = not $ T.all (\c -> isKana c || isKanji c) t
+    makeF :: Vector [Text] -> Either (FieldType, Vector [Text]) NewEntryUserData
+    makeF v = NewEntryUserData <$> get1 <*> get2 <*> get3
+      <*> pure (g rnf) <*> pure (g mnf)
       where
         g :: Vector Int -> [Text]
         g ii = concat $ map (v V.!) (V.toList ii)
-        c1 = not $ all T.null (g mf)
-        c2 = not $ all T.null (g mn)
-        c3 = not $ any isNonJp (g mf)
-        c4 = not $ any isNonJp (g rf)
-        isNonJp t = not $ T.all (\c -> isKana c || isKanji c) t
+        get1 = case NE.nonEmpty (g mf) of
+          Nothing -> Left (MainField, v)
+          Just xs -> if any isNonJp xs
+            then Left (MainField, v)
+            else Right xs
 
-    invalid = V.filter (not . checkOne) vs
+        get2 = case NE.nonEmpty (g mn) of
+          Nothing -> Left (MeaningField,v)
+          Just xs -> Right xs
 
-  void $ if V.null invalid
-    then text $ "All Good"
+        get3 = if any isNonJp (g rf)
+          then Left (ReadingField,v)
+          else Right (g rf)
+
+    eitherV = fmap makeF $ V.toList vs
+    (invalid, valid) = partitionEithers eitherV
+
+  void $ if null invalid
+    then do
+      text $ "All Good"
+      searchEntriesWidget valid
+
     else do
-      el "table" $ el "tbody" $ do
-        V.forM_ (V.take 10 invalid) $ \v -> do
-          el "tr" $ V.forM_ v $ \f -> do
-            el "td" $ text $ mconcat $ intersperse ", " f
+      el "h3" $ text "Problem in these values"
+      elClass "table" "table table-striped table-bordered" $ el "tbody" $ do
+        forM_ (take 10 invalid) $ \(ft,v) -> do
+          let ii = V.elemIndices ft fs
+          el "tr" $ (flip V.imapM_) v $ \i f -> do
+            let attr = if V.elem i ii then ("style" =: "background: #FF7043;") else Map.empty
+            elAttr "td" attr $ text $ mconcat $ intersperse ", " f
+
+data NewEntryUserData = NewEntryUserData
+  { mainField :: NonEmpty Text
+  , meaningField :: NonEmpty Text
+  , readingField :: [Text]
+  , readingNotesField :: [Text]
+  , meaningNotesField :: [Text]
+  } deriving (Show)
+
+data NewEntryOp
+  = AddVocabs (NonEmpty VocabId)
+  | AddCustomEntry NewEntryUserData
+  | MarkWakaru (NonEmpty VocabId)
+  deriving (Show)
+
+-- Choices for each Entry
+-- SrsEntry -> Either [VocabId] NewEntry
+-- Wakaru -> Only if (NonEntry VocabId)
+-- Ignore - Do Nothing
+searchEntriesWidget vs = do
+  return ()
