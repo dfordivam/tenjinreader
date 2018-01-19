@@ -43,13 +43,14 @@ importWidgetTop = do
 
 parseInput (t, sep, sep2) = do
   let
-    ls = map (T.splitOn sep) $ filter filtLines $ T.lines t
+    ls = map (map ((map T.strip) . (T.splitOn sep2))) $
+      map (T.splitOn sep) $ filter filtLines $ T.lines t
     filtLines t
       | T.null t = False
       | T.head t == '#' = False
       | otherwise = True
 
-    vs :: Vector (Vector Text)
+    vs :: Vector (Vector [Text])
     vs = V.fromList (map V.fromList ls)
     colNum = length <$> headMay ls
 
@@ -61,14 +62,14 @@ parseInput (t, sep, sep2) = do
           correctCount = V.length vs - V.length fail
 
 
-      text $ "Number of Fields/Columns : " <> tshow n
-      text $ "Parsed " <> tshow correctCount <> " records correctly."
+      el "p" $ text $ "Number of Fields/Columns : " <> tshow n
+      el "p" $ text $ "Parsed " <> tshow correctCount <> " records correctly."
       if (not $ V.null fail)
         then do
           text $ "Failed to parse " <> tshow (V.length fail) <> " records."
           V.forM_ fail $ \v -> do
-            text $ mconcat $ intersperse sep $ V.toList v
-        else coloumnSelectionWidget vs sep2
+            text $ tshow v
+        else coloumnSelectionWidget vs
 
 data FieldType
   = MainField -- Having Kanji
@@ -77,20 +78,21 @@ data FieldType
   | ReadingNoteField
   | MeaningNoteField
   | NextReviewDateField
-  | OtherField -- Ignore this
+  | IgnoreField -- Ignore this
   deriving (Eq, Ord, Enum, Bounded, Show)
 
+guessType :: [Text] -> FieldType
 guessType f
-  | T.null f = OtherField
-  | T.all isDigit f = OtherField
-  | (not $ T.any isLetter f) && T.any isKanji f = MainField
-  | T.any isKana f = ReadingField
-  | T.all isLetter f = MeaningField
-  | otherwise = OtherField
+  | null f = IgnoreField
+  | all (T.all isDigit) f = IgnoreField
+  | all (\t -> (not $ T.any isAscii t) && T.any isKanji t) f = MainField
+  | all (\t -> (not $ T.any isAscii t) && T.any isKana t) f = ReadingField
+  | all (\t -> T.all isAscii t) f = MeaningField
+  | otherwise = IgnoreField
 
 validChoices f = Map.fromList $ map (\t -> (t, tshow t)) allT
   where
-    allT = [MainField .. OtherField]
+    allT = [MainField .. IgnoreField]
 
 isValid fs = (nn mf && nn mn)
   where
@@ -102,13 +104,12 @@ isValid fs = (nn mf && nn mn)
     -- mnf = V.elemIndices MeaningNoteField fs
     -- nrd = V.elemIndices NextReviewDateField fs
 
-coloumnSelectionWidget vs sep2 = do
+coloumnSelectionWidget vs = do
   let v = vs V.! 0
       cnum = V.length v
       attr = ("style" =: "width: 100%; overflow-x: auto;")
 
   elAttr "div" attr $ elClass "table" "table table-striped table-bordered" $ do
-    checkEv <- btn "btn-primary" "Check Data"
     fDynV <- el "thead" $ do
       V.forM v $ \f -> do
         d <- el "th" $
@@ -118,18 +119,21 @@ coloumnSelectionWidget vs sep2 = do
 
     let fDyn = sequence fDynV
 
-    dyn ((\f -> unless (isValid f) (text "Please select main field and meaning")) <$> fDyn)
+    c <- dyn ((\f -> if (isValid f)
+           then btn "btn-primary" "Next"
+           else never <$ (text "Please select main field and meaning")) <$> fDyn)
+    checkEv <- switchPromptly never c
 
     el "tbody" $ do
       V.forM_ (V.take 10 vs) $ \v -> do
         el "tr" $ V.forM_ v $ \f -> do
-          el "td" $ text f
+          el "td" $ text $ mconcat $ intersperse ", " f
 
     widgetHold (return ())
-      (checkDataWidget vs sep2 <$> tagDyn fDyn checkEv)
+      (checkDataWidget vs <$> tagDyn fDyn checkEv)
   return ()
 
-checkDataWidget vs sep2 fs = do
+checkDataWidget vs fs = do
   let
     mf = V.elemIndices MainField fs
     rf = V.elemIndices ReadingField fs
@@ -138,12 +142,11 @@ checkDataWidget vs sep2 fs = do
     mnf = V.elemIndices MeaningNoteField fs
     nrd = V.elemIndices NextReviewDateField fs
 
-    checkOne :: Vector Text -> Bool
+    checkOne :: Vector [Text] -> Bool
     checkOne v = c1 && c2 && c3 && c4
       where
         g :: Vector Int -> [Text]
-        g ii = map T.strip $ concat $ map (\t -> T.splitOn sep2 t)
-                       $ map (v V.!) (V.toList ii)
+        g ii = concat $ map (v V.!) (V.toList ii)
         c1 = not $ all T.null (g mf)
         c2 = not $ all T.null (g mn)
         c3 = not $ any isNonJp (g mf)
@@ -158,4 +161,4 @@ checkDataWidget vs sep2 fs = do
       el "table" $ el "tbody" $ do
         V.forM_ (V.take 10 invalid) $ \v -> do
           el "tr" $ V.forM_ v $ \f -> do
-            el "td" $ text f
+            el "td" $ text $ mconcat $ intersperse ", " f
