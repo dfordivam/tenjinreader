@@ -72,6 +72,9 @@ type AppRequest
   :<|> GetVocabDetails
   :<|> GetVocabSentences
 
+  :<|> ImportSearchFields
+  :<|> ImportData
+
 ------------------------------------------------------------
 -- class CRUD t where
 --   data KeyT t
@@ -357,6 +360,35 @@ data GetVocabSentences = GetVocabSentences (Either VocabId SrsEntryId)
 instance WebSocketMessage AppRequest GetVocabSentences where
   type ResponseT AppRequest GetVocabSentences =
     ([VocabId], [SentenceData])
+
+----------------------------------------------------------------
+data ImportSearchFields = ImportSearchFields [(Int, NonEmpty Text)]
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest ImportSearchFields where
+  type ResponseT AppRequest ImportSearchFields =
+    ([(Int, Maybe (Either SrsEntryId (NonEmpty EntryId)))])
+
+data NewEntryUserData = NewEntryUserData
+  { mainField :: NonEmpty Text
+  , meaningField :: NonEmpty Text
+  , readingField :: [Text]
+  , readingNotesField :: [Text]
+  , meaningNotesField :: [Text]
+  }
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+data NewEntryOp
+  = AddVocabs (NonEmpty VocabId)
+  | AddCustomEntry NewEntryUserData [VocabId]
+  | MarkWakaru (NonEmpty VocabId)
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+data ImportData = ImportData [NewEntryOp]
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest ImportData where
+  type ResponseT AppRequest ImportData = ()
 
 ----------------------------------------------------------------
 makeLenses ''ReviewItem

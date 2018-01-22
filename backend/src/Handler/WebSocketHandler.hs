@@ -84,6 +84,9 @@ wsHandler = HandlerWrapper $
   :<&> h getVocabDetails
   :<&> h getVocabSentences
 
+  :<&> h getImportSearchFields
+  :<&> h getImportData
+
   where
   h :: (WebSocketMessage Message.AppRequest a, Monad m)
     => (a -> m (ResponseT Message.AppRequest a))

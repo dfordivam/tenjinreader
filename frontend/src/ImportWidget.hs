@@ -172,7 +172,7 @@ previewDataWidget vs fs = do
   void $ if null invalid
     then do
       text $ "All Good"
-      searchEntriesWidget valid
+      previewEntriesWidget valid
 
     else do
       el "h3" $ text "Problem in these values"
@@ -183,23 +183,39 @@ previewDataWidget vs fs = do
             let attr = if V.elem i ii then ("style" =: "background: #FF7043;") else Map.empty
             elAttr "td" attr $ text $ mconcat $ intersperse ", " f
 
-data NewEntryUserData = NewEntryUserData
-  { mainField :: NonEmpty Text
-  , meaningField :: NonEmpty Text
-  , readingField :: [Text]
-  , readingNotesField :: [Text]
-  , meaningNotesField :: [Text]
-  } deriving (Show)
-
-data NewEntryOp
-  = AddVocabs (NonEmpty VocabId)
-  | AddCustomEntry NewEntryUserData
-  | MarkWakaru (NonEmpty VocabId)
-  deriving (Show)
-
 -- Choices for each Entry
 -- SrsEntry -> Either [VocabId] NewEntry
 -- Wakaru -> Only if (NonEntry VocabId)
 -- Ignore - Do Nothing
-searchEntriesWidget vs = do
+previewEntriesWidget ds = do
+  let
+    preview ds = do
+      elClass "table" "table table-striped table-bordered" $ do
+        el "thead" $ do
+          el "th" $ text ""
+          el "th" $ text "Main"
+          el "th" $ text "Reading"
+          el "th" $ text "Meaning"
+          el "th" $ text "RNotes"
+          el "th" $ text "MNotes"
+
+        let f l = if T.length t > 25 then (T.take 25 t) <> ".." else t
+              where t = mconcat $ intersperse ", " l
+        el "tbody" $ forM (zip [1..] ds) $ \(i,d) -> el "tr" $ do
+          el "td" $ text $ tshow i
+          el "td" $ text $ f (NE.toList $ mainField d)
+          el "td" $ text $ f (readingField d)
+          el "td" $ text $ f (NE.toList $ meaningField d)
+          el "td" $ text $ f (readingNotesField d)
+          el "td" $ text $ f (meaningNotesField d)
+
+  preview ds
+  -- searchEv <- btn "btn-primary" "Next2"
+
+  -- let req = 
+  -- resp <- getWebSocketResponse req
+  -- widgetHold (return ())
+  --   (searchResultWidget <$> resp)
   return ()
+
+-- searchResultWidget ds = do
