@@ -218,11 +218,12 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
       <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
       <*> (_numOfLines <$> rs)
 
-    startPara = (\(p,v) -> (ParaNum p, ParaPos $ maybe 1 identity v)) startParaMaybe
+    startPara = (\(p,v) -> (ParaNum p, ParaPos $ maybe 1 (max 1) v)) startParaMaybe
     initState = (ForwardGrow,
                  (getCurrentViewContent (makeParaData annText) (Just startPara)))
     dEv = snd <$> (evVisible)
 
+  text $ tshow startParaMaybe
   rec
     let doStop (Just GrowText) Nothing = Just 1
         doStop (Just GrowText) (Just c) = Just (c + 1)
@@ -282,7 +283,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
     text "row1Dyn fst :"
-    display $ fst <$> row1Dyn
+    display $ (\(ParaPos l, ParaPos u) -> ("(" <> tshow l <> "," <> tshow u <> ")"))
+      . fst <$> row1Dyn
     textContent <- fetchMoreContentF docId (makeParaData annText) endParaNum
       (traceEvent "fetchEv: " (attachDyn firstDisplayedPara pageChangeEv))
 
@@ -292,14 +294,14 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
         else Map.empty
       divAttr = divAttr' <*> fullscreenDyn
 
-    text "firstDisplayedPara:"
-    display firstDisplayedPara
-    text " lastDisplayedPara:"
-    display lastDisplayedPara
-    text " nextParaMaybe:"
-    display nextParaMaybe
-    text " prevParaMaybe:"
-    display prevParaMaybe
+    -- text "firstDisplayedPara:"
+    -- display firstDisplayedPara
+    -- text " lastDisplayedPara:"
+    -- display lastDisplayedPara
+    -- text " nextParaMaybe:"
+    -- display nextParaMaybe
+    -- text " prevParaMaybe:"
+    -- display prevParaMaybe
 
     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
                                            , False <$ closeEv])
@@ -553,7 +555,7 @@ textAdjustF (_, (Just ShrinkText)) ((li,ui), ps)
     lp = ps A.! lpN
     (lpL,lpU) = A.bounds lp
     -- During viewport size change li can be invalid
-    halfL = halfParaPos lpU  li
+    halfL = lpU - halfParaPos lpU  li
     newLp = A.ixmap (lpL, halfL) identity lp
 
 
@@ -574,8 +576,8 @@ textAdjustF (viewPD, (Just GrowText)) ((li,ui), ps)
     nextPN = (lpN + 1)
     nextP = viewPD A.! nextPN
 
-    halfL1 = halfParaPos ui lpU
-    halfL2 = halfParaPos lpOTU lpU
+    halfL1 = lpU + halfParaPos ui lpU
+    halfL2 = lpU + halfParaPos lpOTU lpU
 
 textAdjustF (viewPD, Nothing) (_, ps) = (A.bounds lp,ps)
   where
@@ -599,7 +601,7 @@ textAdjustRevF (_, (Just ShrinkText)) ((li,ui), ps)
     fp = ps A.! fpN
     (fpL,fpU) = A.bounds fp
     -- During viewport size change li can be invalid
-    halfL = halfParaPos ui  fpL
+    halfL = fpL + halfParaPos ui fpL
     newFp = A.ixmap (halfL, fpU) identity fp
 
 
@@ -620,8 +622,8 @@ textAdjustRevF (viewPD, (Just GrowText)) ((li,ui), ps)
     prevPN = (fpN - 1)
     prevP = viewPD A.! prevPN
 
-    halfL1 = halfParaPos li fpL
-    halfL2 = halfParaPos fpOTL fpL
+    halfL1 = fpL - (halfParaPos fpL li)
+    halfL2 = fpL - (halfParaPos fpL fpOTL)
 
 textAdjustRevF (viewPD, Nothing) (_, ps) = (A.bounds fp,ps)
   where
