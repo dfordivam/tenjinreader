@@ -18,6 +18,8 @@ import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Vector as V
+import qualified Data.Array as A
+import Data.Array (Array)
 import qualified GHCJS.DOM.DOMRectReadOnly as DOM
 import qualified GHCJS.DOM.Element as DOM
 import qualified GHCJS.DOM.Document as DOM
@@ -129,7 +131,6 @@ readingPaneInt :: AppMonad t m
 readingPaneInt docEv rsDef = do
   (closeEv,fullScrEv, rsDyn) <- divClass "row" $ do
     closeEv <- btn "btn-default btn-sm" "Close"
-    -- editEv <- btn "btn-default" "Edit"
     fullScrEv <- btn "btn-default btn-sm" "Full Screen"
 
     rsDyn <- readerSettingsControls rsDef
@@ -141,9 +142,7 @@ readingPaneInt docEv rsDef = do
     -- (readingPaneView <$> docEv)
     -- (paginatedReader rsDyn fullScrEv <$> docEv)
     (verticalReader rsDyn fullScrEv <$> docEv)
-  -- rdDyn <- holdDyn Nothing (Just <$> docEv)
   return (closeEv, never)
-         -- , fmapMaybe identity $ tagDyn rdDyn editEv)
 
 -- Display the complete document in one page
 readingPaneView :: AppMonad t m
@@ -178,64 +177,6 @@ readingPaneView (ReaderDocument _ title annText _) = do
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
   return ()
 
-
-getFirstParaOfPrevPage ::
-     forall t m b . (AppMonad t m)
-  => Dynamic t (ReaderSettingsTree CurrentDb)
-  -> Event t b
-  -> Dynamic t [VocabId]
-  -> Dynamic t [(Int,AnnotatedPara)]
-  -> (AppMonadT t m () -> AppMonadT t m (Event t ()))
-  -> Dynamic t (Map Text Text)
-  -> Event t Int
-  -> AppMonadT t m (Event t Int)
-getFirstParaOfPrevPage rs prev vIdDyn textContent dispFullScr divAttr endParaEv = do
-  rec
-    let
-      init endPara = do
-        elDynAttr "div" divAttr $ do
-          rec
-            (e,v) <- el' "div" $
-              bwdRenderParaNum 20 endPara e
-          return v -- First Para
-
-      -- Get para num and remove self
-      getParaDyn endPara = do
-        widgetHold (init endPara)
-          ((return (constDyn 0)) <$ delEv)
-
-    delEv <- delay 2 endParaEv
-  pDyn <- widgetHold (return (constDyn (constDyn 0)))
-    (getParaDyn <$> endParaEv)
-  return (tagDyn (join $ join pDyn) delEv)
-  where
-    bwdRenderParaNum 0 paraNum e = return (constDyn paraNum)
-    bwdRenderParaNum paraCount paraNum e = do
-      cntnt <- sample $ current textContent
-      let para = List.lookup paraNum cntnt
-      case para of
-        Nothing -> return (constDyn 0)
-        (Just p) -> bwdRenderPara paraCount p paraNum e
-
-
-    bwdRenderPara paraCount para paraNum e = do
-      ev <- delay 0.1 =<< getPostBuild
-      overFlowEv <- holdUniqDyn
-        =<< widgetHold (return True)
-        (checkOverFlow e (_numOfLines <$> rs) <$ ev)
-
-      let
-        prevParaWidget b = if b
-          then return (constDyn paraNum)
-          else bwdRenderParaNum (paraCount - 1) (paraNum - 1) e
-
-      v2 <- widgetHold (prevParaWidget True)
-            (prevParaWidget <$> updated overFlowEv)
-
-      el "div" $
-        renderOnePara vIdDyn (_rubySize <$> rs) para
-
-      return $ join v2
 
 ----------------------------------------------------------------------------------
 -- Vertical rendering

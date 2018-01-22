@@ -45,6 +45,7 @@ executable frontend
                      , these
                      , random
                      , vector
+                     , array
                      , hs-nlp-jp-utils
                      , ghcjs-dom
 
