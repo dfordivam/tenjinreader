@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module ReadingPane where
 
 import FrontendCommon
@@ -19,7 +20,7 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Vector as V
 import qualified Data.Array as A
-import Data.Array (Array)
+import Data.Array (Array, Ix)
 import qualified GHCJS.DOM.DOMRectReadOnly as DOM
 import qualified GHCJS.DOM.Element as DOM
 import qualified GHCJS.DOM.Document as DOM
@@ -184,6 +185,14 @@ readingPaneView (ReaderDocument _ title annText _) = do
 data TextAdjustDirection = ForwardGrow | BackwardGrow
   deriving (Show, Eq)
 
+newtype ParaPos = ParaPos { unParaPos :: Int }
+  deriving (Show, Eq, Ord, Ix, Num)
+
+newtype ParaNum = ParaNum { unParaNum :: Int }
+  deriving (Show, Eq, Ord, Ix, Num)
+
+type ParaData = Array ParaNum (Array ParaPos (Either Text (Vocab, [VocabId], Bool)))
+
 verticalReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
   -> Event t ()
@@ -209,12 +218,10 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
       <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
       <*> (_numOfLines <$> rs)
 
-    startPara = (\(p,v) -> (p,maybe 0 identity v)) startParaMaybe
-    initState = (ForwardGrow, (getCurrentViewContent annText (Just startPara)))
-    getState d content = maybe ((0,1), []) (\p -> ((0,length $ snd p), [p])) $
-      case d of
-        ForwardGrow -> headMay content
-        BackwardGrow -> headMay $ reverse content
+    startPara = (\(p,v) -> (ParaNum p, ParaPos $ maybe 1 identity v)) startParaMaybe
+    initState = (ForwardGrow,
+                 (getCurrentViewContent (makeParaData annText) (Just startPara)))
+    dEv = snd <$> (evVisible)
 
   rec
     let doStop (Just GrowText) Nothing = Just 1
@@ -234,51 +241,32 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
     stopTicksMaybe <- foldDyn doStop Nothing $
       leftmost [Nothing <$ stopTicks,(snd <$> evVisible)]
 
-  let
-    -- Dirty HACK
-    getFPOffset (tc, ((fpN, fpT):[])) = (fpN, length prefix)
-      where
-        (Just (prefix,_)) = headMay $ catMaybes $
-          fmap (\(v,l) -> (,) v <$> List.stripPrefix fpT l) $
-          fmap (\s -> splitAt s fpOT) [0..lenOT]
-        lenOT = length fpOT -- Full para / orig length
-        fpOT = maybe [] identity $ List.lookup fpN tc
-    getFPOffset (tc, ((fpN, fpT):_)) = (fpN, lenOT - (length fpT))
-      where
-        lenOT = length fpOT -- Full para / orig length
-        fpOT = maybe [] identity $ List.lookup fpN tc
-    dEv = snd <$> (evVisible)
-
-  text $ "Start Para:" <> tshow startPara
   --------------------------------
   rec
     let
       pageChangeEv = leftmost [BackwardGrow <$ prev, ForwardGrow <$ next]
-      firstParaEv :: Event t (Int,Int)
-      firstParaEv = fmapMaybe identity $ leftmost
-        [tagDyn nextParaMaybe next
-        , Just <$> firstPara] -- TODO
 
-      firstPara = getFPOffset <$>
-        (attachDyn textContent (snd <$> tagDyn row1Dyn stopTicks))
+      firstDisplayedPara :: Dynamic t (ParaNum, ParaPos)
+      firstDisplayedPara = ffor row1Dyn $ \(_,ps) ->
+        (fst $ A.bounds ps, fst $ A.bounds $ (ps A.! (fst $ A.bounds ps)))
 
-      lastDisplayedPara :: Dynamic t (Int, Int)
-      lastDisplayedPara = (\v (fpN,o) -> maybe (0,0)
-        (\(pn,pt) -> (pn, (if fpN == pn then o - 1 else 0) + length pt))
-        (preview (_2 . to reverse . _head) v)) <$> row1Dyn <*> firstParaDyn
+      lastDisplayedPara :: Dynamic t (ParaNum, ParaPos)
+      lastDisplayedPara = ffor row1Dyn $ \(_,ps) ->
+        (snd $ A.bounds ps, snd $ A.bounds $ (ps A.! (snd $ A.bounds ps)))
 
       nextParaMaybe = getNextParaMaybe <$> lastDisplayedPara <*> textContent
-      prevParaMaybe = getPrevParaMaybe <$> firstParaDyn <*> textContent
-
-    firstParaDyn <- holdDyn startPara
-      =<< delay 1 firstParaEv -- without this stack overflow
+      prevParaMaybe = getPrevParaMaybe <$> firstDisplayedPara <*> textContent
 
     let foldF (d, tc) =
           foldDyn f st ((\d -> (tc,d)) <$> dEv)
           where f = case d of
                   ForwardGrow -> textAdjustF
                   BackwardGrow -> textAdjustRevF
-                st = getState d tc
+                st = case d of
+                  ForwardGrow -> getState tcL
+                  BackwardGrow -> getState tcU
+                (tcL, tcU) = A.bounds tc
+                getState n = (\p -> (A.bounds p, A.array (n,n) [(n,p)])) (tc A.! n)
 
         newStateEv = attachWith af (current
           ((,) <$> (getCurrentViewContent <$> textContent <*> nextParaMaybe)
@@ -288,15 +276,15 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
             af (c,_) ForwardGrow = (ForwardGrow,c)
             af (_,c) BackwardGrow = (BackwardGrow,c)
 
-        row1Dyn :: Dynamic t ((Int,Int), [(Int,AnnotatedPara)])
+        row1Dyn :: Dynamic t ((ParaPos, ParaPos), ParaData)
         row1Dyn = join row1Dyn'
 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
     text "row1Dyn fst :"
     display $ fst <$> row1Dyn
-    textContent <- fetchMoreContentF docId annText endParaNum
-      (traceEvent "fetchEv: " (attachDyn firstParaDyn pageChangeEv))
+    textContent <- fetchMoreContentF docId (makeParaData annText) endParaNum
+      (traceEvent "fetchEv: " (attachDyn firstDisplayedPara pageChangeEv))
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
@@ -304,8 +292,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
         else Map.empty
       divAttr = divAttr' <*> fullscreenDyn
 
-    text "firstParaDyn:"
-    display firstParaDyn
+    text "firstDisplayedPara:"
+    display firstDisplayedPara
     text " lastDisplayedPara:"
     display lastDisplayedPara
     text " nextParaMaybe:"
@@ -352,7 +340,9 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
     surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
 
-  getWebSocketResponse ((\(p,o) -> SaveReadingProgress docId (p,Just o)) <$> firstParaEv)
+  getWebSocketResponse
+    ((\(ParaNum p, ParaPos o) -> SaveReadingProgress docId (p,Just o))
+      <$> updated firstDisplayedPara)
 
   --------------------------------
 
@@ -387,24 +377,24 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
 
 fetchMoreContentF :: (AppMonad t m)
   => _
-  -> [(Int,AnnotatedPara)]
+  -> ParaData
   -> Int
-  -> Event t ((Int,Int), TextAdjustDirection)
-  -> AppMonadT t m (Dynamic t [(Int,AnnotatedPara)])
+  -> Event t ((ParaNum, ParaPos), TextAdjustDirection)
+  -> AppMonadT t m (Dynamic t ParaData)
 fetchMoreContentF docId annText endParaNum pageChangeEv = do
   rec
     -- Fetch more contents
     -- Keep at most 60 paras in memory, length n == 30
     let
 
-        lastAvailablePara = ((\(p:_) -> fst p) . reverse) <$> textContent
-        firstAvailablePara = ((\(p:_) -> fst p)) <$> textContent
+        lastAvailablePara = (snd . A.bounds) <$> textContent
+        firstAvailablePara = (fst . A.bounds) <$> textContent
         hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara pageChangeEv)
-        hitEndF (l,((n,_), d))
+        hitEndF (ParaNum l,((ParaNum n,_), d))
           | l < endParaNum && d == ForwardGrow && (l - n < 10) = Just (l + 1)
           | otherwise = Nothing
         hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara pageChangeEv)
-        hitStartF (f,((n,_), d))
+        hitStartF (ParaNum f,((ParaNum n,_), d))
           | f > 0 && d == BackwardGrow && (n - f < 10) = Just (max 0 (f - 30))
           | otherwise = Nothing
 
@@ -418,63 +408,77 @@ fetchMoreContentF docId annText endParaNum pageChangeEv = do
   display lastAvailablePara
   text ", "
   display firstAvailablePara
-  text ", "
-  display (length <$> textContent)
   text ")"
 
   return textContent
 
-moreContentAccF :: [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)] -> [(Int, AnnotatedPara)]
+makeParaData :: [(Int, AnnotatedPara)] -> ParaData
+makeParaData [] = A.listArray (ParaNum 0, ParaNum (-1)) []
+makeParaData n@(n1:_) = A.array (ParaNum (fst n1), ParaNum (fst l)) $ map f n
+  where
+    f (n,c) = (ParaNum n, A.listArray (ParaPos 1, ParaPos (length c)) c)
+    (l:_) = reverse n
+
+moreContentAccF :: [(Int, AnnotatedPara)] -> ParaData -> ParaData
 moreContentAccF [] o = o
-moreContentAccF n@(n1:_) o@(o1:_)
-  | (fst n1) > (fst o1) = (drop (length o - 30) o) ++ n -- More forward content
-  | otherwise = n ++ (take 30 o) -- More previous paras
+moreContentAccF n@(n1:_) o = A.array newBounds ((A.assocs pd) ++ (A.assocs o))
+  where
+    (curFirst, curLast) = A.bounds o
+    pd = makeParaData n
+    (newFirst, newLast) = A.bounds pd
+    newBounds = if newFirst > curLast
+      then ((max curFirst (ParaNum $ 60 - (unParaNum newLast))) , newLast)
+      else (newFirst, (min curLast (ParaNum $ 60 + (unParaNum newFirst))))
 
 getCurrentViewContent
-  :: [(Int,AnnotatedPara)]
-  -> Maybe (Int, Int)
-  -> [(Int,AnnotatedPara)]
-getCurrentViewContent annText Nothing = annText
-getCurrentViewContent annText (Just (p,o)) = startP : restP
+  :: ParaData
+  -> Maybe (ParaNum, ParaPos)
+  -> ParaData
+getCurrentViewContent pd Nothing = pd
+getCurrentViewContent pd (Just (p,o)) = (A.ixmap newBounds identity pd) A.// [(p,newP)]
   where
-    startP = (p, maybe [] (drop o) (List.lookup p annText))
-    restP = filter ((> p) . fst) annText
+    newBounds = A.bounds pd & _1 .~ p
+    op = pd A.! p
+    newP = A.ixmap (A.bounds op & _1 .~ o) identity op
 
 -- Offsets are the Current start of page
 getPrevViewContent
-  :: [(Int,AnnotatedPara)]
-  -> Maybe (Int, Int)
-  -> [(Int,AnnotatedPara)]
-getPrevViewContent annText Nothing = annText
-getPrevViewContent annText (Just (p,o)) =
-  -- if o == 0 then restP else
-  reverse $ lastP : (reverse restP)
+  :: ParaData
+  -> Maybe (ParaNum, ParaPos)
+  -> ParaData
+getPrevViewContent pd Nothing = pd
+getPrevViewContent pd (Just (p,o)) = (A.ixmap newBounds identity pd) A.// [(p,newP)]
   where
-    lastP = (p, maybe [] (take o) (List.lookup p annText))
-    restP = filter ((< p) . fst) annText
+    newBounds = A.bounds pd & _2 .~ p
+    op = pd A.! p
+    newP = A.ixmap (A.bounds op & _2 .~ o) identity op
 
 -- Start of next page (one after end of current page)
-getNextParaMaybe :: (Int, Int) -> [(Int,AnnotatedPara)]
-  -> Maybe (Int, Int)
-getNextParaMaybe (lp, lpOff) textContent = lpOT >>= \l ->
-  case (drop (lpOff + 1) l, nextP) of
-    ([],Nothing) -> Nothing
-    ([],Just _) -> Just (lp + 1, 0)
-    (ls,_) -> Just $ (lp,lpOff + 1)
+getNextParaMaybe
+  :: (ParaNum, ParaPos)
+  -> ParaData
+  -> Maybe (ParaNum, ParaPos)
+getNextParaMaybe (p, pos) textContent
+  | pos < (snd $ A.bounds pOT) = Just (p, pos + 1)
+  | lp > p = Just (p + 1, ParaPos 1)
+  | otherwise = Nothing
   where
-    lpOT = List.lookup lp textContent
-    nextP = List.lookup (lp + 1) textContent
+    pOT = textContent A.! p
+    (_,lp) = A.bounds textContent
 
 -- End of previous page (one before start of current page)
-getPrevParaMaybe :: (Int, Int) -> [(Int,AnnotatedPara)]
-  -> Maybe (Int,Int)
-getPrevParaMaybe (lp, lpOff) textContent =
-  case (lpOff, prevP) of
-    (0,Just p) -> Just $ (lp - 1, length p)
-    (0, Nothing) -> Nothing
-    (_,_) -> Just (lp, lpOff - 1 )
+getPrevParaMaybe
+  :: (ParaNum, ParaPos)
+  -> ParaData
+  -> Maybe (ParaNum, ParaPos)
+getPrevParaMaybe (p, pos) textContent
+  | pos > (fst $ A.bounds pOT) = Just (p, pos - 1)
+  | fp < p = Just (p - 1, snd (A.bounds pp))
+  | otherwise = Nothing
   where
-    prevP = List.lookup (lp - 1) textContent
+    pOT = textContent A.! p
+    pp = textContent A.! (p - 1)
+    (fp,_) = A.bounds textContent
 
 -- On click of left or right button hide both
 -- wait for stopTicks, then show the button again if the next/prev value is Just
@@ -517,6 +521,9 @@ data TextAdjust = ShrinkText | GrowText
   deriving (Show, Eq)
 
 
+halfParaPos (ParaPos u) (ParaPos l)
+  = ParaPos $ floor $ (fromIntegral (u - l) / 2)
+
 -- Converge on the text content size based on Events
 -- The Input events will toggle between shrink and grow
 -- This is equivalent to binary space search.
@@ -526,128 +533,110 @@ data TextAdjust = ShrinkText | GrowText
 -- When a resize occurs (ie event goes Nothing -> Just)
 -- The bounds will have to be re-calculated
 
--- (li,ui) are wrt to the content given in the annText
--- Therefore the annText is limited only to the content which has to be
--- displayed in this view (> first char for normal, < Last Char for reverse)
-textAdjustF
-  :: ([(Int,AnnotatedPara)], Maybe TextAdjust)
-  -> ((Int,Int), [(Int,AnnotatedPara)])
-  -> ((Int,Int), [(Int,AnnotatedPara)])
+textAdjustF, textAdjustRevF
+  :: (ParaData, Maybe TextAdjust)
+  -> ((ParaPos, ParaPos), ParaData)
+  -> ((ParaPos, ParaPos), ParaData)
 
--- lp -> last para
--- ps -> all paras
--- lpN -> last para number
--- lpT -> last para Content
-textAdjustF (annText, (Just ShrinkText)) v@(_,[]) = v
-textAdjustF (annText, (Just ShrinkText)) ((li,ui), ps)
-  = case (lp) of
-      (_,[]) -> case psRev of
-        (lp':psRev') -> textAdjustF (annText, (Just ShrinkText))
-          ((0,length lp'), (reverse psRev))
-        [] -> ((0,1),[])
+textAdjustF (_, (Just ShrinkText)) ((li,ui), ps)
+  | lpU == lpL
+    -- drop the last Para
+    = assert (lpN > fpN)
+    ((A.bounds $ ps A.! (lpN - 1))
+      , A.ixmap (fpN, lpN - 1) identity ps)
 
-      (lpN,lpT) -> ((liN, lenT) -- Adjust upper bound
-          , (reverse psRev) ++ [(lpN, nlpT)])
-        where (liN,halfL) = if li < lenT
-                then (,) li (li + (floor $ (fromIntegral (lenT - li)) / 2))
-                else (,) 0 (floor $ (fromIntegral lenT) / 2)
-              nlpT = take halfL lpT
-              lenT = length lpT
+  | otherwise
+    -- drop half
+    = ((li, lpU), ps A.// [(lpN, newLp)])
   where
-    (lp:psRev) = reverse ps
+    (fpN,lpN) = A.bounds ps
+    lp = ps A.! lpN
+    (lpL,lpU) = A.bounds lp
+    -- During viewport size change li can be invalid
+    halfL = halfParaPos lpU  li
+    newLp = A.ixmap (lpL, halfL) identity lp
 
-textAdjustF (annText, (Just GrowText)) v@(_,[])
-  = maybe v (\p -> ((0, length $ snd p), [p])) $ headMay annText
 
-textAdjustF (annText, (Just GrowText)) v@((li,ui), ps) =
-  (\(i,n) -> (i, (reverse psRev) ++ n)) newLp
+textAdjustF (viewPD, (Just GrowText)) ((li,ui), ps)
+  | lpU < ui = assert (ui <= lpOTU)
+    ((lpU, ui), ps A.// [(lpN, A.ixmap (lpL, halfL1) identity lpOT)])
+  | lpU < lpOTU -- ui is invalid
+    = ((lpU, lpOTU), ps A.// [(lpN, A.ixmap (lpL, halfL2) identity lpOT)])
+  | nextPN <= (snd $ A.bounds viewPD) =
+    (A.bounds nextP, A.ixmap (fpN, nextPN) identity viewPD)
+  | otherwise = textAdjustF (viewPD, Nothing) ((li,ui), ps)
   where
-    ((lpN, lpT):psRev) = reverse ps
-    newLp = if lenT < lenOT
-      -- Add content from this para
-      -- Adjust lower bound
-      then (,) (lenT, uiN) [(lpN, lpTN)]
-      -- This para content over, add a new Para
-      else case newPara of
-             Just np -> (,) (0, length np) $ (lpN, lpT): [(lpN + 1, np)] -- not reversed, so add at end
-             Nothing -> v -- TODO handle this case
+    (fpN,lpN) = A.bounds ps
+    lp = ps A.! lpN
+    (lpL,lpU) = A.bounds lp
+    lpOT = viewPD A.! lpN
+    (_,lpOTU) = A.bounds lpOT
+    nextPN = (lpN + 1)
+    nextP = viewPD A.! nextPN
 
-    lpTN = take halfL lpOT
-    (uiN, halfL) = if ui > lenT
-      then (,) ui (lenT + (ceiling $ (fromIntegral (ui - lenT)) / 2))
-      else (,) lenOT lenOT
+    halfL1 = halfParaPos ui lpU
+    halfL2 = halfParaPos lpOTU lpU
 
-    lenT = length lpT
-    lenOT = length lpOT -- Full para / orig length
-
-    lpOT = maybe [] identity $ List.lookup lpN annText
-
-    newPara = List.lookup (lpN + 1) annText
-
-textAdjustF (annText, Nothing) (_, ps) = ((0,(length lpOT)),ps)
-    where
-      ((lpN, lpT):_) = reverse ps
-      lpOT = maybe [] identity $ List.lookup lpN annText
+textAdjustF (viewPD, Nothing) (_, ps) = (A.bounds lp,ps)
+  where
+    (fpN,lpN) = A.bounds ps
+    lp = viewPD A.! lpN
 
 -- lower bound is towards end, upper bound is towards start
 -- Do binary search between these bounds
-textAdjustRevF
-  :: ([(Int,AnnotatedPara)], Maybe TextAdjust)
-  -> ((Int,Int), [(Int,AnnotatedPara)])
-  -> ((Int,Int), [(Int,AnnotatedPara)])
+textAdjustRevF (_, (Just ShrinkText)) ((li,ui), ps)
+  | fpL == fpU
+    -- drop the first Para
+    = assert (lpN > fpN)
+    ((A.bounds $ ps A.! (fpN + 1))
+      , A.ixmap (fpN + 1, lpN) identity ps)
 
-textAdjustRevF (annText, (Just ShrinkText)) ((li,ui),(fp:ps)) = case (fp) of
-  (_,[]) -> case ps of
-    (fp':ps') -> textAdjustRevF (annText, (Just ShrinkText))
-      ((0,length fp'), ps)
-    [] -> error "textAdjustRevF error"
-
-  (fpN,fpT) -> ((li, (length fpT) )
-      , (fpN, nfpT) : ps)
-    where halfL = if li < lenT
-            then li + (floor $ (fromIntegral (lenT - li)) / 2)
-            else (floor $ (fromIntegral lenT) / 2)
-          nfpT = reverse $ take halfL $ reverse fpT
-          lenT = length fpT
-
-textAdjustRevF (annText, (Just GrowText)) v@(_,[])
-  = error "textAdjustRevF error empty"
-
-textAdjustRevF (annText, (Just GrowText)) v@((li,ui), ((fpN, fpT):ps)) =
-  (\(i,n) -> (i, n ++ ps)) newFp
+  | otherwise
+    -- drop half
+    = ((fpL, ui), ps A.// [(fpN, newFp)])
   where
-    newFp = if lenT < lenOT
-      then (,) (lenT, ui) [(fpN, fpTN)]
-      -- This para content over, add a new Para
-      else case newPara of
-             Just np -> (,) (0, length np) $ (fpN - 1, np): [(fpN, fpT)]
-             Nothing -> v -- TODO handle this case
-
-    fpTN = reverse $ take halfL $ reverse fpOT
-    halfL = lenT + (ceiling $ (fromIntegral (ui - lenT)) / 2)
-
-    lenT = length fpT
-    lenOT = length fpOT -- Full para / orig length
-
-    fpOT = maybe [] identity $ List.lookup fpN annText
-
-    newPara = List.lookup (fpN - 1) annText
+    (fpN,lpN) = A.bounds ps
+    fp = ps A.! fpN
+    (fpL,fpU) = A.bounds fp
+    -- During viewport size change li can be invalid
+    halfL = halfParaPos ui  fpL
+    newFp = A.ixmap (halfL, fpU) identity fp
 
 
-textAdjustRevF (annText, Nothing) (_, ps) = ((0,(length lpOT)),ps)
-    where
-      ((lpN, lpT):_) = reverse ps
-      lpOT = maybe [] identity $ List.lookup lpN annText
+textAdjustRevF (viewPD, (Just GrowText)) ((li,ui), ps)
+  | fpL > li = assert (li >= fpOTL)
+    ((li, fpL), ps A.// [(fpN, A.ixmap (halfL1, fpU) identity fpOT)])
+  | fpL > fpOTL -- li is invalid
+    = ((fpOTL, ui), ps A.// [(fpN, A.ixmap (halfL2, fpU) identity fpOT)])
+  | prevPN >= (snd $ A.bounds viewPD) =
+    (A.bounds prevP, A.ixmap (prevPN, lpN) identity viewPD)
+  | otherwise = textAdjustRevF (viewPD, Nothing) ((li,ui), ps)
+  where
+    (fpN,lpN) = A.bounds ps
+    fp = ps A.! fpN
+    (fpL,fpU) = A.bounds fp
+    fpOT = viewPD A.! fpN
+    (fpOTL,_) = A.bounds fpOT
+    prevPN = (fpN - 1)
+    prevP = viewPD A.! prevPN
+
+    halfL1 = halfParaPos li fpL
+    halfL2 = halfParaPos fpOTL fpL
+
+textAdjustRevF (viewPD, Nothing) (_, ps) = (A.bounds fp,ps)
+  where
+    (fpN,lpN) = A.bounds ps
+    fp = viewPD A.! fpN
 
 renderDynParas :: (_)
   => Dynamic t (ReaderSettings CurrentDb) -- Used for mark
-  -> Dynamic t [(Int,AnnotatedPara)]
+  -> Dynamic t ParaData
   -> m (Event t ([VocabId], (Text, Maybe e)))
 renderDynParas rs dynParas = do
-  let dynMap = Map.fromList <$> dynParas
+  let dynMap = (Map.fromList . A.assocs) <$> dynParas
       renderF vIdDyn = renderOnePara vIdDyn (_rubySize <$> rs)
       renderEachPara vIdDyn dt = do
-        ev <- dyn (renderF vIdDyn<$> dt)
+        ev <- dyn ((\p -> renderF vIdDyn (A.elems p)) <$> dt)
         switchPromptly never ev
 
   rec
