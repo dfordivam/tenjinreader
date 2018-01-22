@@ -80,21 +80,30 @@ btn cl t = do
 addEditSrsEntryWidget :: AppMonad t m
   => (Either KanjiId VocabId)
   -> Maybe Text -- Surface
-  -> Maybe SrsEntryId
+  -> VocabSrsState
   -> AppMonadT t m ()
 addEditSrsEntryWidget i t s = do
   let
     widget s = case s of
-      (Just sId) -> do
+      (InSrs sId) -> do
         ev <- btn "btn-xs btn-primary" "Edit SRS"
         openEditSrsItemWidget (sId <$ ev)
         return never
 
-      (Nothing) -> do
+      (IsWakaru) -> do
+        ev <- btn "btn-xs btn-primary" "わからない"
+        resp <- getWebSocketResponse $ QuickToggleWakaru i <$ ev
+        showWSProcessing ev resp
+        return resp
+
+      (NotInSrs) -> do
         ev <- btn "btn-xs btn-primary" "Add to SRS"
         resp <- getWebSocketResponse $ QuickAddSrsItem i t <$ ev
         showWSProcessing ev resp
-        return resp
+        ev2 <- btn "btn-xs btn-primary" "わかる"
+        resp2 <- getWebSocketResponse $ QuickToggleWakaru i <$ ev2
+        showWSProcessing ev2 resp2
+        return $ leftmost [resp,resp2]
   rec
     sDyn <- holdDyn s resp
     resp <- switchPromptly never
@@ -401,7 +410,7 @@ renderOnePara vIdDyn rubySize annTextPara = do
     leftmost <$> mapM f (annTextPara)
 
 showVocabDetailsWidget :: forall t m e . (AppMonad t m, DOM.IsElement e)
-  => Event t ((Text, Maybe e) , [(Entry, Maybe SrsEntryId)])
+  => Event t ((Text, Maybe e) , [(Entry, VocabSrsState)])
   -> AppMonadT t m ()
 showVocabDetailsWidget detailsEv = do
   let
@@ -442,7 +451,7 @@ showVocabDetailsWidget detailsEv = do
               , domEvent Click e1]
 
     wd :: AppMonad t m
-      => Maybe ((Text, Maybe e) , [(Entry, Maybe SrsEntryId)])
+      => Maybe ((Text, Maybe e) , [(Entry, VocabSrsState)])
       -> AppMonadT t m (Event t ())
     wd (Just ((s,e),es)) = (wrapper e)
       (mapM_ (showEntry s) (orderEntries (fst) es))

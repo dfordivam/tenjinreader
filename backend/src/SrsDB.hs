@@ -58,13 +58,13 @@ deriving instance Root (AppConcurrentDbTree CurrentDb)
 
 
 type family AppUserData t
-type instance AppUserData t = AppUserDataTree t
+type instance AppUserData CurrentDb = AppUserDataTree CurrentDb
 
 data AppUserDataTree t = AppUserDataTree
   { _reviews :: Tree SrsEntryId SrsEntry
   , _readerDocuments :: Tree ReaderDocumentId (ReaderDocument t)
-  , _kanjiSrsMap :: Tree KanjiId SrsEntryId
-  , _vocabSrsMap :: Tree VocabId SrsEntryId
+  , _kanjiSrsMap :: Tree KanjiId (Either () SrsEntryId)
+  , _vocabSrsMap :: Tree VocabId (Either () SrsEntryId)
   -- An Srs Item may not have an entry in this map
   , _srsKanjiVocabMap :: Tree SrsEntryId (Either KanjiId VocabId)
   , _readerSettings :: ReaderSettings t

@@ -57,6 +57,7 @@ wsHandler = HandlerWrapper $
   :<&> h getLoadMoreVocabSearchResult
 
   :<&> h getQuickAddSrsItem
+  :<&> h getQuickToggleWakaru
 
   :<&> h getSrsStats
 

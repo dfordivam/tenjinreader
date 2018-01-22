@@ -299,7 +299,7 @@ checkAnswerInt readings kanaAlts =
   where
     kanas = concat $ map (map snd) kanaAlts
 
-getQuickAddSrsItem :: QuickAddSrsItem -> WsHandlerM (Maybe SrsEntryId)
+getQuickAddSrsItem :: QuickAddSrsItem -> WsHandlerM VocabSrsState
 getQuickAddSrsItem (QuickAddSrsItem v t) = do
   uId <- asks currentUserId
 
@@ -307,7 +307,7 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
   let
     upFun :: (AllocM m) => SrsEntry
       -> AppUserDataTree CurrentDb
-      -> StateT (Maybe SrsEntryId) m
+      -> StateT (Maybe VocabSrsState) m
            (AppUserDataTree CurrentDb)
     upFun itm rd = do
       mx <- lift $ Tree.lookupMaxTree (rd ^. reviews)
@@ -315,21 +315,48 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
           zerokey = SrsEntryId 0
           nextKey (SrsEntryId k, _) = SrsEntryId (k + 1)
 
-      put (Just newk)
+      put (Just $ InSrs newk)
       lift $ rd & reviews %%~ Tree.insertTree newk itm
          >>= srsKanjiVocabMap %%~ Tree.insertTree newk v
          >>= case v of
          (Left k) ->
-           kanjiSrsMap %%~ Tree.insertTree k newk
+           kanjiSrsMap %%~ Tree.insertTree k (Right newk)
          (Right v) ->
-           vocabSrsMap %%~ Tree.insertTree v newk
+           vocabSrsMap %%~ Tree.insertTree v (Right newk)
 
   ret <- forM srsItm $ \itm -> do
     lift $ transactSrsDB $
       runStateWithNothing $
         userData %%~ updateTreeLiftedM uId (upFun itm)
 
-  return $ join ret
+  return $ maybe NotInSrs id (join ret)
+
+getQuickToggleWakaru :: QuickToggleWakaru -> WsHandlerM (VocabSrsState)
+getQuickToggleWakaru (QuickToggleWakaru e) = do
+  uId <- asks currentUserId
+  let
+    f k t = (lift $ Tree.lookupTree k t)
+      >>= \case
+        Nothing -> do
+          put (Just IsWakaru)
+          lift $ Tree.insertTree k (Left ()) t
+        Just _ -> do
+          put (Just NotInSrs)
+          lift $ Tree.deleteTree k t
+
+    upFun :: (AllocM m)
+      => AppUserDataTree CurrentDb
+      -> StateT (Maybe VocabSrsState) m
+           (AppUserDataTree CurrentDb)
+    upFun = case e of
+      (Left k) -> kanjiSrsMap %%~ (f k)
+      (Right v) -> vocabSrsMap %%~ (f v)
+
+  ret <- lift $ transactSrsDB $
+    runStateWithNothing $
+      userData %%~ updateTreeLiftedM uId upFun
+
+  return $ maybe NotInSrs id ret
 
 data TRM = TRM SrsEntryField (NonEmpty Reading) (NonEmpty Meaning)
 
@@ -475,26 +502,26 @@ initSrsDb = do
 
 fixSrsDb :: Handler ()
 fixSrsDb = do
-  se <- asks appVocabSearchEngNoGloss
-  let uId = 1
-  let
-    upFun :: (AllocM m) => AppUserDataTree CurrentDb
-      -> m (AppUserDataTree CurrentDb)
-    upFun rd = do
-      rws <- Tree.toList (rd ^. reviews)
-      let
+  -- se <- asks appVocabSearchEngNoGloss
+  -- let uId = 1
+  -- let
+  --   upFun :: (AllocM m) => AppUserDataTree CurrentDb
+  --     -> m (AppUserDataTree CurrentDb)
+  --   upFun rd = do
+  --     rws <- Tree.toList (rd ^. reviews)
+  --     let
 
-        getF (ri,r) = (,) <$> pure ri <*> listToMaybe eIds
-          where f = NE.head (r ^. field)
-                eIds = query se [f]
-        newIds :: [(SrsEntryId, EntryId)]
-        newIds = catMaybes $ map getF rws
+  --       getF (ri,r) = (,) <$> pure ri <*> listToMaybe eIds
+  --         where f = NE.head (r ^. field)
+  --               eIds = query se [f]
+  --       newIds :: [(SrsEntryId, EntryId)]
+  --       newIds = catMaybes $ map getF rws
 
-        ff rd (s,e) = rd & srsKanjiVocabMap %%~ Tree.insertTree s (Right e)
-          >>= vocabSrsMap %%~ Tree.insertTree e s
+  --       ff rd (s,e) = rd & srsKanjiVocabMap %%~ Tree.insertTree s (Right e)
+  --         >>= vocabSrsMap %%~ Tree.insertTree e s
 
-      foldlM ff rd newIds
+  --     foldlM ff rd newIds
 
-  transactSrsDB_ $ userData %%~ updateTreeM uId upFun
+  -- transactSrsDB_ $ userData %%~ updateTreeM uId upFun
 
   return ()

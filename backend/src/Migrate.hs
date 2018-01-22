@@ -33,6 +33,7 @@ import Data.Text (Text, unpack)
 import Data.Int (Int64)
 import Data.Typeable (Typeable)
 import qualified Data.BTree.Impure as Tree
+import Data.BTree.Impure (Tree)
 
 import Control.Monad.Haskey
 import Database.Haskey.Alloc.Concurrent (Root)
@@ -49,15 +50,20 @@ import qualified Data.Map as Map
 import Data.Time.Calendar (Day)
 
 
--- -data AppUserDataTreeOld t = AppUserDataTreeOld
--- -  { _reviewsOld :: Tree SrsEntryId SrsEntry
--- -  , _readerDocumentsOld :: Tree ReaderDocumentId ReaderDocument
--- -  , _kanjiSrsMapOld :: Tree KanjiId SrsEntryId
--- -  , _vocabSrsMapOld :: Tree VocabId SrsEntryId
--- -  -- An Srs Item may not have an entry in this map
--- -  , _srsKanjiVocabMapOld :: Tree SrsEntryId (Either KanjiId VocabId)
--- -  } deriving (Generic, Show, Typeable, Binary, Value)
--- -
+data AppUserDataTreeOld t = AppUserDataTreeOld
+  { _reviewsOld :: Tree SrsEntryId SrsEntry
+  , _readerDocumentsOld :: Tree ReaderDocumentId (ReaderDocument t)
+  , _kanjiSrsMapOld :: Tree KanjiId (SrsEntryId)
+  , _vocabSrsMapOld :: Tree VocabId (SrsEntryId)
+  -- An Srs Item may not have an entry in this map
+  , _srsKanjiVocabMapOld :: Tree SrsEntryId (Either KanjiId VocabId)
+  , _readerSettingsOld :: ReaderSettings t
+  } deriving (Generic, Show, Typeable, Binary, Value)
+
+type instance AppUserData OldDb = AppUserDataTreeOld OldDb
+
+makeLenses ''AppUserDataTreeOld
+
 newtype AppOldConcurrentDb = AppOldConcurrentDb
   { unAppOldConcurrentDb :: DbSchema OldDb }
   deriving (Generic, Show, Typeable, Binary, Value, Root)
@@ -96,12 +102,12 @@ migrateFun dbOld db = do
              --   => AppUserDataTreeOld (OldDb)
              --   -> n (TType)
              tup d =
-               ( (d ^. reviews)
-               , (d ^. readerDocuments)
-               , (d ^. kanjiSrsMap)
-               , (d ^. vocabSrsMap)
-               , (d ^. srsKanjiVocabMap)
-               , (d ^. readerSettings))
+               ( (d ^. reviewsOld)
+               , (d ^. readerDocumentsOld)
+               , (d ^. kanjiSrsMapOld)
+               , (d ^. vocabSrsMapOld)
+               , (d ^. srsKanjiVocabMapOld)
+               , (d ^. readerSettingsOld))
                &   (_1 %%~ Tree.toList)
                >>= (_2 %%~ Tree.toList)
                >>= (_3 %%~ Tree.toList)
@@ -114,16 +120,18 @@ migrateFun dbOld db = do
       runNewDb $ transact $ \(AppConcurrentDb tree) -> do
         newD <- AppUserDataTree
           <$> (Tree.fromList $ d ^. _1)
-          <*> (Tree.fromList $ map modifyRD (d ^. _2))
-          <*> (Tree.fromList $ d ^. _3)
-          <*> (Tree.fromList $ d ^. _4)
+          <*> (Tree.fromList $ coerce (d ^. _2))
+          <*> (Tree.fromList $ modifyMap $ d ^. _3)
+          <*> (Tree.fromList $ modifyMap $ d ^. _4)
           <*> (Tree.fromList $ d ^. _5)
           <*> pure (coerce (d ^. _6))
 
         newTree <- tree & userData %%~
           Tree.insertTree uId newD
         commit () (AppConcurrentDb newTree)
-    modifyRD = coerce
+
+    modifyMap :: [(a,b)] -> [(a,Either () b)]
+    modifyMap = each . _2 %~ Right
     -- modifyRD (rId, rd) = (,) rId $ ReaderDocument
     --   (rd ^. readerDocOldId)
     --   (rd ^. readerDocOldTitle)

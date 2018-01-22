@@ -38,6 +38,7 @@ type AppRequest
   :<|> LoadMoreVocabSearchResult
 
   :<|> QuickAddSrsItem
+  :<|> QuickToggleWakaru
 
   :<|> GetSrsStats
 
@@ -120,10 +121,16 @@ data GetKanjiDetails =
 instance WebSocketMessage AppRequest GetKanjiDetails where
   type ResponseT AppRequest GetKanjiDetails = Maybe KanjiSelectionDetails
 
-type VocabList = [(VocabDetails, Maybe SrsEntryId)]
+data VocabSrsState
+  = NotInSrs
+  | InSrs SrsEntryId
+  | IsWakaru
+  deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
+
+type VocabList = [(VocabDetails, VocabSrsState)]
 
 data KanjiSelectionDetails =
-  KanjiSelectionDetails KanjiDetails (Maybe SrsEntryId) VocabList
+  KanjiSelectionDetails KanjiDetails VocabSrsState VocabList
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data LoadMoreKanjiVocab = LoadMoreKanjiVocab
@@ -158,7 +165,14 @@ data QuickAddSrsItem = QuickAddSrsItem (Either KanjiId VocabId)
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest QuickAddSrsItem where
-  type ResponseT AppRequest QuickAddSrsItem = Maybe SrsEntryId
+  type ResponseT AppRequest QuickAddSrsItem = VocabSrsState
+
+----------------------------------------------------------------
+data QuickToggleWakaru = QuickToggleWakaru (Either KanjiId VocabId)
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest QuickToggleWakaru where
+  type ResponseT AppRequest QuickToggleWakaru = VocabSrsState
 
 ----------------------------------------------------------------
 
@@ -351,7 +365,7 @@ data GetVocabDetails = GetVocabDetails [VocabId]
 
 instance WebSocketMessage AppRequest GetVocabDetails where
   type ResponseT AppRequest GetVocabDetails =
-    [(Entry, Maybe SrsEntryId)]
+    [(Entry, VocabSrsState)]
 
 ----------------------------------------------------------------
 data GetVocabSentences = GetVocabSentences (Either VocabId SrsEntryId)

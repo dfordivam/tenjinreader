@@ -139,7 +139,7 @@ getKanjiDetails (GetKanjiDetails kId _) = do
   uId <- asks currentUserId
   rs <- lift $ transactReadOnlySrsDB $ \db ->
     Tree.lookupTree uId (db ^. userData) >>= mapM (\rd ->
-      Tree.lookupTree kId (rd ^. kanjiSrsMap))
+      getVocabSrsState <$> Tree.lookupTree kId (rd ^. kanjiSrsMap))
 
   vs <- loadVocabList (take searchResultCount keys)
 
@@ -156,7 +156,8 @@ loadVocabList keys = do
   uId <- asks currentUserId
   s <- lift $ transactReadOnlySrsDB $ \db ->
     Tree.lookupTree uId (db ^. userData) >>= mapM (\rd -> do
-      mapM ((flip Tree.lookupTree) (rd ^. vocabSrsMap)) keys)
+      (map getVocabSrsState)
+        <$> mapM ((flip Tree.lookupTree) (rd ^. vocabSrsMap)) keys)
   return $ zip vocabs <$> s
 
 getLoadMoreKanjiVocab :: LoadMoreKanjiVocab -> WsHandlerM VocabList
@@ -376,7 +377,7 @@ saveReadingProgress (SaveReadingProgress docId p) = do
         (readerDocProgress %%~ (const (return p))))
 
 getVocabDetails :: GetVocabDetails
-  -> WsHandlerM [(Entry, Maybe SrsEntryId)]
+  -> WsHandlerM [(Entry, VocabSrsState)]
 getVocabDetails (GetVocabDetails eIds) = do
   uId <- asks currentUserId
   vocabDb <- lift $ asks appVocabDb
@@ -387,7 +388,7 @@ getVocabDetails (GetVocabDetails eIds) = do
         findOne vmap eId = do
           srsId <- Tree.lookupTree eId vmap
           let e = _vocabEntry <$> arrayLookupMaybe vocabDb eId
-          return $ (,) <$> e <*> (pure srsId)
+          return $ (,) <$> e <*> (pure $ getVocabSrsState srsId)
     mapM findAll (_vocabSrsMap <$> rd)
   return $ maybe [] catMaybes es
 

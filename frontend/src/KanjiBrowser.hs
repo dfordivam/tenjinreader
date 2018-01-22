@@ -270,7 +270,7 @@ kanjiDetailWindow k = do
 vocabListWindow
   :: (AppMonad t m
      , WebSocketMessage AppRequest req
-     , ResponseT AppRequest req ~ [(VocabDetails, Maybe SrsEntryId)])
+     , ResponseT AppRequest req ~ [(VocabDetails, VocabSrsState)])
   => req -> Event t VocabList -> AppMonadT t m ()
 vocabListWindow req listEv = do
   let

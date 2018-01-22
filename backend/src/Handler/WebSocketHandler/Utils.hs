@@ -74,4 +74,6 @@ arrayLookup a ids = map (a A.!) validIds
 arrayLookupMaybe :: (A.Ix i) => Array i e -> i -> Maybe e
 arrayLookupMaybe a i = listToMaybe $ arrayLookup a [i]
 
-
+getVocabSrsState Nothing = NotInSrs
+getVocabSrsState (Just (Right s)) = InSrs s
+getVocabSrsState (Just (Left ())) = IsWakaru
