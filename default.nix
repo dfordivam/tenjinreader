@@ -53,6 +53,30 @@
         beam-sqlite = self.callCabal2nix "beam-core" "${beam-src}/beam-sqlite" {};
         beam-migrate = self.callCabal2nix "beam-core" "${beam-src}/beam-migrate" {};
 
+        haskey = self.callCabal2nix "haskey" 
+          (pkgs.fetchFromGitHub {
+            owner = "haskell-haskey";
+            repo = "haskey";
+            rev = "39d53caec4568111663aded397921c1f26b670d7";
+            sha256 = "1g3a6i5973cxiw959pwl9xb8z8zv2nr0by24a83x4r53jg0a4fai";
+          }) {};
+
+        haskey-mtl = self.callCabal2nix "haskey" 
+          (pkgs.fetchFromGitHub {
+            owner = "haskell-haskey";
+            repo = "haskey-mtl";
+            rev = "d7ccc93e4763f7c3f131fd92bba5dbbbb9279099";
+            sha256 = "04ax88rzjbjap8hl4q8y4rhhd4bfa5mz2jlfj6sps1jjp0d7dd9z";
+          }) {inherit haskey haskey-btree;};
+
+        haskey-btree = self.callCabal2nix "haskey" 
+          (pkgs.fetchFromGitHub {
+            owner = "haskell-haskey";
+            repo = "haskey-btree";
+            rev = "8d1f9569b340da086dbdc20916dd272bbdd8f8a0";
+            sha256 = "06hqylp8m0ix10lxv29054cb5vaz3h7amlrrsdfhh2gv21f1p93m";
+          }) {};
+
         frontend = pkgs.haskell.lib.dontHaddock super.frontend;
         backend = pkgs.haskell.lib.dontHaddock super.backend;
         common = pkgs.haskell.lib.dontHaddock super.common;
