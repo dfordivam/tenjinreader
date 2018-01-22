@@ -342,9 +342,11 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
     surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
     showVocabDetailsWidget (attachDyn surfDyn detailsEv)
 
+  firstParaDyn <- holdUniqDyn firstDisplayedPara
+
   getWebSocketResponse
     ((\(ParaNum p, ParaPos o) -> SaveReadingProgress docId (p,Just o))
-      <$> updated firstDisplayedPara)
+      <$> updated firstParaDyn)
 
   --------------------------------
 
@@ -524,7 +526,7 @@ data TextAdjust = ShrinkText | GrowText
 
 
 halfParaPos (ParaPos u) (ParaPos l)
-  = ParaPos $ floor $ (fromIntegral (u - l) / 2)
+  = ParaPos $ ceiling $ (fromIntegral (u - l) / 2)
 
 -- Converge on the text content size based on Events
 -- The Input events will toggle between shrink and grow
