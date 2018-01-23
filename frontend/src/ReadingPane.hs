@@ -219,8 +219,8 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
       <*> (_numOfLines <$> rs)
 
     startPara = (\(p,v) -> (ParaNum p, ParaPos $ maybe 1 (max 1) v)) startParaMaybe
-    initState = (ForwardGrow,
-                 (getCurrentViewContent (makeParaData annText) (Just startPara)))
+    initState = (1, (ForwardGrow,
+                 (getCurrentViewContent (makeParaData annText) (Just startPara))))
     dEv = snd <$> (evVisible)
 
   text $ tshow startParaMaybe
@@ -258,18 +258,18 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
       nextParaMaybe = getNextParaMaybe <$> lastDisplayedPara <*> textContent
       prevParaMaybe = getPrevParaMaybe <$> firstDisplayedPara <*> textContent
 
-    let foldF (d, tc) =
+      row1Len :: Dynamic t Int
+      row1Len = ffor row1Dyn $ \(_,ps) ->
+        foldl (\len (l,u) -> len + (unParaPos (u - l))) 0 (map A.bounds $ A.elems ps)
+
+    let foldF (len, (d, tc)) =
           foldDyn f st ((\d -> (tc,d)) <$> dEv)
           where f = case d of
                   ForwardGrow -> textAdjustF
                   BackwardGrow -> textAdjustRevF
-                st = case d of
-                  ForwardGrow -> getState tcL
-                  BackwardGrow -> getState tcU
-                (tcL, tcU) = A.bounds tc
-                getState n = (\p -> (A.bounds p, A.array (n,n) [(n,p)])) (tc A.! n)
+                st = getState tc len d
 
-        newStateEv = attachWith af (current
+        newStateEv = attachDyn row1Len $ attachWith af (current
           ((,) <$> (getCurrentViewContent <$> textContent <*> nextParaMaybe)
                <*> (getPrevViewContent <$> textContent <*> prevParaMaybe)))
                      pageChangeEv
@@ -282,6 +282,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
+    display row1Len
     text "row1Dyn fst :"
     display $ (\(ParaPos l, ParaPos u) -> ("(" <> tshow l <> "," <> tshow u <> ")"))
       . fst <$> row1Dyn
@@ -433,6 +434,37 @@ moreContentAccF n@(n1:_) o = A.array newBounds ((A.assocs pd) ++ (A.assocs o))
     newBounds = if newFirst > curLast
       then ((max curFirst (ParaNum $ 60 - (unParaNum newLast))) , newLast)
       else (newFirst, (min curLast (ParaNum $ 60 + (unParaNum newFirst))))
+
+getState
+  :: ParaData
+  -> Int
+  -> _
+  -> ((ParaPos, ParaPos), ParaData)
+getState tc len d = (A.bounds (snd fp), pd)
+  where
+    pd = A.array (minimum pns, maximum pns) ps
+    pns = map fst ps
+    ps = (fp:rp)
+    (fp:rp) = case d of
+      ForwardGrow -> recF len tcL
+      BackwardGrow -> recF len tcU
+
+    recF :: Int -> ParaNum -> [(ParaNum, Array ParaPos _)]
+    recF l n = case d of
+      ForwardGrow
+        | nl > l -> [(n, A.ixmap (lb, lb + (ParaPos l)) identity nd)]
+        | n < tcU -> (n,nd) : recF (l - nl) (n + 1)
+        | otherwise -> [(n,nd)]
+      BackwardGrow
+        | nl > l -> [(n, A.ixmap (ub - (ParaPos l), ub) identity nd)]
+        | n > tcL -> (n,nd) : recF (l - nl) (n - 1)
+        | otherwise -> [(n,nd)]
+      where
+        nd = tc A.! n
+        nl = unParaPos $ ub - lb
+        (lb,ub) = (A.bounds nd)
+
+    (tcL, tcU) = A.bounds tc
 
 getCurrentViewContent
   :: ParaData
