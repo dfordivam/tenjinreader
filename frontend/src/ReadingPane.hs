@@ -440,12 +440,12 @@ getState
   -> Int
   -> _
   -> ((ParaPos, ParaPos), ParaData)
-getState tc len d = (A.bounds (snd fp), pd)
+getState tc len d = (A.bounds (snd lp), pd)
   where
     pd = A.array (minimum pns, maximum pns) ps
     pns = map fst ps
-    ps = (fp:rp)
-    (fp:rp) = case d of
+    ps = (lp:rp)
+    (lp:rp) = reverse $ case d of
       ForwardGrow -> recF len tcL
       BackwardGrow -> recF len tcU
 
