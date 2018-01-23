@@ -4,7 +4,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Foundation where
@@ -25,12 +24,6 @@ import Yesod.Core.Types     (Logger)
 import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
-
-import Control.Monad.Haskey
-import Control.Lens
-import Database.Haskey.Store.File (defFileStoreConfig)
-import Data.BTree.Alloc (AllocM, AllocReaderM)
-import qualified Data.BTree.Impure as Tree
 
 import Common (CurrentDb, OldDb)
 import KanjiDB
@@ -58,7 +51,6 @@ data App = App
     , appKanjiSearchEng :: KanjiSearchEngine
     , appVocabSearchEng :: VocabSearchEngine
     , appVocabSearchEngNoGloss :: VocabSearchEngineNoGloss
-    , appConcurrentDb :: ConcurrentDb AppConcurrentDb
     }
 
 data MenuItem = MenuItem
@@ -228,41 +220,6 @@ instance YesodPersist App where
 instance YesodPersistRunner App where
     getDBRunner = defaultGetDBRunner appConnPool
 
-type SrsDB = HaskeyT AppConcurrentDb Handler
-
-runSrsDB
-  :: SrsDB a
-  -> Handler a
-runSrsDB action = do
-  master <- getYesod
-  runHaskeyT action (appConcurrentDb master)
-    defFileStoreConfig
-
-transactSrsDB_ ::
-  (forall m . (AllocM m)
-    => DbSchema CurrentDb
-    -> m (DbSchema CurrentDb))
-  -> Handler ()
-transactSrsDB_ action = transactSrsDB
-  (\t -> action t >>= (\nt -> return (nt,())))
-
-transactSrsDB ::
-  (forall m . (AllocM m)
-    => DbSchema CurrentDb
-    -> m (DbSchema CurrentDb, a))
-  -> Handler a
-transactSrsDB action = do
-  runSrsDB $ transact $ \(AppConcurrentDb tree) -> do
-    (newTree, a) <- action tree
-    commit a (AppConcurrentDb newTree)
-
-transactReadOnlySrsDB ::
-  (forall m . (AllocReaderM m)
-    => DbSchema CurrentDb -> m a)
-  -> Handler a
-transactReadOnlySrsDB action = do
-  runSrsDB $ transactReadOnly $ \(AppConcurrentDb tree) -> action tree
-
 instance YesodAuth App where
     type AuthId App = UserId
 
@@ -284,7 +241,6 @@ instance YesodAuth App where
                 { userIdent = userId
                 , userPassword = Nothing
                 }
-              lift $ insertNewUserData uid
               return $ Authenticated uid
 
     -- You can add other plugins like Google Email, email or OAuth here
@@ -302,14 +258,6 @@ isAuthenticated = do
         Just _ -> Authorized
 
 instance YesodAuthPersist App
-
-insertNewUserData :: UserId -> Handler ()
-insertNewUserData uid =
-  transactSrsDB_ $
-    userData %%~ (Tree.insertTree uId d)
-  where
-    uId = fromSqlKey uid
-    d = AppUserDataTree Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
 
 -- This instance is required to use forms. You can modify renderMessage to
 -- achieve customized and internationalized form validation messages.

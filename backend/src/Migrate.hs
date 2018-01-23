@@ -72,9 +72,19 @@ deriving instance Show (AppConcurrentDbTree OldDb)
 deriving instance Value (AppConcurrentDbTree OldDb)
 deriving instance Root (AppConcurrentDbTree OldDb)
 
+openSrsDB :: FilePath -> IO (ConcurrentDb AppConcurrentDb)
+openSrsDB fp =
+  flip runFileStoreT defFileStoreConfig $
+    openConcurrentDb hnds >>= \case
+      Nothing -> createConcurrentDb hnds (AppConcurrentDb (AppConcurrentDbTree Tree.empty))
+      Just db -> return db
+  where
+    hnds = concurrentHandles fp
+
 migrateMain = do
-  db <- openSrsDB "srsdb"
-  dbOld <- openOldSrsDB "oldsrsdb"
+  (db,_) <- openUserDB "userData/1"
+  -- dbOld <- openOldSrsDB "oldsrsdb"
+  dbOld <- openSrsDB "oldsrsdb"
   putStrLn $ ("Doing Migration" :: Text)
   migrateFun dbOld db
   putStrLn $ ("Migration Done" :: Text)
@@ -82,32 +92,32 @@ migrateMain = do
 migrateFun dbOld db = do
   let
     runNewDb :: (_)
-      => HaskeyT (AppConcurrentDb) m a
+      => HaskeyT (UserConcurrentDb) m a
       -> m a
     runNewDb action = runHaskeyT action db
       defFileStoreConfig
 
     runOldDb :: (_)
-      => HaskeyT (AppOldConcurrentDb) m a
+      => HaskeyT (AppConcurrentDb) m a
       -> m a
     runOldDb action = runHaskeyT action dbOld
       defFileStoreConfig
 
     getUserData uId =
       runOldDb $ transactReadOnly
-        (\(AppOldConcurrentDb db) -> do
+        (\(AppConcurrentDb db) -> do
            ud <- Tree.lookupTree uId (db ^. userData)
            let
              -- tup :: (AllocReaderM n)
              --   => AppUserDataTreeOld (OldDb)
              --   -> n (TType)
              tup d =
-               ( (d ^. reviewsOld)
-               , (d ^. readerDocumentsOld)
-               , (d ^. kanjiSrsMapOld)
-               , (d ^. vocabSrsMapOld)
-               , (d ^. srsKanjiVocabMapOld)
-               , (d ^. readerSettingsOld))
+               ( (d ^. reviews)
+               , (d ^. readerDocuments)
+               , (d ^. kanjiSrsMap)
+               , (d ^. vocabSrsMap)
+               , (d ^. srsKanjiVocabMap)
+               , (d ^. readerSettings))
                &   (_1 %%~ Tree.toList)
                >>= (_2 %%~ Tree.toList)
                >>= (_3 %%~ Tree.toList)
@@ -117,18 +127,16 @@ migrateFun dbOld db = do
            mapM tup ud)
 
     addUserData uId d =
-      runNewDb $ transact $ \(AppConcurrentDb tree) -> do
+      runNewDb $ transact $ \_ -> do
         newD <- AppUserDataTree
           <$> (Tree.fromList $ d ^. _1)
           <*> (Tree.fromList $ coerce (d ^. _2))
-          <*> (Tree.fromList $ modifyMap $ d ^. _3)
-          <*> (Tree.fromList $ modifyMap $ d ^. _4)
+          <*> (Tree.fromList $ d ^. _3)
+          <*> (Tree.fromList $ d ^. _4)
           <*> (Tree.fromList $ d ^. _5)
           <*> pure (coerce (d ^. _6))
 
-        newTree <- tree & userData %%~
-          Tree.insertTree uId newD
-        commit () (AppConcurrentDb newTree)
+        commit () (UserConcurrentDb newD)
 
     modifyMap :: [(a,b)] -> [(a,Either () b)]
     modifyMap = each . _2 %~ Right
@@ -139,11 +147,12 @@ migrateFun dbOld db = do
     --   (0,Nothing)
   let
     migrateAction = do
-      uds <- runOldDb $ transactReadOnly $
-        (\(AppOldConcurrentDb db) -> do
-          us <- Tree.toList (db ^. userData)
-          return (map fst us))
-      mapM addFun (uds :: [Int64])
+      -- uds <- runOldDb $ transactReadOnly $
+      --   (\(AppOldConcurrentDb db) -> do
+      --     us <- Tree.toList (db ^. userData)
+      --     return (map fst us))
+      -- mapM addFun (uds :: [Int64])
+      addFun 1
 
     addFun uId = do
       getUserData uId

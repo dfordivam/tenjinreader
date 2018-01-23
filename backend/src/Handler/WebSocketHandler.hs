@@ -11,6 +11,7 @@ module Handler.WebSocketHandler
 import Import
 import Yesod.WebSockets
 import Handler.WebSocketHandler.Utils
+import SrsDB
 
 import Handler.WebSocketHandler.KanjiBrowser
 import Handler.WebSocketHandler.SrsReview
@@ -34,15 +35,17 @@ handleWebSocketConn uId = do
   iref1  <- liftIO $ newIORef ([],0)
   iref2  <- liftIO $ newIORef ([],0)
   iref3  <- liftIO $ newIORef ([],0)
+  (db,hnds) <- liftIO $ openUserDB ("userData/" ++ (show $ fromSqlKey uId))
   let runF bs = do
         liftIO $ putStrLn $ decodeUtf8 bs
         lift $ runReaderT
           (handleRequest wsHandler bs) (userSessionData)
       userSessionData =
-        WsHandlerEnv iref1 iref2 iref3 (fromSqlKey uId)
+        WsHandlerEnv iref1 iref2 iref3 (fromSqlKey uId) db
 
   sourceWS $$ ((Data.Conduit.List.mapM runF)
                   =$= sinkWSBinary)
+  liftIO $ closeUserDB hnds
 
 wsHandler :: HandlerWrapper WsHandlerM Message.AppRequest
 wsHandler = HandlerWrapper $

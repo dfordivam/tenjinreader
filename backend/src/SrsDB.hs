@@ -30,9 +30,11 @@ import Data.Text (Text, unpack)
 import Data.Int (Int64)
 import Data.Typeable (Typeable, Typeable1)
 import qualified Data.BTree.Impure as Tree
+import Data.Default
 
 import Control.Monad.Haskey
-import Database.Haskey.Alloc.Concurrent (Root)
+import Database.Haskey.Alloc.Concurrent (Root, ConcurrentHandles)
+import Database.Haskey.Alloc.Concurrent.Database
 import Data.Binary.Orphans
 import GHC.Generics (Generic)
 import Data.These
@@ -56,6 +58,9 @@ deriving instance Show (AppConcurrentDbTree CurrentDb)
 deriving instance Value (AppConcurrentDbTree CurrentDb)
 deriving instance Root (AppConcurrentDbTree CurrentDb)
 
+newtype UserConcurrentDb = UserConcurrentDb
+  { unUserConcurrentDb :: AppUserData CurrentDb }
+  deriving (Generic, Show, Typeable, Binary, Value, Root)
 
 type family AppUserData t
 type instance AppUserData CurrentDb = AppUserDataTree CurrentDb
@@ -70,19 +75,25 @@ data AppUserDataTree t = AppUserDataTree
   , _readerSettings :: ReaderSettings t
   } deriving (Generic, Typeable, Binary)
 
+deriving instance Root (AppUserDataTree CurrentDb)
 instance Value (AppUserDataTree CurrentDb)
 instance Value (AppUserDataTree OldDb)
 instance Show (AppUserDataTree CurrentDb)
 instance Show (AppUserDataTree OldDb)
 
-openSrsDB :: FilePath -> IO (ConcurrentDb AppConcurrentDb)
-openSrsDB fp =
+openUserDB :: FilePath -> IO (ConcurrentDb UserConcurrentDb, ConcurrentHandles)
+openUserDB fp =
   flip runFileStoreT defFileStoreConfig $
     openConcurrentDb hnds >>= \case
-      Nothing -> createConcurrentDb hnds (AppConcurrentDb (AppConcurrentDbTree Tree.empty))
-      Just db -> return db
+      Nothing -> (,) <$> createConcurrentDb hnds (UserConcurrentDb d) <*> pure hnds
+      Just db -> return (db, hnds)
   where
+    d = AppUserDataTree Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
     hnds = concurrentHandles fp
+
+closeUserDB :: ConcurrentHandles -> IO ()
+closeUserDB hnds =
+  flip runFileStoreT defFileStoreConfig (closeConcurrentHandles hnds)
 
 instance Value Int
 instance Value a => Value (Maybe a)

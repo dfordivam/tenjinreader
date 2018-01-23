@@ -137,28 +137,25 @@ getKanjiDetails (GetKanjiDetails kId _) = do
       keys = maybe [] (Set.toList . _kanjiVocabSet) kd
 
   uId <- asks currentUserId
-  rs <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userData) >>= mapM (\rd ->
-      getVocabSrsState <$> Tree.lookupTree kId (rd ^. kanjiSrsMap))
+  rs <- transactReadOnlySrsDB $ \rd ->
+    getVocabSrsState <$> Tree.lookupTree kId (rd ^. kanjiSrsMap)
 
   vs <- loadVocabList (take searchResultCount keys)
 
   asks kanjiVocabResult >>= \ref ->
     liftIO $ writeIORef ref (keys, searchResultCount)
   return $ KanjiSelectionDetails <$> kd ^? _Just . kanjiDetails
-    <*> rs <*> vs
+    <*> pure rs <*> pure vs
 
 loadVocabList keys = do
   vocabDb <- lift $ asks appVocabDb
   let
       vocabs = map _vocabDetails $ arrayLookup vocabDb keys
 
-  uId <- asks currentUserId
-  s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userData) >>= mapM (\rd -> do
+  s <- transactReadOnlySrsDB $ \rd -> do
       (map getVocabSrsState)
-        <$> mapM ((flip Tree.lookupTree) (rd ^. vocabSrsMap)) keys)
-  return $ zip vocabs <$> s
+        <$> mapM ((flip Tree.lookupTree) (rd ^. vocabSrsMap)) keys
+  return $ zip vocabs s
 
 getLoadMoreKanjiVocab :: LoadMoreKanjiVocab -> WsHandlerM VocabList
 getLoadMoreKanjiVocab _ = do
@@ -172,7 +169,7 @@ getLoadMoreKanjiVocab _ = do
 
   asks kanjiVocabResult >>= \ref ->
     liftIO $ writeIORef ref (keys, count + (length vs))
-  return $ maybe [] id vs
+  return $ vs
 
 getVocabSearch :: VocabSearch -> WsHandlerM VocabList
 getVocabSearch (VocabSearch m filt) = do
@@ -193,7 +190,7 @@ getVocabSearch (VocabSearch m filt) = do
   vs <- loadVocabList (take searchResultCount keys)
   asks vocabSearchResult >>= \ref ->
     liftIO $ writeIORef ref (keys, searchResultCount)
-  return $ maybe [] id vs
+  return $ vs
 
 filterPOS :: Maybe PartOfSpeech -> Entry -> Bool
 filterPOS Nothing _ = True
@@ -230,7 +227,7 @@ getLoadMoreVocabSearchResult _ = do
                        $ drop count keys)
   asks vocabSearchResult >>= \ref ->
     liftIO $ writeIORef ref (keys, count + (length vs))
-  return $ maybe [] id vs
+  return $ vs
 
 makeReaderDocumentContent t = do
   vocabDb <- asks appVocabDb
@@ -241,7 +238,6 @@ makeReaderDocumentContent t = do
 getAddOrEditDocument :: AddOrEditDocument
   -> WsHandlerM (Maybe (ReaderDocumentData))
 getAddOrEditDocument (AddOrEditDocument dId title t) = do
-  uId <- asks currentUserId
   c <- lift $ makeReaderDocumentContent t
 
   let
@@ -264,8 +260,7 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
       lift $ rd &
         readerDocuments %%~ Tree.insertTree docId nd
 
-  lift $ transactSrsDB $ runStateWithNothing $
-    userData %%~ updateTreeLiftedM uId upFun
+  transactSrsDB $ runStateWithNothing $ upFun
 
 getQuickAnalyzeText :: QuickAnalyzeText
   -> WsHandlerM [(Int, AnnotatedPara)]
@@ -276,11 +271,8 @@ getQuickAnalyzeText (QuickAnalyzeText t) = do
 getListDocuments :: ListDocuments
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]
 getListDocuments _ = do
-  uId <- asks currentUserId
-
-  ds <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userData
-    mapM Tree.toList (rd ^? _Just . readerDocuments)
+  ds <- transactReadOnlySrsDB $ \rd -> do
+    Tree.toList (rd ^. readerDocuments)
 
   let f (ReaderDocument i t c _) = (i,t,p c)
       p c = T.take 50 (foldl' fol "" c)
@@ -288,32 +280,26 @@ getListDocuments _ = do
       getT (Left t) = t
       getT (Right (v,_,_)) = vocabToText v
 
-  return $ maybe [] (map (f . snd)) ds
+  return $ map (f . snd) ds
 
 getViewDocument :: ViewDocument
   -> WsHandlerM (Maybe (ReaderDocumentData))
 getViewDocument (ViewDocument i paraNum) = do
-  uId <- asks currentUserId
-  s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userData)
-      >>= mapM (\rd ->
-        Tree.lookupTree i (rd ^. readerDocuments))
+  s <- transactReadOnlySrsDB $ \rd ->
+    Tree.lookupTree i (rd ^. readerDocuments)
   let
     ret :: Maybe ReaderDocumentData
-    ret = flip getReaderDocumentData paraNum <$> join s
+    ret = flip getReaderDocumentData paraNum <$> s
 
-  lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userData)
-      >>= mapM (\rd -> do
-        let
-          f :: (AllocReaderM m)
-            => (Vocab, [VocabId], Bool)
-            -> m (Vocab, [VocabId], Bool)
-          f v@(_,vIds,_) = do
-            sIds <- mapM (\i -> Tree.lookupTree i (rd ^. vocabSrsMap)) vIds
-            return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
-        ret & _Just . _5 . each . _2 . each . _Right %%~ f)
-      >>= (\x -> return $ join x)
+  transactReadOnlySrsDB $ \rd -> do
+    let
+      f :: (AllocReaderM m)
+        => (Vocab, [VocabId], Bool)
+        -> m (Vocab, [VocabId], Bool)
+      f v@(_,vIds,_) = do
+        sIds <- mapM (\i -> Tree.lookupTree i (rd ^. vocabSrsMap)) vIds
+        return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
+    ret & _Just . _5 . each . _2 . each . _Right %%~ f
 
 getReaderDocumentData r paraNum = (r ^. readerDocId, r ^. readerDocTitle
                                   , p, endParaNum, slice)
@@ -328,85 +314,63 @@ getReaderDocumentData r paraNum = (r ^. readerDocId, r ^. readerDocTitle
 getViewRawDocument :: ViewRawDocument
   -> WsHandlerM (Maybe (ReaderDocumentId, Text, Text))
 getViewRawDocument (ViewRawDocument i) = do
-  uId <- asks currentUserId
-  s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userData)
-      >>= mapM (\rd ->
-        Tree.lookupTree i (rd ^. readerDocuments))
+  s <- transactReadOnlySrsDB $ \rd ->
+    Tree.lookupTree i (rd ^. readerDocuments)
   let combineToText d = T.unlines $ map getText $ V.toList d
       getText ap = mconcat $ map getT ap
       getT (Left t) = t
       getT (Right (v,_,_)) = vocabToText v
   return $ (\r -> (i, r ^. readerDocTitle
                   , r ^. readerDocContent . to (combineToText)))
-                  <$> (join s)
+                  <$> s
 
 getDeleteDocument :: DeleteDocument
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]
 getDeleteDocument (DeleteDocument dId) = do
-  uId <- asks currentUserId
-  lift $ transactSrsDB_ $
-    userData %%~ updateTreeM uId
-      (readerDocuments %%~ Tree.deleteTree dId)
+  transactSrsDB_ $ (readerDocuments %%~ Tree.deleteTree dId)
   getListDocuments ListDocuments
 
 getReaderSettings :: GetReaderSettings
   -> WsHandlerM (ReaderSettings CurrentDb)
 getReaderSettings _ = do
-  uId <- asks currentUserId
-  s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userData)
-      >>= (\x -> return (x ^? _Just . readerSettings))
-  return $ maybe def id s
+  transactReadOnlySrsDB $ (\rd -> return $ rd ^. readerSettings)
 
 saveReaderSettings :: SaveReaderSettings
   -> WsHandlerM ()
 saveReaderSettings (SaveReaderSettings rs) = do
-  uId <- asks currentUserId
-  lift $ transactSrsDB_ $
-    userData %%~ updateTreeM uId
-      (readerSettings %%~ (const (return rs)))
+  transactSrsDB_ $ (readerSettings %%~ (const (return rs)))
 
 saveReadingProgress :: SaveReadingProgress
   -> WsHandlerM ()
 saveReadingProgress (SaveReadingProgress docId p) = do
-  uId <- asks currentUserId
-  lift $ transactSrsDB_ $
-    userData %%~ updateTreeM uId
-      (readerDocuments %%~ updateTreeM docId
-        (readerDocProgress %%~ (const (return p))))
+  transactSrsDB_ $ (readerDocuments %%~ updateTreeM docId
+                    (readerDocProgress %%~ (const (return p))))
 
 getVocabDetails :: GetVocabDetails
   -> WsHandlerM [(Entry, VocabSrsState)]
 getVocabDetails (GetVocabDetails eIds) = do
-  uId <- asks currentUserId
   vocabDb <- lift $ asks appVocabDb
-  es <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userData
+  es <- transactReadOnlySrsDB $ \rd -> do
     let findAll vmap = do
           mapM (findOne vmap) eIds
         findOne vmap eId = do
           srsId <- Tree.lookupTree eId vmap
           let e = _vocabEntry <$> arrayLookupMaybe vocabDb eId
           return $ (,) <$> e <*> (pure $ getVocabSrsState srsId)
-    mapM findAll (_vocabSrsMap <$> rd)
-  return $ maybe [] catMaybes es
+    findAll (_vocabSrsMap rd)
+  return $ catMaybes es
 
 
 getVocabSentences :: GetVocabSentences
   -> WsHandlerM ([VocabId], [SentenceData])
 getVocabSentences (GetVocabSentences svId) = do
-  uId <- asks currentUserId
   vocabSentenceDb <- lift $ asks appVocabSentenceDb
   sentenceDb <- lift $ asks appSentenceDb
 
   eId <- case svId of
     (Left eId) -> return $ Just eId
-    (Right sId) -> lift $ transactReadOnlySrsDB $ \db ->
-      Tree.lookupTree uId (db ^. userData)
-        >>= mapM (\rd ->
-          Tree.lookupTree sId (rd ^. srsKanjiVocabMap))
-        >>= (\x -> return $ join x)
+    (Right sId) -> transactReadOnlySrsDB $ \rd ->
+      Tree.lookupTree sId (rd ^. srsKanjiVocabMap)
         >>= mapM (\e -> return $ either (const Nothing) Just e)
         >>= (\x -> return $ join x)
   let

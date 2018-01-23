@@ -39,22 +39,19 @@ getSrsStats _ =
     <*> getReviewStats ReviewTypeProdReview
 
 getReviewStats rt = do
-  uId <- asks currentUserId
   pend <- getAllPendingReviews rt
 
-  allRs <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userData
-    mapM Tree.toList (_reviews <$> rd)
+  allRs <- transactReadOnlySrsDB $ \rd -> do
+    Tree.toList (_reviews rd)
 
-  let total = maybe 0 length allRs
+  let total = length allRs
 
-      succ = sumOf (folded . _2 . reviewStateL rt . _Just . _2 . successCount) <$> allRs
-      fail = sumOf (folded . _2 . reviewStateL rt . _Just . _2 . failureCount) <$> allRs
-      totalR = maybe 0 id $ (+) <$> succ <*> fail
+      succ = sumOf (folded . _2 . reviewStateL rt . _Just . _2 . successCount) allRs
+      fail = sumOf (folded . _2 . reviewStateL rt . _Just . _2 . failureCount) allRs
+      totalR = succ + fail
 
-      s = maybe 0 id succ
       avgSucc = if (totalR > 0)
-        then floor $ ((fromIntegral s) * 100) /
+        then floor $ ((fromIntegral succ) * 100) /
                   (fromIntegral totalR)
         else 0
   return $ SrsStats (length pend) total totalR avgSucc
@@ -63,12 +60,10 @@ getAllPendingReviews
   :: ReviewType
   -> WsHandlerM [(SrsEntryId, SrsEntry)]
 getAllPendingReviews rt = do
-  uId <- asks currentUserId
   today <- liftIO $ utctDay <$> getCurrentTime
 
-  lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userData
-    rs <- mapM Tree.toList (_reviews <$> rd)
+  transactReadOnlySrsDB $ \rd -> do
+    rs <- Tree.toList (_reviews rd)
     let
       f (k,r) = (k,r) <$
         (r ^? (reviewStateL rt) . _Just . _1 . _NewReview)
@@ -78,11 +73,10 @@ getAllPendingReviews rt = do
                 then Just (k,r)
                 else Nothing
 
-    return $ maybe [] (mapMaybe f) rs
+    return $ mapMaybe f rs
 
 getBrowseSrsItems :: BrowseSrsItems -> WsHandlerM [SrsItem]
 getBrowseSrsItems (BrowseSrsItems rt brws) = do
-  uId <- asks currentUserId
   today <- liftIO $ utctDay <$> getCurrentTime
 
   let
@@ -114,26 +108,22 @@ getBrowseSrsItems (BrowseSrsItems rt brws) = do
     checkInterval MatureLvl (SrsInterval l)=
       if l > 60 then Just () else Nothing
 
-  rs <- lift $ transactReadOnlySrsDB $ \db -> do
-    rd <- Tree.lookupTree uId $ db ^. userData
-    rs <- mapM Tree.toList (_reviews <$> rd)
-    return $ maybe [] (mapMaybe filF) rs
+  rs <- transactReadOnlySrsDB $ \rd -> do
+    rs <- Tree.toList (_reviews rd)
+    return $ mapMaybe filF rs
   return $ map (\(i,r) -> SrsItem i (r ^. field)) rs
 
 getBulkEditSrsItems :: BulkEditSrsItems
   -> WsHandlerM (Maybe ())
 getBulkEditSrsItems
   (BulkEditSrsItems _ ss DeleteSrsItems) = do
-  uId <- asks currentUserId
-  lift $ transactSrsDB_ $
-    userData %%~ updateTreeM uId
-      (reviews %%~ (\rt -> foldrM Tree.deleteTree rt ss))
+  transactSrsDB_ $
+    (reviews %%~ (\rt -> foldrM Tree.deleteTree rt ss))
 
   return $ Just ()
 
 getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
   today <- liftIO $ utctDay <$> getCurrentTime
-  uId <- asks currentUserId
 
   let
     setL = case rt of
@@ -162,29 +152,23 @@ getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
     doUp t rId = t & updateTreeM rId
       (\r -> return $ upF r)
 
-  lift $ transactSrsDB_ $
-    userData %%~ updateTreeM uId
-      (reviews %%~ (\rt -> foldlM doUp rt ss))
+  transactSrsDB_ $
+    (reviews %%~ (\rt -> foldlM doUp rt ss))
 
   return $ Just ()
 
 getSrsItem :: GetSrsItem
   -> WsHandlerM (Maybe (SrsEntryId, SrsEntry))
 getSrsItem (GetSrsItem i) = do
-  uId <- asks currentUserId
-  s <- lift $ transactReadOnlySrsDB $ \db ->
-    Tree.lookupTree uId (db ^. userData)
-      >>= mapM (\rd ->
+  s <- transactReadOnlySrsDB (\rd ->
         Tree.lookupTree i (rd ^. reviews))
-  return $ (,) i <$> join s
+  return $ (,) i <$> s
 
 getEditSrsItem :: EditSrsItem
   -> WsHandlerM ()
 getEditSrsItem (EditSrsItem sId sItm) = do
-  uId <- asks currentUserId
-  lift $ transactSrsDB_ $
-    userData %%~ updateTreeM uId
-      (reviews %%~ Tree.insertTree sId sItm)
+  transactSrsDB_ $
+    (reviews %%~ Tree.insertTree sId sItm)
 
 getGetNextReviewItem :: GetNextReviewItems
   -> WsHandlerM ([ReviewItem], Int)
@@ -197,7 +181,6 @@ getDoReview :: DoReview
   -> WsHandlerM Bool
 getDoReview (DoReview rt results) = do
   today <- liftIO $ utctDay <$> getCurrentTime
-  uId <- asks currentUserId
 
   let
     doUp :: (AllocM m) => Tree.Tree SrsEntryId SrsEntry
@@ -206,9 +189,8 @@ getDoReview (DoReview rt results) = do
     doUp t (rId,b) = updateTreeM rId
         (\r -> return $ updateSrsEntry b today rt r) t
 
-  lift $ transactSrsDB_ $
-    userData %%~ updateTreeM uId
-      (reviews %%~ (\rt -> foldlM doUp rt results))
+  transactSrsDB_ $
+    (reviews %%~ (\rt -> foldlM doUp rt results))
   return True
 
 updateSrsEntry :: Bool -> Day -> ReviewType -> SrsEntry -> SrsEntry
@@ -301,8 +283,6 @@ checkAnswerInt readings kanaAlts =
 
 getQuickAddSrsItem :: QuickAddSrsItem -> WsHandlerM VocabSrsState
 getQuickAddSrsItem (QuickAddSrsItem v t) = do
-  uId <- asks currentUserId
-
   srsItm <- lift $ makeSrsEntry v t
   let
     upFun :: (AllocM m) => SrsEntry
@@ -325,15 +305,12 @@ getQuickAddSrsItem (QuickAddSrsItem v t) = do
            vocabSrsMap %%~ Tree.insertTree v (Right newk)
 
   ret <- forM srsItm $ \itm -> do
-    lift $ transactSrsDB $
-      runStateWithNothing $
-        userData %%~ updateTreeLiftedM uId (upFun itm)
+    transactSrsDB $ runStateWithNothing $ (upFun itm)
 
   return $ maybe NotInSrs id (join ret)
 
 getQuickToggleWakaru :: QuickToggleWakaru -> WsHandlerM (VocabSrsState)
 getQuickToggleWakaru (QuickToggleWakaru e) = do
-  uId <- asks currentUserId
   let
     f k t = (lift $ Tree.lookupTree k t)
       >>= \case
@@ -352,9 +329,7 @@ getQuickToggleWakaru (QuickToggleWakaru e) = do
       (Left k) -> kanjiSrsMap %%~ (f k)
       (Right v) -> vocabSrsMap %%~ (f v)
 
-  ret <- lift $ transactSrsDB $
-    runStateWithNothing $
-      userData %%~ updateTreeLiftedM uId upFun
+  ret <- transactSrsDB $ runStateWithNothing upFun
 
   return $ maybe NotInSrs id ret
 
@@ -486,19 +461,19 @@ matchingSurface ks surf = fmap fst $ headMay $ reverse (sortF comPrefixes)
     comPrefixes = map (\k -> (k, T.commonPrefixes surf (unKanjiPhrase k))) ks
     sortF = sortBy (comparing (preview (_2 . _Just . _1 . to (T.length))))
 
-initSrsDb :: Handler ()
-initSrsDb = do
-  users <- runDB $ selectKeysList ([] :: [Filter User]) []
-  transactSrsDB_ $ \db -> do
-    let f db u = do
-          let uId = fromSqlKey u
-              d = AppUserDataTree  Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
-          Tree.lookupTree uId (db ^. userData) >>= \case
-            (Just _) -> return db
-            Nothing -> db & userData %%~ (Tree.insertTree uId d)
-    foldM f db users
+-- initSrsDb :: Handler ()
+-- initSrsDb = do
+--   users <- runDB $ selectKeysList ([] :: [Filter User]) []
+--   transactSrsDB_ $ \db -> do
+--     let f db u = do
+--           let uId = fromSqlKey u
+--               d = AppUserDataTree  Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
+--           Tree.lookupTree uId (db ^. userData) >>= \case
+--             (Just _) -> return db
+--             Nothing -> db & userData %%~ (Tree.insertTree uId d)
+--     foldM f db users
 
-  return ()
+--   return ()
 
 fixSrsDb :: Handler ()
 fixSrsDb = do
