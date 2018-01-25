@@ -470,6 +470,10 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
         showStats
     return $ domEvent Click e
 
+  fullASR <- do
+    cb <- checkbox False def
+    return (value cb)
+
   let kanjiRowAttr = ("class" =: "center-block")
          <> ("style" =: "height: 15em;\
              \display: table;")
@@ -488,7 +492,7 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
 
   dr <- dyn $ ffor dyn2 $ \case
     (Nothing) -> return never
-    (Just v) -> inputFieldWidget doRecog v
+    (Just v) -> inputFieldWidget doRecog fullASR v
 
   evReview <- switchPromptly never dr
   return (closeEv, evReview)
@@ -496,10 +500,11 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
 
 inputFieldWidget
   :: (AppMonad t m, SrsReviewType rt)
-  => (Event t () -> m (Event t Result))
+  => (Event t () -> m (Event t Result, Event t (), Event t (), Event t ()))
+  -> Dynamic t Bool
   -> (ReviewItem, ActualReviewType rt)
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
-inputFieldWidget doRecog (ri@(ReviewItem i k m r), rt) = do
+inputFieldWidget doRecog fullASR (ri@(ReviewItem i k m r), rt) = do
   let
     tiId = "JP-TextInput-IME-Input"
     style = "text-align: center; width: 100%;" <> color
@@ -559,7 +564,7 @@ inputFieldWidget doRecog (ri@(ReviewItem i k m r), rt) = do
     -- Footer
     (shiruResEv , addEditEv, (recogCorrectEv, recogResEv), shimesuEv) <- divClass "row" $ do
       recog <- divClass "col-sm-2" $
-        speechRecogWidget doRecog (ri, rt)
+        speechRecogWidget doRecog fullASR (ri, rt)
       shirimasu <- divClass "col-sm-2" $
         btn "btn-primary" "知ります"
       (shimesu, shiranai) <- divClass "col-sm-2" $ do
@@ -657,55 +662,112 @@ data AnswerBoxState = ReviewStart | ShowAnswer | NextReview
 
 data SpeechRecogWidgetState
   = NewReviewStart
+  | WaitingForSpeechInput
   | WaitingForRecogResponse
   | WaitingForServerResponse
   | AnswerSuccessful
   | AnswerWrong
+  | RecogError
+  | RecogStop
 
 btnText :: SpeechRecogWidgetState
   -> Text
-btnText NewReviewStart = "Recog"
+btnText NewReviewStart = "Start Recog"
+btnText WaitingForSpeechInput = "Ready"
 btnText WaitingForRecogResponse = "Listening"
 btnText WaitingForServerResponse = "Processing"
 btnText AnswerSuccessful = "Correct! (Click for next)"
 btnText AnswerWrong = "Not quite, Try Again?"
+btnText RecogError = "Error, Try Again?"
+btnText RecogStop = "Try Again?"
 
 -- Widget Sta
 speechRecogWidget :: forall t m rt . (AppMonad t m, SrsReviewType rt)
-  => (Event t () -> m (Event t Result))
+  => (Event t () -> m (Event t Result, Event t (), Event t (), Event t ()))
+  -> Dynamic t Bool
   -> (ReviewItem, ActualReviewType rt)
   -> AppMonadT t m (Event t Bool, Event t (ReviewStateEvent rt))
-speechRecogWidget doRecog (ri@(ReviewItem i k m r),rt) = do
+speechRecogWidget doRecog fullASR (ri@(ReviewItem i k m r),rt) = do
   let startRecogEv st ev =
         fforMaybe (tagDyn st ev) $ \case
           NewReviewStart -> Just ()
           AnswerWrong -> Just ()
+          RecogError -> Just ()
+          RecogStop -> Just ()
           _ -> Nothing
 
+      ans = getAnswer ri rt
       doReviewEv st ev =
         fforMaybe (tagDyn st ev) $ \case
           AnswerSuccessful -> Just ()
           _ -> Nothing
 
+      foldF _ AnswerSuccessful = AnswerSuccessful
+      foldF RecogStop AnswerWrong = AnswerWrong
+      foldF RecogStop WaitingForServerResponse = WaitingForServerResponse
+      foldF e _ = e
+
+      checkForCommand res
+        | doWakaru = Just True
+        | doWakaranai || doShimesu = Just False
+        | otherwise = Nothing
+        where
+          doWakaru = any ((\x -> elem x wakaruOpts) . snd) (concat res)
+          doWakaranai = any ((\x -> elem x wakaranaiOpts) . snd) (concat res)
+          doShimesu = any ((\x -> elem x shimesuOpts) . snd) (concat res)
+          wakaruOpts = ["わかる", "分かる", "わかります", "分かります"
+                       , "知る", "しる", "しります", "知ります"]
+          wakaranaiOpts = ["わからない", "分からない", "わかりません", "分かりません"
+                       , "知らない", "しらない", "しりません", "知りません"]
+          shimesuOpts = ["しめす", "しめします", "示す", "示します"]
+
+  isFullAsr <- sample (current fullASR)
+  evPB <- getPostBuild
+  initEv <- if isFullAsr
+    then delay 0.5 evPB
+    else return never
+
   rec
     let
-      ev' = leftmost [ev1, ev2, ev3]
+      ev' = leftmost [ev1, ev2, ev3, ev4, ev5, ev6]
       ev1 = ffor recRes2 $ \case
           True -> AnswerSuccessful
           False -> AnswerWrong
-      ev2 = WaitingForRecogResponse <$ stRec
+      ev2 = WaitingForSpeechInput <$ stRec
       ev3 = WaitingForServerResponse <$ recRes1
-      stRec = (startRecogEv stDyn evClick)
+      ev4 = RecogError <$ erEv
+      ev5 = WaitingForRecogResponse <$ startEv
+
       correctEv = fmapMaybe identity $ ffor recRes2 $ \b -> if b then Just True else Nothing
+
+      stRec = startRecogEv stDyn (leftmost [evClick, initEv, () <$ ev6])
 
     evEv <- dyn $ (btn "btn-primary")
       <$> (btnText <$> stDyn)
     evClick <- switchPromptly never evEv
-    ev <- delay 0.1 ev'
 
-    recRes1 <- lift $ doRecog stRec
+    ev <- delay 0.01 ev'
+    ev6 <- delay 1 (RecogStop <$ stopEv)
+
+    (recRes0, startEv, erEv, stopEv) <- lift $ doRecog stRec
+
+    let (recRes1, commandEv) = if isFullAsr
+          then (fmapMaybe identity (fst $ comRes)
+               , fmapMaybe identity (snd $ comRes))
+          else (recRes0, never)
+        comRes = splitE $ ffor recRes0 $ \res ->
+          case (checkForCommand res) of
+            Nothing -> (Just res, Nothing)
+            (Just v) -> (Nothing, Just v)
+
+
     recRes2 <- checkSpeechRecogResult (ri,rt) (traceEvent "Recog ->" recRes1)
 
-    stDyn <- holdDyn NewReviewStart ev
+    stDyn <- foldDyn foldF NewReviewStart ev
 
-  return $ (correctEv, DoReviewEv (i,rt,True) <$ doReviewEv stDyn evClick)
+  autoNextEv <- if isFullAsr
+    then delay 3 (() <$ correctEv)
+    else return never
+
+  return $ (leftmost [correctEv, commandEv]
+           , DoReviewEv (i,rt,True) <$ leftmost [doReviewEv stDyn evClick, autoNextEv])

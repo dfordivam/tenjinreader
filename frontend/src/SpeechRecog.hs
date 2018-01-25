@@ -57,10 +57,13 @@ bindWanaKana =
 #endif
 
 speechRecogSetup :: MonadWidget t m
-  => m (Event t () -> m (Event t Result))
+  => m (Event t () -> m (Event t Result, Event t (), Event t (), Event t ()))
 speechRecogSetup = do
 #if defined (ghcjs_HOST_OS)
   (trigEv, trigAction) <- newTriggerEvent
+  (speechStartEv, speechStartAction) <- newTriggerEvent
+  (errorEv, errorAction) <- newTriggerEvent
+  (timeoutEv, timeoutAction) <- newTriggerEvent
 
   recog <- liftIO $ do
     recog <- newSpeechRecognition
@@ -73,13 +76,16 @@ speechRecogSetup = do
     setMaxAlternatives recog 5
 
     GHCJS.DOM.EventM.on recog result (onResultEv trigAction)
+    GHCJS.DOM.EventM.on recog speechstart (liftIO $ speechStartAction ())
+    GHCJS.DOM.EventM.on recog audioend (liftIO $ timeoutAction ())
+    GHCJS.DOM.EventM.on recog GHCJS.DOM.SpeechRecognition.error (liftIO $ errorAction ())
     return recog
 
   return (\e -> do
     performEvent (startRecognition recog <$ e)
-    return trigEv)
+    return (trigEv, speechStartEv, errorEv, timeoutEv))
 #else
-  return (const (return never))
+  return (const (return (never, never, never, never)))
 #endif
 
 #if defined (ghcjs_HOST_OS)
