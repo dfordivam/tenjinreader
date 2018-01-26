@@ -82,7 +82,9 @@ speechRecogSetup = do
     return recog
 
   return (\e -> do
-    performEvent (startRecognition recog <$ e)
+    ed <- delay 0.2 e
+    performEvent ((abort recog) <$ e)
+    performEvent ((startRecognition recog) <$ ed)
     return (trigEv, speechStartEv, errorEv, timeoutEv))
 #else
   return (const (return (never, never, never, never)))
