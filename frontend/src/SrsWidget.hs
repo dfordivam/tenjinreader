@@ -462,17 +462,18 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
       elAttr "span" (colour "red") $
         dynText $ (tshow . _srsReviewStats_incorrectCount) <$> statsDyn
 
-  closeEv <- divClass "panel-heading" $ do
+  (fullASR, closeEv) <- divClass "panel-heading" $ do
     (e,_) <- elClass' "button" "close" $ text "Close"
+
+    fullASR <- do
+      cb <- checkbox False def
+      text "Auto ASR"
+      return (value cb)
 
     divClass "" $ do
       elAttr "span" statsTextAttr $
         showStats
-    return $ domEvent Click e
-
-  fullASR <- do
-    cb <- checkbox False def
-    return (value cb)
+    return $ (fullASR, domEvent Click e)
 
   let kanjiRowAttr = ("class" =: "center-block")
          <> ("style" =: "height: 15em;\
@@ -678,111 +679,11 @@ btnText NewReviewStart = "Start Recog"
 btnText SpeechRecogStarted = "Ready"
 btnText WaitingForRecogResponse = "Listening"
 btnText WaitingForServerResponse = "Processing"
-btnText AnswerSuccessful = "Correct! (Click for next)"
+btnText AnswerSuccessful = "Correct!"
 btnText AnswerWrong = "Not quite, Try Again?"
 btnText RecogError = "Error, Try Again?"
 btnText RecogStop = "Try Again?"
 
--- Widget Sta
--- speechRecogWidget :: forall t m rt . (AppMonad t m, SrsReviewType rt)
---   => (Event t () -> m (Event t Result, Event t (), Event t (), Event t ()))
---   -> Dynamic t Bool
---   -> (ReviewItem, ActualReviewType rt)
---   -> AppMonadT t m (Event t Bool, Event t (ReviewStateEvent rt))
--- speechRecogWidget doRecog fullASR (ri@(ReviewItem i k m r),rt) = do
---   let startRecogEv st ev =
---         fforMaybe (tagDyn st ev) $ \case
---           NewReviewStart -> Just ()
---           AnswerWrong -> Just ()
---           RecogError -> Just ()
---           RecogStop -> Just ()
---           _ -> Nothing
-
---       ans = getAnswer ri rt
---       doReviewEv st ev =
---         fforMaybe (tagDyn st ev) $ \case
---           AnswerSuccessful -> Just ()
---           _ -> Nothing
-
---       foldF _ AnswerSuccessful = AnswerSuccessful
---       foldF RecogStop AnswerWrong = AnswerWrong
---       foldF RecogStop WaitingForServerResponse = WaitingForServerResponse
---       foldF e _ = e
-
---       checkForCommand res
---         | doWakaru = Just True
---         | doWakaranai || doShimesu = Just False
---         | otherwise = Nothing
---         where
---           doWakaru = any ((\x -> elem x wakaruOpts) . snd) (concat res)
---           doWakaranai = any ((\x -> elem x wakaranaiOpts) . snd) (concat res)
---           doShimesu = any ((\x -> elem x shimesuOpts) . snd) (concat res)
---           wakaruOpts = ["わかる", "分かる", "わかります", "分かります"
---                        , "知る", "しる", "しります", "知ります"]
---           wakaranaiOpts = ["わからない", "分からない", "わかりません", "分かりません"
---                        , "知らない", "しらない", "しりません", "知りません"]
---           shimesuOpts = ["しめす", "しめします", "示す", "示します"]
-
---   isFullAsr <- sample (current fullASR)
---   evPB <- getPostBuild
---   initEv <- if isFullAsr
---     then delay 0.5 evPB
---     else return never
-
---   rec
---     let
---       -- ev' = traceEvent ("ev: ") $ leftmost [ev1, ev2, ev3, ev5, ev6]
---       ev1 = ffor recRes2 $ \case
---           True -> AnswerSuccessful
---           False -> AnswerWrong
---       ev2 = SpeechRecogStarted <$ stRec
---       ev3 = WaitingForServerResponse <$ recRes1
---       ev4 = RecogError <$ erEv
---       ev5 = WaitingForRecogResponse <$ startEv
---       ev6 = (RecogStop <$ stopEv)
-
---       correctEv = fmapMaybe identity $
---         ffor (leftmost [commandEv,recRes2]) $ \b ->
---           if b then Just True else Nothing
-
---       stRec = startRecogEv stDyn (leftmost [evClick, initEv, ev6RestartRecog])
-
---     -- ev <- delay 0.01 ev'
-
---     allEvs <- batchOccurrences 1 (mergeList [ev1, ev2, ev3, ev4, ev5, ev6])
---     -- Stop and error can happen together
---     -- Restart after an error or stop after a delay
---     ev6 <- debounce 1 $ leftmost [(RecogStop <$ stopEv), (RecogError <$ erEv)]
---     ev6RestartRecog <- if isFullAsr
---       then delay 0.5 (() <$ (traceEvent "ev6:" ev6))
---       else return never
-
---     (recRes0, startEv, erEv, stopEv) <- lift $ doRecog stRec
-
---     let (recRes1, commandEv) = if isFullAsr
---           then (fmapMaybe identity (fst $ comRes)
---                , fmapMaybe identity (snd $ comRes))
---           else (recRes0, never)
---         comRes = splitE $ ffor recRes0 $ \res ->
---           case (checkForCommand res) of
---             Nothing -> (Just res, Nothing)
---             (Just v) -> (Nothing, Just v)
-
-
---     recRes2 <- checkSpeechRecogResult (ri,rt) (traceEvent "Recog ->" recRes1)
-
---     stDyn <- foldDyn foldF NewReviewStart ev
-
---     evEv <- dyn $ (btn "btn-primary")
---       <$> (btnText <$> stDyn)
---     evClick <- switchPromptly never evEv
-
---   autoNextEv <- if isFullAsr
---     then delay 3 (() <$ correctEv)
---     else return never
-
---   return $ (leftmost [correctEv, commandEv]
---            , DoReviewEv (i,rt,True) <$ leftmost [doReviewEv stDyn evClick, autoNextEv])
 
 -- Input
 -- Outputs
@@ -805,17 +706,22 @@ speechRecogWidget doRecog fullASR (ri@(ReviewItem i k m r),rt) = do
 
   rec
     let
-      startRecogEv = leftmost [initEv, () <$ resultWrongEv, () <$ shimesuEv, retryEv]
-      (shimesuEv, shiruEv, tsugiEv, answerEv) = checkForCommand resultEv
+      startRecogEv = leftmost [initEv, () <$ resultWrongEv
+                              , () <$ shimesuEv, () <$ retryEv]
+      (shimesuEv, shiruEv, tsugiEv, answerEv) =
+        checkForCommand $
+          traceEventWith (T.unpack . mconcat . (intersperse ", ") .
+                          (fmap snd) . concat) $
+          resultEv
     (resultCorrectEv, resultWrongEv) <- do
-      bEv <- checkSpeechRecogResult (ri,rt) (traceEvent "Recog ->" answerEv)
+      bEv <- checkSpeechRecogResult (ri,rt) answerEv
       return $ (filterOnEq bEv True, filterOnEq bEv False)
 
 
     (resultEv, recogStartEv, recogEndEv, stopEv) <- lift $ doRecog startRecogEv
 
     retryEv <- do
-      allEvs <- batchOccurrences 1 $
+      allEvs <- batchOccurrences 2 $
         mergeList [SpeechRecogStarted <$ startRecogEv
                  , WaitingForRecogResponse <$ recogStartEv
                  , WaitingForServerResponse <$ resultEv
@@ -827,8 +733,9 @@ speechRecogWidget doRecog fullASR (ri@(ReviewItem i k m r),rt) = do
       let stChangeEv = getStChangeEv allEvs
       stDyn <- holdDyn NewReviewStart stChangeEv
 
-      display (btnText <$> stDyn)
-      return (filterOnEq stChangeEv RecogStop)
+      dyn ((\t -> text (btnText t)) <$> stDyn)
+      return $ leftmost [(filterOnEq stChangeEv RecogStop)
+                        , filterOnEq stChangeEv RecogError]
 
     -- btnClick <- (dyn $ (\(c,t) -> btn c t) <$> (btnText <$> stDyn))
     --         >>= switchPromptly never
