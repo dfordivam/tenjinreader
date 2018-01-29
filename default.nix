@@ -57,8 +57,8 @@
           (pkgs.fetchFromGitHub {
             owner = "haskell-haskey";
             repo = "haskey";
-            rev = "39d53caec4568111663aded397921c1f26b670d7";
-            sha256 = "1g3a6i5973cxiw959pwl9xb8z8zv2nr0by24a83x4r53jg0a4fai";
+            rev = "00c96fc30d45aa0e3c218aa4f6780a463cec8c89";
+            sha256 = "1xbghqqrgkk454vmw24pxijhj7k3fnv6hnf928ba7i75fhxkqpfn";
           }) {};
 
         haskey-mtl = self.callCabal2nix "haskey" 
@@ -73,8 +73,8 @@
           (pkgs.fetchFromGitHub {
             owner = "haskell-haskey";
             repo = "haskey-btree";
-            rev = "8d1f9569b340da086dbdc20916dd272bbdd8f8a0";
-            sha256 = "06hqylp8m0ix10lxv29054cb5vaz3h7amlrrsdfhh2gv21f1p93m";
+            rev = "4cca2f924ab4ea0b6f576aa5ef1124f3330b3d3e";
+            sha256 = "01qmwjzhjdwnqwfwk07irfzfnx75rmf351kvjnvjx16j083xji4b";
           }) {};
 
         frontend = pkgs.haskell.lib.dontHaddock super.frontend;
