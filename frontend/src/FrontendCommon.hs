@@ -61,6 +61,9 @@ handleVisibility v dv mv = elDynAttr "div" (f <$> dv) mv
 tshow :: (Show a) => a -> Text
 tshow = (T.pack . show)
 
+filterOnEq ev v = fmapMaybe identity $ ffor ev
+  (\b -> if b == v then Just True else Nothing)
+
 displayVocabT :: DomBuilder t m => Vocab -> m ()
 displayVocabT (Vocab ks) = do
   let
