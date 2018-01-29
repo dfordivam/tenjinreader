@@ -569,8 +569,11 @@ inputFieldWidget doRecog fullASR (ri@(ReviewItem i k m r), rt) = do
       shirimasu <- divClass "col-sm-2" $
         btn "btn-primary" "知ります"
       (shimesu, shiranai) <- divClass "col-sm-2" $ do
-        ev <- widgetHoldWithRemoveAfterEvent ((btn "btn-primary" "示す") <$ evPB)
-        ev2 <- widgetHoldWithRemoveAfterEvent ((btn "btn-primary" "知らない") <$ ev)
+        rec
+          let evChange = (leftmost [ev, () <$ fst recog])
+          ev <- switchPromptlyDyn <$> widgetHold (btn "btn-primary" "示す")
+            (return never <$ evChange)
+        ev2 <- widgetHoldWithRemoveAfterEvent ((btn "btn-primary" "知らない") <$ evChange)
         return (ev,ev2)
       divClass "col-sm-2" $ do
         openEv <- btn "btn-primary" "Sentences"
