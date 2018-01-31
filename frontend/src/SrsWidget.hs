@@ -638,12 +638,14 @@ checkSpeechRecogResult (ri,rt) resEv = do
     checkF res = do
       ev <- getPostBuild
       let
-        r1 = any ((checkAnswer n) . snd) (concat res)
+        r1 = any ((\r -> elem r (NE.toList $ ri ^. reviewItemField))
+                  . snd) (concat res)
+        r2 = any ((checkAnswer n) . snd) (concat res)
         n = getAnswer ri rt
         readings = case n of
           (Left m) -> []
           (Right r) -> NE.toList r
-      if r1
+      if r1 || r2
         then return (True <$ ev)
         else do
           respEv <- getWebSocketResponse $ CheckAnswer readings res <$ ev
