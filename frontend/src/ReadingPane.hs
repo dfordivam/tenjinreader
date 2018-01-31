@@ -389,18 +389,18 @@ fetchMoreContentF :: (AppMonad t m)
 fetchMoreContentF docId annText endParaNum pageChangeEv = do
   rec
     -- Fetch more contents
-    -- Keep at most 60 paras in memory, length n == 30
+    -- Keep at most 120 paras in memory
     let
 
         lastAvailablePara = (snd . A.bounds) <$> textContent
         firstAvailablePara = (fst . A.bounds) <$> textContent
         hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara pageChangeEv)
         hitEndF (ParaNum l,((ParaNum n,_), d))
-          | l < endParaNum && d == ForwardGrow && (l - n < 10) = Just (l + 1)
+          | l < endParaNum && d == ForwardGrow && (l - n < 20) = Just (l + 1)
           | otherwise = Nothing
         hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara pageChangeEv)
         hitStartF (ParaNum f,((ParaNum n,_), d))
-          | f > 0 && d == BackwardGrow && (n - f < 10) = Just (max 0 (f - 30))
+          | f > 0 && d == BackwardGrow && (n - f < 20) = Just (max 0 (f - 60))
           | otherwise = Nothing
 
     moreContentEv <- getWebSocketResponse $

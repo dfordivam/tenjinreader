@@ -305,9 +305,9 @@ getReaderDocumentData r paraNum = (r ^. readerDocId, r ^. readerDocTitle
                                   , p, endParaNum, slice)
   where
     slice = zip [startI..] $ V.toList $ V.slice startI len $ r ^. readerDocContent
-    len = min (totalLen - startI) 30
+    len = min (totalLen - startI) 60
     totalLen = (V.length $ r ^. readerDocContent)
-    startI = maybe (max 0 (fst p - 10)) (\p -> min p (totalLen - 1)) paraNum
+    startI = maybe (max 0 (fst p - 20)) (\p -> min p (totalLen - 1)) paraNum
     p = r ^. readerDocProgress
     endParaNum = totalLen - 1
 
