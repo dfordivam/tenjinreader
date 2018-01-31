@@ -737,8 +737,17 @@ speechRecogWidget doRecog fullASR (ri@(ReviewItem i k m r),rt) = do
       stDyn <- holdDyn NewReviewStart stChangeEv
 
       dyn ((\t -> text (btnText t)) <$> stDyn)
-      return $ leftmost [(filterOnEq stChangeEv RecogStop)
-                        , filterOnEq stChangeEv RecogError]
+
+      recogEndEvs <- batchOccurrences 2 $
+        mergeList [ WaitingForServerResponse <$ resultEv
+                 , AnswerSuccessful <$ resultCorrectEv
+                 , AnswerWrong <$ resultWrongEv
+                 , RecogError <$ stopEv
+                 , RecogStop <$ recogEndEv
+                 ]
+      let recogChangeEv = getStChangeEv allEvs
+      return $ leftmost [(filterOnEq recogChangeEv RecogStop)
+                        , filterOnEq recogChangeEv RecogError]
 
     -- btnClick <- (dyn $ (\(c,t) -> btn c t) <$> (btnText <$> stDyn))
     --         >>= switchPromptly never
