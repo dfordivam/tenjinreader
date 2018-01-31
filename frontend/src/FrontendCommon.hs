@@ -456,7 +456,8 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
     wd Nothing = return never
 
   detailsEv1 <- getWebSocketResponse $ GetVocabDetails
-    <$> (fmap fst vIdEv)
+    <$> fmapMaybeCheap ((fmap NE.toList) . NE.nonEmpty)
+        (fmap fst vIdEv)
   surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
   let detailsEv = attachDyn surfDyn detailsEv1
 
