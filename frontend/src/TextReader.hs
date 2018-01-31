@@ -174,9 +174,5 @@ quickAnalyzeTop = do
 
   let vIdEv = switchPromptlyDyn $ leftmost <$> v
 
-  divClass "" $ do
-    detailsEv <- getWebSocketResponse $ GetVocabDetails
-      <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
-    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
+  showVocabDetailsWidget vIdEv
   return ()

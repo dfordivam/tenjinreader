@@ -171,11 +171,7 @@ readingPaneView (ReaderDocument _ title annText _) = do
           V.mapM (renderOnePara vIdDyn (value rubySizeDD)) annText
       return v
 
-  divClass "" $ do
-    detailsEv <- getWebSocketResponse $ GetVocabDetails
-      <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
-    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
+  showVocabDetailsWidget vIdEv
   return ()
 
 
@@ -337,11 +333,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
     (next,prev) <- leftRightButtons fullscreenDyn nextParaMaybe prevParaMaybe stopTicks
 
 
-  divClass "" $ do
-    detailsEv <- getWebSocketResponse $ GetVocabDetails
-      <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
-    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
+  showVocabDetailsWidget vIdEv
 
   firstParaDyn <- holdUniqDyn firstDisplayedPara
 

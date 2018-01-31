@@ -361,12 +361,7 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
 
   let vIdEv = leftmost $ concat vIdEvs
 
-  divClass "" $ do
-    detailsEv <- getWebSocketResponse $ GetVocabDetails
-      <$> (fmap fst vIdEv)
-    surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
-    showVocabDetailsWidget (attachDyn surfDyn detailsEv)
-
+  showVocabDetailsWidget vIdEv
   return closeEvTop
 
 vocabRuby :: (_)
@@ -413,9 +408,9 @@ renderOnePara vIdDyn rubySize annTextPara = do
     leftmost <$> mapM f (annTextPara)
 
 showVocabDetailsWidget :: forall t m e . (AppMonad t m, DOM.IsElement e)
-  => Event t ((Text, Maybe e) , [(Entry, VocabSrsState)])
+  => Event t (_,(Text, Maybe e))
   -> AppMonadT t m ()
-showVocabDetailsWidget detailsEv = do
+showVocabDetailsWidget vIdEv = divClass "" $ do
   let
 
     attrBack = ("class" =: "modal")
@@ -453,12 +448,17 @@ showVocabDetailsWidget detailsEv = do
               [domEvent Click e
               , domEvent Click e1]
 
-    wd :: AppMonad t m
+    wd :: (AppMonad t m, DOM.IsElement e)
       => Maybe ((Text, Maybe e) , [(Entry, VocabSrsState)])
       -> AppMonadT t m (Event t ())
     wd (Just ((s,e),es)) = (wrapper e)
       (mapM_ (showEntry s) (orderEntries (fst) es))
     wd Nothing = return never
+
+  detailsEv1 <- getWebSocketResponse $ GetVocabDetails
+    <$> (fmap fst vIdEv)
+  surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
+  let detailsEv = attachDyn surfDyn detailsEv1
 
   rec
     let ev = leftmost [Just <$> detailsEv
