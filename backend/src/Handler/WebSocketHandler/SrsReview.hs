@@ -361,9 +361,9 @@ makeSrsEntry v surface = do
             . traverse . readingPhrase . to (Reading . unReadingPhrase)
           m = nonEmpty $ v ^.. _Just . vocabEntry . entrySenses
             . traverse . senseGlosses . traverse . glossDefinition . to (Meaning)
-          f = (:|[]) <$> ((isSurfaceKana surface)
-            <|> unKanjiPhrase <$> (matchingSurface ks =<< surface)
-                         <|> vocabField)
+          f = (isSurfaceKana surface vocabField) <|>
+            ((:|[]) <$> (unKanjiPhrase <$> (matchingSurface ks =<< surface)
+                         <|> vocabField))
 
           vocabField = v ^? _Just . vocabDetails . vocab
             . to vocabToText
@@ -385,10 +385,10 @@ makeSrsEntry v surface = do
       state = (NewReview, SrsEntryStats 0 0)
   return (get <$> tmp)
 
-isSurfaceKana (Just t) = if isKanaOnly t
-  then Just t
+isSurfaceKana (Just t) (Just v) = if isKanaOnly t
+  then Just (t:|[v])
   else Nothing
-isSurfaceKana Nothing = Nothing
+isSurfaceKana _ _ = Nothing
 
 isKanaOnly :: Text -> Bool
 isKanaOnly = (all f) . T.unpack
