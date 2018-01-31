@@ -44,24 +44,61 @@ parseAndSearch es se m t = do
   let
     fun ("", _) = Nothing
     fun (surf, Nothing) = Just (Left surf)
-    fun (surf, Just feat) = Just $ Right $
-      (\v -> (v, eIds, True))
-      (getVocabFurigana (surf,reading))
+    fun (surf, Just feat) = Just $ Right $ (voc, filter f eIds , True)
       where
+        voc = getVocabFurigana (surf,reading)
         term = (_mecabNodeFeat7 feat)
         reading = (_mecabNodeFeat8 feat)
         eIds = query se [term]
-        e = arrayLookup es eIds
-        gs = take 5 $ e ^.. (traverse . vocabEntry
-                    . entrySenses . traverse
-                    . senseGlosses . traverse
-                    . glossDefinition)
+        origRead = getOriginalReading term voc
+        f eId
+          | isKanaOnly surf = True
+          | otherwise = case arrayLookupMaybe es eId of
+          Nothing -> False
+          (Just e) -> elem origRead (e ^.. vocabEntry . entryReadingElements . traverse
+                                    . readingPhrase . to (unReadingPhrase))
   return $ V.fromList $ map (catMaybes . (fmap fun)) feats
 
 isKanaOnly :: T.Text -> Bool
 isKanaOnly = (all f) . T.unpack
   where f = not . isKanji
           -- isKana c || (elem c ['、', '〜', 'ー'])
+
+-- getOriginalReading "分かる" -> Vocab "分かり" -> "わかる"
+getOriginalReading :: Text -> Vocab -> Text
+getOriginalReading term (Vocab ks) = mconcat $ map f $ zip kgs1 ks
+  where
+    f (_,(KanjiWithReading _ r)) = r
+    f (k, _) = katakanaToHiragana k
+    kgs1 = T.groupBy (\ a b -> (isKana a) == (isKana b)) term
+
+testGetOriginalReading = map (\((a,b), (c,d)) ->
+  (\v -> Right $ v == d) =<< (getOriginalReading c <$> makeFurigana (KanjiPhrase a) (ReadingPhrase b)))
+  [ (("いじり回す", "いじりまわす")
+   , ("いじり回す", "いじりまわす"))
+  , (("弄りまわし", "いじりまわし")
+   , ("弄りまわす", "いじりまわす"))
+  , (("弄り回せ", "いじりまわせ")
+   , ("弄り回す", "いじりまわす"))
+  , (("窺い", "うかがい")
+   , ("窺う", "うかがう"))
+  , (("黄色く", "きいろく")
+   , ("黄色い", "きいろい"))
+  , (("額が少なく", "がくがすくなく")
+   , ("額が少ない", "がくがすくない"))
+  , (("ケント紙", "ケントし")
+   , ("ケント紙", "けんとし"))
+  , (("二酸化ケイ素", "にさんかケイそ")
+   , ("二酸化ケイ素", "にさんかけいそ"))
+  , (("ページ違反", "ぺーじいはん")
+   , ("ページ違反", "ぺーじいはん"))
+  , (("シェリー酒", "シェリーしゅ")
+   , ("シェリー酒", "しぇりーしゅ"))
+  , (("パン屋", "ぱんや")
+   , ("パン屋", "ぱんや"))
+  , (("命", "いのち")
+   , ("命", "いのち"))
+  ]
 
 getVocabFurigana (surf, reading)
   | isKanaOnly surf = Vocab [Kana surf]
