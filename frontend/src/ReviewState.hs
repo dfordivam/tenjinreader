@@ -144,8 +144,7 @@ widgetStateFun st (AddItemsEv ri pendCount) = st
   & reviewQueue %~ Map.union
      (Map.fromList $ map (\r@(ReviewItem i _ _ _) -> (i,(r, initState r))) ri)
   & resultQueue .~ Nothing
-  & reviewStats . srsReviewStats_pendingCount .~
-    (pendCount + (st ^. reviewQueue . to (Map.size)))
+  & reviewStats . srsReviewStats_pendingCount .~ pendCount
 
 widgetStateFun st (DoReviewEv (i,res,b)) = st
   & reviewQueue %~ (Map.update upF i)
@@ -170,52 +169,66 @@ widgetStateFun st (UndoReview) = st
 -- Result Synchronise with server
 -- TODO implement feature to re-send result if no response recieved
 data ResultsSyncState
-  = ReadyToSend
+  = ReadyToSync
   | WaitingForResp [Result] [Result]
-  | SendResults [Result]
+  | DoSync [Result]
 
 data ResultSyncEvent
   = AddResult Result
+  | FetchPendingReviews
   | SendingResult
   | RespRecieved
   | RetrySendResult
 
-syncResultWithServer :: AppMonad t m
+syncResultWithServer :: (AppMonad t m, SrsReviewType rt)
   => ReviewType
+  -> Event t ()
   -> Event t Result
-  -> AppMonadT t m ()
-syncResultWithServer rt addEv = do
+  -> Dynamic t (SrsWidgetState rt)
+  -> AppMonadT t m (Event t (ReviewStateEvent rt))
+syncResultWithServer rt refreshEv addEv widgetStateDyn = do
   rec
     let
       sendResultEv =
         fmapMaybeCheap sendResultEvFun $
-        updated sendResultDyn
+        attachDyn widgetStateDyn $ updated sendResultDyn
 
-      sendResultEvFun (SendResults r) = Just $ DoReview rt r
+      sendResultEvFun (st, (DoSync r))
+        = Just $ SyncReviewItems rt r
+          $ if (5 > (Map.size $ _reviewQueue st))
+               then Just (Map.keys $ _reviewQueue st)
+               else Nothing
       sendResultEvFun _ = Nothing
 
     sendResResp <- getWebSocketResponse sendResultEv
 
     sendResDelayedEv <- delay 0.001 sendResultEv
-    sendResultDyn <- foldDyn (flip $ foldl (flip handlerSendResultEv)) ReadyToSend
+    sendResultDyn <- foldDyn (flip $ foldl (flip handlerSendResultEv)) ReadyToSync
       $ mergeList [
         SendingResult <$ sendResDelayedEv
       , RespRecieved <$ sendResResp
       , AddResult <$> addEv
+      , FetchPendingReviews <$ refreshEv
       , RetrySendResult <$ never ]
-  return ()
+
+  return $ uncurry AddItemsEv
+    <$> fmapMaybeCheap identity sendResResp
 
 handlerSendResultEv :: ResultSyncEvent -> ResultsSyncState -> ResultsSyncState
-handlerSendResultEv (AddResult r) ReadyToSend = SendResults [r]
+handlerSendResultEv (AddResult r) ReadyToSync = DoSync  [r]
 handlerSendResultEv (AddResult r) (WaitingForResp r' rs) = WaitingForResp r' (r : rs)
-handlerSendResultEv (AddResult r) (SendResults rs) = SendResults (r : rs)
+handlerSendResultEv (AddResult r) (DoSync  rs) = DoSync  (r : rs)
 
-handlerSendResultEv (SendingResult) (SendResults rs) = WaitingForResp rs []
+handlerSendResultEv (FetchPendingReviews) ReadyToSync = DoSync  []
+handlerSendResultEv (FetchPendingReviews) s = s
+
+
+handlerSendResultEv (SendingResult) (DoSync  rs) = WaitingForResp rs []
 handlerSendResultEv (SendingResult) _ = error "handlerSendResultEv 1"
 
-handlerSendResultEv (RespRecieved) (WaitingForResp _ []) = ReadyToSend
-handlerSendResultEv (RespRecieved) (WaitingForResp _ rs) = SendResults rs
+handlerSendResultEv (RespRecieved) (WaitingForResp _ []) = ReadyToSync
+handlerSendResultEv (RespRecieved) (WaitingForResp _ rs) = DoSync  rs
 handlerSendResultEv (RespRecieved) _ = error "handlerSendResultEv 2"
 
-handlerSendResultEv (RetrySendResult) (WaitingForResp r rs) = SendResults (r ++ rs)
+handlerSendResultEv (RetrySendResult) (WaitingForResp r rs) = DoSync  (r ++ rs)
 handlerSendResultEv (RetrySendResult) s = s

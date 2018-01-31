@@ -170,16 +170,9 @@ getEditSrsItem (EditSrsItem sId sItm) = do
   transactSrsDB_ $
     (reviews %%~ Tree.insertTree sId sItm)
 
-getGetNextReviewItem :: GetNextReviewItems
-  -> WsHandlerM ([ReviewItem], Int)
-getGetNextReviewItem (GetNextReviewItems rt alreadyPresent) = do
-  rsAll <- getAllPendingReviews rt
-  let rs = filter (\(i,_) -> not $ elem i alreadyPresent) rsAll
-  return $ (getReviewItem <$> (take 20 rs), length rs)
-
-getDoReview :: DoReview
-  -> WsHandlerM Bool
-getDoReview (DoReview rt results) = do
+getSyncReviewItems :: SyncReviewItems
+  -> WsHandlerM (Maybe ([ReviewItem], Int))
+getSyncReviewItems (SyncReviewItems rt results mAp) = do
   today <- liftIO $ utctDay <$> getCurrentTime
 
   let
@@ -191,7 +184,14 @@ getDoReview (DoReview rt results) = do
 
   transactSrsDB_ $
     (reviews %%~ (\rt -> foldlM doUp rt results))
-  return True
+
+  let
+    getRv alreadyPresent = do
+      rsAll <- getAllPendingReviews rt
+      let rs = filter (\(i,_) -> not $ elem i alreadyPresent) rsAll
+      return $ (getReviewItem <$> (take 20 rs), length rsAll)
+  mapM getRv mAp
+
 
 updateSrsEntry :: Bool -> Day -> ReviewType -> SrsEntry -> SrsEntry
 updateSrsEntry b today rt r = r

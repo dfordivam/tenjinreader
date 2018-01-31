@@ -369,8 +369,6 @@ reviewWidget p refreshEv = do
     -- 5. refresh (if initEv was Nothing)
 
     let
-      addItemEv = uncurry AddItemsEv <$> leftmost [fetchMoreReviewsResp] :: Event t (ReviewStateEvent rt)
-
     -- Output Events
     -- 1. Show review item
     -- 2. Fetch new reviews
@@ -380,20 +378,15 @@ reviewWidget p refreshEv = do
       (mergeList [addItemEv, reviewResultEv])
 
     let
-        fetchMoreReviews = GetNextReviewItems rt <$> ffilter ((< 5) . length)
-          ((Map.keys . _reviewQueue) <$> (tagDyn widgetStateDyn newReviewEv))
-
-        newReviewEv = leftmost [() <$ reviewResultEv
-                               ,() <$ refreshEv]
-
-    -- There is race between newReviewEv and sendResultEv
-    dEv <- debounce 2 fetchMoreReviews
-    fetchMoreReviewsResp <- getWebSocketResponse dEv
-
-    let
-        addResEv = fmapMaybe (_resultQueue)
+      addResEv = fmapMaybe (_resultQueue)
           (updated widgetStateDyn)
-    syncResultWithServer rt addResEv
+
+      newReviewEv = leftmost [() <$ reviewResultEv
+                             ,() <$ refreshEv]
+
+    (addItemEv :: Event t (ReviewStateEvent rt))
+      <- syncResultWithServer rt refreshEv
+        addResEv widgetStateDyn
 
     (closeEv, reviewResultEv) <- reviewWidgetView
       (_reviewStats <$> widgetStateDyn)

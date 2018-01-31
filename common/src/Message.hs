@@ -43,8 +43,7 @@ type AppRequest
   :<|> GetSrsStats
 
   -- Doing Review
-  :<|> GetNextReviewItems
-  :<|> DoReview
+  :<|> SyncReviewItems
   :<|> CheckAnswer
 
   -- Browsing Srs Items
@@ -209,14 +208,6 @@ data SrsItemLevel = LearningLvl | IntermediateLvl | MatureLvl
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
 ----------------------------------------------------------------
-data GetNextReviewItems =
-  GetNextReviewItems ReviewType [SrsEntryId]
-  deriving (Generic, Show, ToJSON, FromJSON)
-
-instance WebSocketMessage AppRequest GetNextReviewItems where
-  type ResponseT AppRequest GetNextReviewItems
-    = ([ReviewItem], Int) -- Pending reviews
-
 data ReviewItem = ReviewItem
   { _reviewItemId ::  SrsEntryId
   , _reviewItemField :: SrsEntryField
@@ -236,12 +227,13 @@ getReviewItem (i,s) =
     r = (s ^. readings)
     rn = (s ^. readingNotes)
 
-data DoReview = DoReview ReviewType [(SrsEntryId, Bool)]
+data SyncReviewItems = SyncReviewItems ReviewType [(SrsEntryId, Bool)]
+  (Maybe [SrsEntryId])
   deriving (Generic, Show, ToJSON, FromJSON)
 
-instance WebSocketMessage AppRequest DoReview where
-  type ResponseT AppRequest DoReview
-    = Bool
+instance WebSocketMessage AppRequest SyncReviewItems where
+  type ResponseT AppRequest SyncReviewItems
+    = Maybe ([ReviewItem], Int) -- Pending reviews
 
 ----------------------------------------------------------------
 data CheckAnswer =
