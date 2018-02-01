@@ -133,7 +133,7 @@ migrateFun dbOld db = do
           <*> (Tree.fromList $ d ^. _5)
           <*> pure (coerce (d ^. _6))
           <*> pure (Set.empty)
-          <*> pure ([])
+          <*> pure (map fst $ d ^. _2)
 
         commit () (UserConcurrentDb newD)
 
