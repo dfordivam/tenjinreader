@@ -16,6 +16,8 @@ import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Vector as V
+import qualified Data.List as List
+
 import Text.Pretty.Simple
 import Data.SearchEngine
 import qualified Data.BTree.Impure as Tree
@@ -259,6 +261,7 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
       put $ Just (getReaderDocumentData nd Nothing)
       lift $ rd &
         readerDocuments %%~ Tree.insertTree docId nd
+        >>= documentAccessOrder %%~ (\ol -> return $ newk : (List.delete newk ol))
 
   transactSrsDB $ runStateWithNothing $ upFun
 
@@ -272,7 +275,8 @@ getListDocuments :: ListDocuments
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]
 getListDocuments _ = do
   ds <- transactReadOnlySrsDB $ \rd -> do
-    Tree.toList (rd ^. readerDocuments)
+    let dl = take 20 $ rd ^. documentAccessOrder
+    catMaybes <$> mapM (\i -> Tree.lookupTree i (rd ^. readerDocuments)) dl
 
   let f (ReaderDocument i t c _) = (i,t,p c)
       p c = T.take 50 (foldl' fol "" c)
@@ -280,13 +284,17 @@ getListDocuments _ = do
       getT (Left t) = t
       getT (Right (v,_,_)) = vocabToText v
 
-  return $ map (f . snd) ds
+  return $ map f ds
 
 getViewDocument :: ViewDocument
   -> WsHandlerM (Maybe (ReaderDocumentData))
 getViewDocument (ViewDocument i paraNum) = do
   s <- transactReadOnlySrsDB $ \rd ->
     Tree.lookupTree i (rd ^. readerDocuments)
+
+  forM s $ \_ -> transactSrsDB_ $
+    documentAccessOrder %%~ (\ol -> return $ i : (List.delete i ol))
+
   let
     ret :: Maybe ReaderDocumentData
     ret = flip getReaderDocumentData paraNum <$> s
