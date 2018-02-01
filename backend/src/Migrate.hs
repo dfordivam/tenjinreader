@@ -36,7 +36,7 @@ import qualified Data.BTree.Impure as Tree
 import Data.BTree.Impure (Tree)
 
 import Control.Monad.Haskey
-import Database.Haskey.Alloc.Concurrent (Root)
+import Database.Haskey.Alloc.Concurrent (Root, ConcurrentHandles)
 import Data.Binary.Orphans
 import GHC.Generics (Generic)
 import Data.These
@@ -50,41 +50,39 @@ import qualified Data.Map as Map
 import Data.Time.Calendar (Day)
 
 
+newtype UserConcurrentDbOld = UserConcurrentDbOld
+  { unUserConcurrentDb :: AppUserData OldDb }
+  deriving (Generic, Show, Typeable, Binary, Value, Root)
+
+type instance AppUserData OldDb = AppUserDataTreeOld OldDb
+
 data AppUserDataTreeOld t = AppUserDataTreeOld
   { _reviewsOld :: Tree SrsEntryId SrsEntry
   , _readerDocumentsOld :: Tree ReaderDocumentId (ReaderDocument t)
-  , _kanjiSrsMapOld :: Tree KanjiId (SrsEntryId)
-  , _vocabSrsMapOld :: Tree VocabId (SrsEntryId)
+  , _kanjiSrsMapOld :: Tree KanjiId (Either () SrsEntryId)
+  , _vocabSrsMapOld :: Tree VocabId (Either () SrsEntryId)
   -- An Srs Item may not have an entry in this map
   , _srsKanjiVocabMapOld :: Tree SrsEntryId (Either KanjiId VocabId)
   , _readerSettingsOld :: ReaderSettings t
   } deriving (Generic, Show, Typeable, Binary, Value)
 
-type instance AppUserData OldDb = AppUserDataTreeOld OldDb
-
+deriving instance Root (AppUserDataTreeOld OldDb)
 makeLenses ''AppUserDataTreeOld
 
-newtype AppOldConcurrentDb = AppOldConcurrentDb
-  { unAppOldConcurrentDb :: DbSchema OldDb }
-  deriving (Generic, Show, Typeable, Binary, Value, Root)
-
-deriving instance Show (AppConcurrentDbTree OldDb)
-deriving instance Value (AppConcurrentDbTree OldDb)
-deriving instance Root (AppConcurrentDbTree OldDb)
-
-openSrsDB :: FilePath -> IO (ConcurrentDb AppConcurrentDb)
-openSrsDB fp =
+openUserDBOld :: FilePath -> IO (ConcurrentDb UserConcurrentDbOld, ConcurrentHandles)
+openUserDBOld fp =
   flip runFileStoreT defFileStoreConfig $
     openConcurrentDb hnds >>= \case
-      Nothing -> createConcurrentDb hnds (AppConcurrentDb (AppConcurrentDbTree Tree.empty))
-      Just db -> return db
+      Nothing -> (,) <$> createConcurrentDb hnds (UserConcurrentDbOld d) <*> pure hnds
+      Just db -> return (db, hnds)
   where
+    d = AppUserDataTreeOld Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
     hnds = concurrentHandles fp
 
 migrateMain = do
   (db,_) <- openUserDB "userData/1"
   -- dbOld <- openOldSrsDB "oldsrsdb"
-  dbOld <- openSrsDB "oldsrsdb"
+  (dbOld,_) <- openUserDBOld "userDataOld/1"
   putStrLn $ ("Doing Migration" :: Text)
   migrateFun dbOld db
   putStrLn $ ("Migration Done" :: Text)
@@ -98,33 +96,32 @@ migrateFun dbOld db = do
       defFileStoreConfig
 
     runOldDb :: (_)
-      => HaskeyT (AppConcurrentDb) m a
+      => HaskeyT (UserConcurrentDbOld) m a
       -> m a
     runOldDb action = runHaskeyT action dbOld
       defFileStoreConfig
 
     getUserData uId =
       runOldDb $ transactReadOnly
-        (\(AppConcurrentDb db) -> do
-           ud <- Tree.lookupTree uId (db ^. userData)
+        (\(UserConcurrentDbOld d) -> do
            let
              -- tup :: (AllocReaderM n)
              --   => AppUserDataTreeOld (OldDb)
              --   -> n (TType)
              tup d =
-               ( (d ^. reviews)
-               , (d ^. readerDocuments)
-               , (d ^. kanjiSrsMap)
-               , (d ^. vocabSrsMap)
-               , (d ^. srsKanjiVocabMap)
-               , (d ^. readerSettings))
+               ( (d ^. reviewsOld)
+               , (d ^. readerDocumentsOld)
+               , (d ^. kanjiSrsMapOld)
+               , (d ^. vocabSrsMapOld)
+               , (d ^. srsKanjiVocabMapOld)
+               , (d ^. readerSettingsOld))
                &   (_1 %%~ Tree.toList)
                >>= (_2 %%~ Tree.toList)
                >>= (_3 %%~ Tree.toList)
                >>= (_4 %%~ Tree.toList)
                >>= (_5 %%~ Tree.toList)
 
-           mapM tup ud)
+           tup d)
 
     addUserData uId d =
       runNewDb $ transact $ \_ -> do
@@ -138,8 +135,8 @@ migrateFun dbOld db = do
 
         commit () (UserConcurrentDb newD)
 
-    modifyMap :: [(a,b)] -> [(a,Either () b)]
-    modifyMap = each . _2 %~ Right
+    -- modifyMap :: [(a,b)] -> [(a,Either () b)]
+    -- modifyMap = each . _2 %~ Right
     -- modifyRD (rId, rd) = (,) rId $ ReaderDocument
     --   (rd ^. readerDocOldId)
     --   (rd ^. readerDocOldTitle)
@@ -156,15 +153,6 @@ migrateFun dbOld db = do
 
     addFun uId = do
       getUserData uId
-        >>= mapM (addUserData uId)
+        >>= addUserData uId
 
   migrateAction
-
-openOldSrsDB :: FilePath -> IO (ConcurrentDb AppOldConcurrentDb)
-openOldSrsDB fp =
-  flip runFileStoreT defFileStoreConfig $
-    openConcurrentDb hnds >>= \case
-      Nothing -> error "Old DB not found"
-      Just db -> return db
-  where
-    hnds = concurrentHandles fp

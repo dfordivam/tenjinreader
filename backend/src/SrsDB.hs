@@ -42,22 +42,6 @@ import Data.List.NonEmpty (NonEmpty)
 
 import Data.Time.Calendar (Day)
 
--- Haskey based db schema
-newtype AppConcurrentDb = AppConcurrentDb
-  { unAppConcurrentDb :: DbSchema CurrentDb }
-  deriving (Generic, Show, Typeable, Binary, Value, Root)
-
-type family DbSchema t
-type instance DbSchema t = AppConcurrentDbTree t
-
-data AppConcurrentDbTree t = AppConcurrentDbTree
-  { _userData :: Tree Int64 (AppUserData t)
-  } deriving (Generic, Typeable, Binary)
-
-deriving instance Show (AppConcurrentDbTree CurrentDb)
-deriving instance Value (AppConcurrentDbTree CurrentDb)
-deriving instance Root (AppConcurrentDbTree CurrentDb)
-
 newtype UserConcurrentDb = UserConcurrentDb
   { unUserConcurrentDb :: AppUserData CurrentDb }
   deriving (Generic, Show, Typeable, Binary, Value, Root)
@@ -129,4 +113,3 @@ instance Key KanjiId
 instance Key VocabId
 
 makeLenses ''AppUserDataTree
-makeLenses ''AppConcurrentDbTree
