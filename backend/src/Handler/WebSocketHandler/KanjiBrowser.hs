@@ -370,7 +370,7 @@ getVocabDetails (GetVocabDetails eIds) = do
 
 
 getVocabSentences :: GetVocabSentences
-  -> WsHandlerM ([VocabId], [SentenceData])
+  -> WsHandlerM ([VocabId], [(SentenceId, SentenceData, Bool)])
 getVocabSentences (GetVocabSentences svId) = do
   vocabSentenceDb <- lift $ asks appVocabSentenceDb
   sentenceDb <- lift $ asks appSentenceDb
@@ -381,8 +381,26 @@ getVocabSentences (GetVocabSentences svId) = do
       Tree.lookupTree sId (rd ^. srsKanjiVocabMap)
         >>= mapM (\e -> return $ either (const Nothing) Just e)
         >>= (\x -> return $ join x)
-  let
-    ss = take 20 $ maybe [] ( arrayLookup sentenceDb . Set.toList)
-      $ join ((\i -> Map.lookup i vocabSentenceDb) <$> eId)
+  favSet <- transactReadOnlySrsDB (pure . view favouriteSentences)
 
+  let
+    ss = maybe [] (catMaybes . map g) (f <$> sSetMB)
+
+    f sSet = take 20 (favs ++ others)
+      where
+        favs = (\i -> (i,True)) <$> (Set.toList $ Set.intersection favSet sSet)
+        others = (\i -> (i,False)) <$> (Set.toList $ Set.difference sSet favSet)
+
+    g (sId,b) = (,,) <$> pure sId <*> arrayLookupMaybe sentenceDb sId <*> pure b
+    sSetMB = join ((\i -> Map.lookup i vocabSentenceDb) <$> eId)
   return (maybeToList eId, ss)
+
+getToggleSentenceFav :: ToggleSentenceFav
+  -> WsHandlerM ()
+getToggleSentenceFav (ToggleSentenceFav sId) =
+  transactSrsDB_ $
+    favouriteSentences %%~
+      (\s -> return $
+             if Set.member sId s
+               then Set.delete sId s
+               else Set.insert sId s)

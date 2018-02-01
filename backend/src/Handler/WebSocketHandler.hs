@@ -86,6 +86,7 @@ wsHandler = HandlerWrapper $
 
   :<&> h getVocabDetails
   :<&> h getVocabSentences
+  :<&> h getToggleSentenceFav
 
   :<&> h getImportSearchFields
   :<&> h getImportData
