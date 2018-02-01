@@ -26,6 +26,8 @@ import Data.BTree.Alloc (AllocM, AllocReaderM)
 import Data.BTree.Impure (Tree, insertTree, lookupTree, toList)
 import Data.BTree.Primitives (Value, Key)
 import Data.Binary (Binary)
+import qualified Data.Set as Set
+import Data.Set (Set)
 import Data.Text (Text, unpack)
 import Data.Int (Int64)
 import Data.Typeable (Typeable, Typeable1)
@@ -57,6 +59,8 @@ data AppUserDataTree t = AppUserDataTree
   -- An Srs Item may not have an entry in this map
   , _srsKanjiVocabMap :: Tree SrsEntryId (Either KanjiId VocabId)
   , _readerSettings :: ReaderSettings t
+  , _favouriteSentences :: Set SentenceId
+  , _documentAccessOrder :: [ReaderDocumentId]
   } deriving (Generic, Typeable, Binary)
 
 deriving instance Root (AppUserDataTree CurrentDb)
@@ -73,6 +77,7 @@ openUserDB fp =
       Just db -> return (db, hnds)
   where
     d = AppUserDataTree Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
+      Set.empty []
     hnds = concurrentHandles fp
 
 closeUserDB :: ConcurrentHandles -> IO ()

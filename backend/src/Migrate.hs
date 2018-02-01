@@ -28,6 +28,7 @@ import Data.Coerce
 import Data.Default
 import Data.BTree.Alloc (AllocM, AllocReaderM)
 import Data.BTree.Primitives (Value, Key)
+import qualified Data.Set as Set
 import Data.Binary (Binary)
 import Data.Text (Text, unpack)
 import Data.Int (Int64)
@@ -73,10 +74,9 @@ openUserDBOld :: FilePath -> IO (ConcurrentDb UserConcurrentDbOld, ConcurrentHan
 openUserDBOld fp =
   flip runFileStoreT defFileStoreConfig $
     openConcurrentDb hnds >>= \case
-      Nothing -> (,) <$> createConcurrentDb hnds (UserConcurrentDbOld d) <*> pure hnds
+      Nothing -> error "Old Db not found"
       Just db -> return (db, hnds)
   where
-    d = AppUserDataTreeOld Tree.empty Tree.empty Tree.empty Tree.empty Tree.empty def
     hnds = concurrentHandles fp
 
 migrateMain = do
@@ -132,6 +132,8 @@ migrateFun dbOld db = do
           <*> (Tree.fromList $ d ^. _4)
           <*> (Tree.fromList $ d ^. _5)
           <*> pure (coerce (d ^. _6))
+          <*> pure (Set.empty)
+          <*> pure ([])
 
         commit () (UserConcurrentDb newD)
 
