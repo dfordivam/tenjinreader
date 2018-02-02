@@ -318,7 +318,11 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
             return (domEvent Click e)
 
           vIdEv <- el "div" $ do
-            renderDynParas rs (snd <$> row1Dyn)
+            let renderF = ffor (isNothing . snd <$> visDyn) $ \b -> if b
+                  then renderDynParas
+                  else renderDynParasLight
+            dyn ((\f -> f rs (snd <$> row1Dyn)) <$> renderF)
+              >>= switchPromptly never
 
           (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
             text ""
@@ -359,7 +363,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
               (return never <$ stopTicks)
             tickW = do
               ev <- getPostBuild
-              de <- delay 1 $ leftmost [ev, () <$ evVisible]
+              de <- delay 0.5 $ leftmost [ev, () <$ evVisible]
               return $ de
         t <- widgetHold init
           (init <$ startTicksAgain)
@@ -664,7 +668,7 @@ textAdjustRevF (viewPD, Nothing) (_, ps) = (A.bounds fp,ps)
     fp = viewPD A.! fpN
 
 renderDynParas :: (_)
-  => Dynamic t (ReaderSettings CurrentDb) -- Used for mark
+  => Dynamic t (ReaderSettings CurrentDb) -- Used for rubySize
   -> Dynamic t ParaData
   -> m (Event t ([VocabId], (Text, Maybe e)))
 renderDynParas rs dynParas = do
@@ -680,6 +684,45 @@ renderDynParas rs dynParas = do
     v <- list dynMap (renderEachPara vIdDyn)
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
   return (vIdEv)
+
+vocabRubyLight :: (_)
+  => Int
+  -> Bool
+  -> Vocab -> m ()
+vocabRubyLight fontSizePct vis v@(Vocab ks) = do
+  let
+    rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) fontSizePct
+    g r True = r
+    g _ _ = ""
+    f (Kana k) = text k
+    f (KanjiWithReading (Kanji k) r)
+      = elAttr "ruby" rubyAttr $ do
+          text k
+          el "rt" $ text (g r vis)
+
+  void $ el "span" $ mapM f ks
+
+renderOneParaLight :: (_)
+  => Int
+  -> [Either Text (Vocab, [VocabId], Bool)]
+  -> m ()
+renderOneParaLight rubySize annTextPara = do
+  el "p" $ do
+    let f (Left t) = text t
+        f (Right (v, vId, vis)) = vocabRubyLight rubySize vis v
+    void $ mapM f (annTextPara)
+
+renderDynParasLight :: (_)
+  => Dynamic t (ReaderSettings CurrentDb) -- Used for rubySize
+  -> Dynamic t ParaData
+  -> m (Event t ([VocabId], (Text, Maybe (DOM.Element))))
+renderDynParasLight rs dynParas = do
+  let renderEachPara rs dt = do
+        renderOneParaLight (_rubySize rs) dt
+
+  rsC <- sample $ current rs
+  dyn ((mapM (renderEachPara rsC)) <$> ((\a -> A.elems (fmap A.elems a)) <$> dynParas))
+  return never
 
 ----------------------------------------------------------------------------------
 lineHeightOptions = Map.fromList $ (\x -> (x, (tshow x) <> "%"))
