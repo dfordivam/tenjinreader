@@ -44,11 +44,13 @@ parseAndSearch es se m t = do
   let
     fun ("", _) = Nothing
     fun (surf, Nothing) = Just (Left surf)
-    fun (surf, Just feat) = Just $ Right $ (voc, filter f eIds , True)
+    fun (surf, Just feat) = Just $ Right $ (voc, vIds, True)
       where
         voc = getVocabFurigana (surf,reading)
         term = (_mecabNodeFeat7 feat)
         reading = (_mecabNodeFeat8 feat)
+        ffIds = filter f eIds
+        vIds = if null ffIds then eIds else ffIds
         eIds = query se [term]
         origRead = getOriginalReading term voc
         f eId
