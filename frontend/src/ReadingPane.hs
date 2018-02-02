@@ -418,14 +418,16 @@ makeParaData n@(n1:_) = A.array (ParaNum (fst n1), ParaNum (fst l)) $ map f n
 
 moreContentAccF :: [(Int, AnnotatedPara)] -> ParaData -> ParaData
 moreContentAccF [] o = o
-moreContentAccF n@(n1:_) o = A.array newBounds ((A.assocs pd) ++ (A.assocs o))
+moreContentAccF n@(n1:_) o = A.array newBounds $ filter (f newBounds) $
+  ((A.assocs pd) ++ (A.assocs o))
   where
+    f (l,u) (i,_) = if l > i || i < u then True else False
     (curFirst, curLast) = A.bounds o
     pd = makeParaData n
     (newFirst, newLast) = A.bounds pd
     newBounds = if newFirst > curLast
-      then ((max curFirst (ParaNum $ 60 - (unParaNum newLast))) , newLast)
-      else (newFirst, (min curLast (ParaNum $ 60 + (unParaNum newFirst))))
+      then ((max curFirst (ParaNum $ 120 - (unParaNum newLast))) , newLast)
+      else (newFirst, (min curLast (ParaNum $ 120 + (unParaNum newFirst))))
 
 getState
   :: ParaData
