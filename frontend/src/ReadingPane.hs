@@ -421,7 +421,7 @@ moreContentAccF [] o = o
 moreContentAccF n@(n1:_) o = A.array newBounds $ filter (f newBounds) $
   ((A.assocs pd) ++ (A.assocs o))
   where
-    f (l,u) (i,_) = if l > i || i < u then True else False
+    f (l,u) (i,_) = if l >= i || i <= u then True else False
     (curFirst, curLast) = A.bounds o
     pd = makeParaData n
     (newFirst, newLast) = A.bounds pd
