@@ -566,13 +566,16 @@ textAdjustF, textAdjustRevF
   -> ((ParaPos, ParaPos), ParaData)
   -> ((ParaPos, ParaPos), ParaData)
 
-textAdjustF (_, (Just ShrinkText)) ((li,ui), ps)
+textAdjustF (viewPD, (Just ShrinkText)) ((li,ui), ps)
   | lpU == lpL
     -- drop the last Para
     = assert (lpN > fpN)
     ((A.bounds $ ps A.! (lpN - 1))
       , A.ixmap (fpN, lpN - 1) identity ps)
 
+  -- During viewport size change li can become invalid
+  | li >= lpU
+    = textAdjustF (viewPD, Just ShrinkText) ((lpL, lpU), ps)
   | otherwise
     -- drop half
     = ((li, lpU), ps A.// [(lpN, newLp)])
@@ -580,7 +583,6 @@ textAdjustF (_, (Just ShrinkText)) ((li,ui), ps)
     (fpN,lpN) = A.bounds ps
     lp = ps A.! lpN
     (lpL,lpU) = A.bounds lp
-    -- During viewport size change li can be invalid
     halfL = lpU - halfParaPos lpU  li
     newLp = A.ixmap (lpL, halfL) identity lp
 
@@ -612,13 +614,16 @@ textAdjustF (viewPD, Nothing) (_, ps) = (A.bounds lp,ps)
 
 -- lower bound is towards end, upper bound is towards start
 -- Do binary search between these bounds
-textAdjustRevF (_, (Just ShrinkText)) ((li,ui), ps)
+textAdjustRevF (viewPD, (Just ShrinkText)) ((li,ui), ps)
   | fpL == fpU
     -- drop the first Para
     = assert (lpN > fpN)
     ((A.bounds $ ps A.! (fpN + 1))
       , A.ixmap (fpN + 1, lpN) identity ps)
 
+  -- During viewport size change ui can become invalid
+  | ui <= fpL
+    = textAdjustRevF (viewPD, Just ShrinkText) ((fpL, fpU), ps)
   | otherwise
     -- drop half
     = ((fpL, ui), ps A.// [(fpN, newFp)])
