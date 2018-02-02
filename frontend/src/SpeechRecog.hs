@@ -77,7 +77,10 @@ speechRecogSetup = do
 
     GHCJS.DOM.EventM.on recog result (onResultEv trigAction)
     GHCJS.DOM.EventM.on recog speechstart (liftIO $ speechStartAction ())
+    GHCJS.DOM.EventM.on recog end (liftIO $ timeoutAction ())
+    GHCJS.DOM.EventM.on recog nomatch (liftIO $ timeoutAction ())
     GHCJS.DOM.EventM.on recog audioend (liftIO $ timeoutAction ())
+    GHCJS.DOM.EventM.on recog soundend (liftIO $ timeoutAction ())
     GHCJS.DOM.EventM.on recog GHCJS.DOM.SpeechRecognition.error (liftIO $ errorAction ())
     return recog
 
