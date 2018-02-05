@@ -18,6 +18,8 @@ import Yesod.Auth.Dummy
 
 import Yesod.Auth
 import Yesod.Auth.OAuth2.Github
+import Yesod.Auth.OAuth2.Google
+import Yesod.Auth.OAuth (authTwitterUsingUserId)
 
 import Yesod.Default.Util   (addStaticContentExternal)
 import Yesod.Core.Types     (Logger)
@@ -231,22 +233,28 @@ instance YesodAuth App where
     redirectToReferer _ = True
 
     authenticate creds = runDB $ do
-        -- Try to use the user login name, else fallback to the github' user id number
-        let userId = maybe (credsIdent creds) snd (headMay $ filter ((== "login") . fst) $ credsExtra creds)
-        x <- getBy $ UniqueUser $ userId
+        let
+          userId = credsIdent creds
+            -- Try to use the user login name, else fallback to the github' user id number
+            -- maybe (credsIdent creds) snd (headMay $ filter ((== "login") . fst) $ credsExtra creds)
+        x <- getBy $ UniqueUser userId (credsPlugin creds)
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
             Nothing -> do
               uid <- insert User
                 { userIdent = userId
+                , userService = (credsPlugin creds)
                 , userPassword = Nothing
                 }
               return $ Authenticated uid
 
-    -- You can add other plugins like Google Email, email or OAuth here
     authPlugins app =
       [oauth2Github (appGithubClientId $ appSettings app)
-        (appGithubClientSecret $ appSettings app)]
+        (appGithubClientSecret $ appSettings app)
+      , oauth2Google (appGoogleClientId $ appSettings app)
+        (appGoogleClientSecret $ appSettings app)
+      , authTwitterUsingUserId (TE.encodeUtf8 $ appTwitterClientId $ appSettings app)
+        (TE.encodeUtf8 $ appTwitterClientSecret $ appSettings app)]
     authHttpManager = appHttpManager
 
 -- | Access function to determine if a user is logged in.

@@ -1,7 +1,8 @@
 User
     ident Text
+    service Text
     password Text Maybe
-    UniqueUser ident
+    UniqueUser ident service
     deriving Typeable
 Email
     email Text

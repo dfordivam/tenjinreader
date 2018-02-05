@@ -84,6 +84,7 @@ library
     , transformers
     , these
     , array
+    , yesod-auth-oauth
     , common
   if (flag(dev)) || (flag(library-only))
     ghc-options: -Wall -fwarn-tabs -O0
@@ -156,6 +157,7 @@ executable server
     , time
     , case-insensitive
     , wai
+    , yesod-auth-oauth
     , server
     , foreign-store
   if flag(library-only)
@@ -231,6 +233,7 @@ executable db-migrate
     , transformers
     , these
     , array
+    , yesod-auth-oauth
     , common
   if flag(library-only)
     buildable: False

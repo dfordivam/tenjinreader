@@ -68,6 +68,10 @@ data AppSettings = AppSettings
     , appLinksCsvPath           :: Text
     , appGithubClientId         :: Text
     , appGithubClientSecret     :: Text
+    , appGoogleClientId         :: Text
+    , appGoogleClientSecret     :: Text
+    , appTwitterClientId         :: Text
+    , appTwitterClientSecret     :: Text
     }
 
 instance FromJSON AppSettings where
@@ -102,6 +106,10 @@ instance FromJSON AppSettings where
         appLinksCsvPath           <- o .:  "links-csv"
         appGithubClientId         <- o .:  "github-client-id"
         appGithubClientSecret     <- o .:  "github-client-secret"
+        appGoogleClientId         <- o .:  "google-client-id"
+        appGoogleClientSecret     <- o .:  "google-client-secret"
+        appTwitterClientId         <- o .:  "twitter-client-id"
+        appTwitterClientSecret     <- o .:  "twitter-client-secret"
         return AppSettings {..}
 
 -- | Settings for 'widgetFile', such as which template languages to support and

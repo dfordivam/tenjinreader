@@ -43,6 +43,7 @@
         }) {});
 
         mecab = pkgs.haskell.lib.doJailbreak super.mecab;
+        yesod-auth-oauth = pkgs.haskell.lib.doJailbreak super.yesod-auth-oauth;
         reflex-websocket-interface = r-all.reflex-websocket-interface;
 
         reflex-websocket-interface-shared = r-all.reflex-websocket-interface-shared;

@@ -36,5 +36,11 @@ srs-database-dir: "srsdb"
 sentences-csv: "/home/divam/nobup/tatoeba/sentences.csv"
 links-csv: "/home/divam/nobup/tatoeba/links.csv"
 
-github-client-id: "_env:GITHUB_CLIENT_ID:invalidValue" 
-github-client-secret: "_env:GITHUB_CLIENT_SECRET:invalidValue"  
+github-client-id: "_env:GITHUB_CLIENT_ID:invalidValue"
+github-client-secret: "_env:GITHUB_CLIENT_SECRET:invalidValue"
+
+google-client-id: "_env:GOOGLE_CLIENT_ID:invalidValue"
+google-client-secret: "_env:GOOGLE_CLIENT_SECRET:invalidValue"
+
+twitter-client-id: "_env:TWITTER_CLIENT_ID:invalidValue"
+twitter-client-secret: "_env:TWITTER_CLIENT_SECRET:invalidValue"
