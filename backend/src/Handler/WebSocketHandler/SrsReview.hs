@@ -386,7 +386,7 @@ makeSrsEntry v surface = do
   return (get <$> tmp)
 
 isSurfaceKana (Just t) (Just v) = if isKanaOnly t
-  then Just (t:|[v])
+  then if t == v then Just (t:|[]) else Just (t:|[v])
   else Nothing
 isSurfaceKana _ _ = Nothing
 
