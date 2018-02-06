@@ -127,7 +127,7 @@ data VocabSrsState
   | IsWakaru
   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON)
 
-type VocabList = [(VocabDetails, VocabSrsState)]
+type VocabList = [(Entry, VocabSrsState)]
 
 data KanjiSelectionDetails =
   KanjiSelectionDetails KanjiDetails VocabSrsState VocabList

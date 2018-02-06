@@ -270,29 +270,10 @@ kanjiDetailWindow k = do
 vocabListWindow
   :: (AppMonad t m
      , WebSocketMessage AppRequest req
-     , ResponseT AppRequest req ~ [(VocabDetails, VocabSrsState)])
+     , ResponseT AppRequest req ~ [(Entry, VocabSrsState)])
   => req -> Event t VocabList -> AppMonadT t m ()
 vocabListWindow req listEv = do
   let
-    listItem (v,s) = divClass "row well-sm" $ do
-      divClass "col-md-3" $ do
-        displayVocabT $ v ^. vocab
-
-      divClass "col-md-5" $
-        text $ T.intercalate ", " $ map unMeaning
-          $ v ^. vocabMeanings
-      divClass "col-md-2" $
-        addEditSrsEntryWidget (Right $ v ^. vocabId)
-          Nothing s
-      divClass "col-md-2" $ do
-        openEv <- btn "btn-xs btn-primary" "Sentences"
-        openSentenceWidget (vocabToText $ v ^. vocab
-                           , map unMeaning $ v ^. vocabMeanings)
-          ((Left $ v ^. vocabId) <$ openEv)
-
-    liWrap i = do
-      dyn $ listItem <$> i
-
     fun (This l) _ = l
     fun (That ln) l = l ++ ln
     fun (These l _) _ = l
@@ -300,10 +281,10 @@ vocabListWindow req listEv = do
   -- NW 1
   rec
     lmEv <- getWebSocketResponse $ req <$ ev
-    dyn <- foldDyn fun [] (align listEv lmEv)
+    lsDyn <- foldDyn fun [] (align listEv lmEv)
     divClass "" $  do
       -- NW 1.1
-      simpleList dyn liWrap
+      dyn $ (mapM (showEntry "")) <$> lsDyn
       -- NW 1.2
     ev <- do
       showWSProcessing ev lmEv

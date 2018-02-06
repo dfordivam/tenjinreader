@@ -478,9 +478,9 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
 
   return ()
 
-showEntry surface (e, sId) = do
+showEntry surface (e, sId) = divClass "well-sm" $ do
   divClass "" $ do
-    elClass "span" "" $ do
+    elClass "span" "well-sm" $ do
       entryKanjiAndReading surface e
     addEditSrsEntryWidget (Right $ e ^. entryUniqueId) (Just surface) sId
     openEv <- btn "btn-xs btn-primary" "Sentences"

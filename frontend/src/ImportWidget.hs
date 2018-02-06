@@ -273,6 +273,7 @@ importWaniKaniVocab = do
 
   reqDyn <- holdDyn (ImportSearchFields []) req
   resp <- getWebSocketResponse req
+  showWSProcessing req resp
   impDone <- widgetHoldWithRemoveAfterEvent
     (importSelectionWidget <$> resp)
   void $ widgetHoldWithRemoveAfterEvent

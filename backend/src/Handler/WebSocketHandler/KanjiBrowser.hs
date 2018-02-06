@@ -152,7 +152,7 @@ getKanjiDetails (GetKanjiDetails kId _) = do
 loadVocabList keys = do
   vocabDb <- lift $ asks appVocabDb
   let
-      vocabs = map _vocabDetails $ arrayLookup vocabDb keys
+      vocabs = map _vocabEntry $ arrayLookup vocabDb keys
 
   s <- transactReadOnlySrsDB $ \rd -> do
       (map getVocabSrsState)
