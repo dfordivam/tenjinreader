@@ -117,8 +117,17 @@ getBulkEditSrsItems :: BulkEditSrsItems
   -> WsHandlerM (Maybe ())
 getBulkEditSrsItems
   (BulkEditSrsItems _ ss DeleteSrsItems) = do
-  transactSrsDB_ $
-    (reviews %%~ (\rt -> foldrM Tree.deleteTree rt ss))
+  transactSrsDB_ $ \rd ->
+    (rd & reviews %%~ flippedfoldM (flip Tree.deleteTree) ss)
+    >>= flippedfoldM (\rd s -> Tree.lookupTree s (rd ^. srsKanjiVocabMap)
+      >>= \case
+          (Just (Left kId)) ->
+            rd & kanjiSrsMap %%~ Tree.deleteTree kId
+              >>= srsKanjiVocabMap %%~ Tree.deleteTree s
+          (Just (Right vId)) ->
+            rd & vocabSrsMap %%~ Tree.deleteTree vId
+              >>= srsKanjiVocabMap %%~ Tree.deleteTree s
+          Nothing -> return rd) ss
 
   return $ Just ()
 
