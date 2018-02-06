@@ -33,15 +33,15 @@ importWidgetTop
   :: AppMonad t m
   => AppMonadT t m ()
 importWidgetTop = do
-  ta <- textArea def
+  -- ta <- textArea def
 
-  ev <- btn "btn-default" "Parse"
-  sep <- dropdown ";" (constDyn separatorChoices) def
-  sep2 <- dropdown "," (constDyn separatorChoices) def
-  let d = ((\a b c -> (a,b,c)) <$> value ta <*> value sep <*> value sep2)
+  -- ev <- btn "btn-default" "Parse"
+  -- sep <- dropdown ";" (constDyn separatorChoices) def
+  -- sep2 <- dropdown "," (constDyn separatorChoices) def
+  -- let d = ((\a b c -> (a,b,c)) <$> value ta <*> value sep <*> value sep2)
 
-  widgetHold (return ())
-    (parseInput <$> (tagDyn d ev))
+  -- widgetHold (return ())
+  --   (parseInput <$> (tagDyn d ev))
 
   importWaniKaniVocab
   return ()
@@ -237,13 +237,18 @@ importWaniKaniVocab
   :: AppMonad t m
   => AppMonadT t m ()
 importWaniKaniVocab = do
-  files <- value <$> fileInput def
+  el "div" $ do
+    el "h3" $ text "Import from Wanikani"
+    el "p" $ text "Please create vocabulary.txt or kanji.txt using https://wanikanitoanki.com/"
+    el "p" $ text "Then import either of these files using below widget"
 
-  ev <- btn "btn-default" "Import"
+  tEv <- el "div" $ do
+    files <- value <$> fileInput def
+    ev <- btn "btn-default" "Read File"
+    let
+      fEv = fmapMaybe headMay (tagDyn files ev)
+    getTextFromFile fEv
 
-  let
-    fEv = fmapMaybe headMay (tagDyn files ev)
-  tEv <- getTextFromFile fEv
   let
     sep = ";"
     sep2 = ","
@@ -268,8 +273,10 @@ importWaniKaniVocab = do
 
   reqDyn <- holdDyn (ImportSearchFields []) req
   resp <- getWebSocketResponse req
-  void $ widgetHold (return ())
+  impDone <- widgetHoldWithRemoveAfterEvent
     (importSelectionWidget <$> resp)
+  void $ widgetHoldWithRemoveAfterEvent
+    ((text "Import Successful!" >> return req) <$ impDone)
 
 instance Ord NewEntryOp where
   compare (AddVocabs _) (AddVocabs _) = EQ
@@ -285,8 +292,8 @@ importSelectionWidget :: AppMonad t m
   => ([(Text, Either () SrsEntryId)]
      , [(NonEmpty VocabId, Text)]
      , [NonEmpty Text])
-  -> AppMonadT t m ()
-importSelectionWidget (alreadyInDb, newEs, notFound) = do
+  -> AppMonadT t m (Event t ())
+importSelectionWidget (alreadyInDb, newEs, notFound) = el "div" $ do
   let showNewEntry (vIds, mf) = el "tr" $ do
         el "td" $ text mf
         dd <- el "td" $ dropdown (MarkWakaru vIds)
@@ -295,23 +302,31 @@ importSelectionWidget (alreadyInDb, newEs, notFound) = do
 
       showNotFound [] = return ()
       showNotFound es = do
-        text "Not found in database: "
-        text $ mconcat $ intersperse ", " $ map fold es
+        el "div" $ do
+          el "h5" $ text "Not found in database: "
+          el "p" $ text $ mconcat $ intersperse ", " $ map fold es
       showAlreadyInDb [] = return ()
       showAlreadyInDb es = do
         let
           isSrs = [x | (x, Right _) <- es]
           wakaru = [x | (x, Left _) <- es]
-        text "Already in Srs: "
-        text $ mconcat $ intersperse ", " $ isSrs
-        text "Marked Wakaru: "
-        text $ mconcat $ intersperse ", " $ wakaru
+        el "div" $ do
+          el "h5" $ text "Already in Srs: "
+          el "p" $ text $ mconcat $ intersperse ", " $ isSrs
+        el "div" $ do
+          el "h5" $ text "Already marked 知る: "
+          el "p"  $ text $ mconcat $ intersperse ", " $ wakaru
 
   showNotFound notFound
   showAlreadyInDb alreadyInDb
   newEsDyn <- sequence <$> do
-    elClass "table" "table table-striped table-bordered" $ el "tbody" $
-      mapM showNewEntry newEs
-  addEv <- btn "btn-primary" "Import"
+    if null newEs
+      then return ([])
+      else el "div" $ do
+        el "h5" $ text "New Entries"
+        el "div" $ elClass "table" "table table-striped table-bordered" $ el "tbody" $
+          mapM showNewEntry newEs
+  addEv <- if null newEs
+    then return never
+    else btn "btn-primary" "Import"
   getWebSocketResponse $ ImportData <$> tagDyn newEsDyn addEv
-  return ()
