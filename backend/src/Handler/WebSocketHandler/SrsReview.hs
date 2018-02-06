@@ -27,7 +27,7 @@ import Data.BTree.Alloc (AllocM, AllocReaderM)
 import Database.Persist.Sql
 import Data.These
 import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
-import Control.Monad.State hiding (foldM)
+import Control.Monad.State hiding (foldM, mapM_)
 import NLP.Japanese.Utils
 import Data.SearchEngine
 
@@ -395,65 +395,57 @@ isKanaOnly = (all f) . T.unpack
   where f = not . isKanji
 
 getImportSearchFields :: ImportSearchFields
-  -> WsHandlerM ([(Int, Maybe (Either SrsEntryId (NonEmpty EntryId)))])
-getImportSearchFields (ImportSearchFields fs)= do
-  return []
-  -- uId <- asks currentUserId
-  -- vocabDb <- lift $ asks appVocabDb
-  -- vocabSearchEng <- lift $ asks appVocabSearchEng
+  -> WsHandlerM ([(Text, Either () SrsEntryId)]
+     , [(NonEmpty VocabId, Text)]
+     , [NonEmpty Text])
+getImportSearchFields (ImportSearchFields fs) = do
+  vocabSearchEng <- lift $ asks appVocabSearchEng
 
-  -- s <- lift $ transactReadOnlySrsDB $ \db ->
-  --   Tree.lookupTree uId (db ^. userData) >>= mapM (\rd -> do
-  --     let
-  --       f ne = mapM (\i -> Tree.lookupTree i (rd ^. vocabSrsMap)) keys
-  --         >>= (\xs -> case (NE.nonEmpty keys, catMaybes xs) of
-  --           (_,(sId:_)) -> return (Just $ Left sId))
-  --           (Just es,_) -> return (Just $ Right es)
-  --           _ -> return Nothing
-  --         where
-  --           keys = query vocabSearchEng (NE.toList ne)
-  --     fs & each . _2 %%~ f)
-  -- return $ maybe (fs & each . _2 .~ Nothing) id s
+  let
+    f (i,ne) = case (NE.nonEmpty es) of
+      Nothing -> return $ Left ne
+      (Just esNE) -> do
+        vs <- transactReadOnlySrsDB $ \rd ->
+          mapM (\i -> Tree.lookupTree i (rd ^. vocabSrsMap)) es
+        return $ Right $ case (headMay $ catMaybes vs) of
+          (Just v) -> Left (NE.head ne, v)
+          Nothing -> Right (esNE, NE.head ne)
+      where
+        es = query vocabSearchEng (NE.toList ne)
+  res <- mapM f fs
+  let
+    inSrs = lefts $ rights res
+    notInSrs = rights $ rights res
+    notFound = lefts res
+
+  return (inSrs, notInSrs, notFound)
 
 flippedfoldM f ta b = foldM f b ta
 
 getImportData :: ImportData
   -> WsHandlerM ()
 getImportData (ImportData fs) = do
-  -- uId <- asks currentUserId
-  -- let
-  --   f rd (AddVocabs vs) = do
-  --     srsItm <- lift $ makeSrsEntry (Right $ NE.head v) Nothing
+  let
+    f (AddVocabs vs) = void $ getQuickAddSrsItem
+      (QuickAddSrsItem (Right $ NE.head vs) Nothing)
 
-  --     nrd <- forM srsItm $ \itm -> do
-  --       mx <- lift $ Tree.lookupMaxTree (rd ^. reviews)
-  --       let newk = maybe zerokey nextKey mx
-  --           zerokey = SrsEntryId 0
-  --           nextKey (SrsEntryId k, _) = SrsEntryId (k + 1)
+    -- f rd (AddCustomEntry nE vs) = do
+    --   let
+    --     state = (NewReview, SrsEntryStats 0 0)
+    --     itm = SrsEntry (These state state)
+    --       (Reading <$> (maybe (mainField nE)
+    --         id (NE.nonEmpty $ readingField nE)))
+    --       (Meaning <$> meaningField nE)
+    --       (ReadingNotes <$> readingNotesField nE)
+    --       (MeaningNotes <$> meaningNotesField nE)
+    --       (mainField nE)
+    --   rd &
 
-  --       rd & reviews %%~ Tree.insertTree newk itm
-  --          >>= srsKanjiVocabMap %%~ Tree.insertTree newk (NE.head vs)
-  --          >>= flippedfoldM (\v -> vocabSrsMap %%~ Tree.insertTree v newk) vs
+    f (MarkWakaru vs) = mapM_ (\e ->
+       void $ getQuickToggleWakaru
+         (QuickToggleWakaru $ Right e)) vs
 
-  --     return $ maybe rd id nrd
-
-  --   f rd (AddCustomEntry nE vs) = do
-  --     let
-  --       state = (NewReview, SrsEntryStats 0 0)
-  --       itm = SrsEntry (These state state)
-  --         (Reading <$> (maybe (mainField nE)
-  --           id (NE.nonEmpty $ readingField nE)))
-  --         (Meaning <$> meaningField nE)
-  --         (ReadingNotes <$> readingNotesField nE)
-  --         (MeaningNotes <$> meaningNotesField nE)
-  --         (mainField nE)
-  --     rd &
-
-  --   f rd (MarkWakaru vs) = rd &
-
-  -- lift $ transactSrsDB_ $
-  --   userData %%~ updateTreeM uId (flippedfoldM f fs)
-  return ()
+  mapM_ f fs
 
 matchingSurface :: [KanjiPhrase] -> Text -> Maybe KanjiPhrase
 matchingSurface ks surf = fmap fst $ headMay $ reverse (sortF comPrefixes)

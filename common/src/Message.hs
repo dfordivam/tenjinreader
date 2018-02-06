@@ -381,7 +381,9 @@ data ImportSearchFields = ImportSearchFields [(Int, NonEmpty Text)]
 
 instance WebSocketMessage AppRequest ImportSearchFields where
   type ResponseT AppRequest ImportSearchFields =
-    ([(Int, Maybe (Either SrsEntryId (NonEmpty EntryId)))])
+    ([(Text, Either () SrsEntryId)]
+     , [(NonEmpty VocabId, Text)]
+     , [NonEmpty Text])
 
 data NewEntryUserData = NewEntryUserData
   { mainField :: NonEmpty Text
@@ -390,13 +392,13 @@ data NewEntryUserData = NewEntryUserData
   , readingNotesField :: [Text]
   , meaningNotesField :: [Text]
   }
-  deriving (Generic, Show, ToJSON, FromJSON)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON)
 
 data NewEntryOp
   = AddVocabs (NonEmpty VocabId)
   | AddCustomEntry NewEntryUserData [VocabId]
   | MarkWakaru (NonEmpty VocabId)
-  deriving (Generic, Show, ToJSON, FromJSON)
+  deriving (Eq, Generic, Show, ToJSON, FromJSON)
 
 data ImportData = ImportData [NewEntryOp]
   deriving (Generic, Show, ToJSON, FromJSON)

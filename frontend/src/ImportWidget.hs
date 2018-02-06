@@ -19,6 +19,9 @@ import qualified Data.Vector as V
 import Data.Vector (Vector)
 import NLP.Japanese.Utils
 import Data.Char
+import GHCJS.DOM.Types (File, fromJSVal, liftJSM, unStringOrArrayBuffer)
+import GHCJS.DOM.EventM as DOM
+import GHCJS.DOM.FileReader
 
 separatorChoices = ((";" :: Text) =: ("SemiColon ;" :: Text))
   <> ("," =: "Comma ,")
@@ -39,6 +42,8 @@ importWidgetTop = do
 
   widgetHold (return ())
     (parseInput <$> (tagDyn d ev))
+
+  importWaniKaniVocab
   return ()
 
 parseInput (t, sep, sep2) = do
@@ -218,4 +223,95 @@ previewEntriesWidget ds = do
   --   (searchResultWidget <$> resp)
   return ()
 
--- searchResultWidget ds = do
+getTextFromFile :: (MonadWidget t m) => Event t File -> m (Event t Text)
+getTextFromFile fEv = do
+  fileReader <- liftJSM newFileReader
+  performEvent_ (fmap (\f -> readAsText fileReader (Just f) (Nothing :: Maybe Text)) fEv)
+  e <- wrapDomEvent fileReader (`DOM.on` load) . liftJSM $ do
+    v <- getResult fileReader
+    s <- mapM fromJSVal $ fmap unStringOrArrayBuffer v
+    return . fmap T.pack $ join s
+  return (fmapMaybe identity e)
+
+importWaniKaniVocab
+  :: AppMonad t m
+  => AppMonadT t m ()
+importWaniKaniVocab = do
+  files <- value <$> fileInput def
+
+  ev <- btn "btn-default" "Import"
+
+  let
+    fEv = fmapMaybe headMay (tagDyn files ev)
+  tEv <- getTextFromFile fEv
+  let
+    sep = ";"
+    sep2 = ","
+    makeReq t = ImportSearchFields $
+      zip [1..] $ catMaybes $ map getMainField ls
+      where
+        ls :: [[[Text]]]
+        ls = map (map ((map T.strip) . (T.splitOn sep2))) $
+          map (T.splitOn sep) $ filter filtLines $ T.lines t
+    filtLines t
+      | T.null t = False
+      | T.head t == '#' = False
+      | otherwise = True
+
+    getMainField :: [[Text]] -> Maybe (NonEmpty Text)
+    getMainField (_:_:f:_)
+      | all (\t -> (not $ T.any isAscii t)
+          && T.any isKanji t) f = NE.nonEmpty f
+      | otherwise = Nothing
+    getMainField _ = Nothing
+    req = makeReq <$> tEv
+
+  reqDyn <- holdDyn (ImportSearchFields []) req
+  resp <- getWebSocketResponse req
+  void $ widgetHold (return ())
+    (importSelectionWidget <$> resp)
+
+instance Ord NewEntryOp where
+  compare (AddVocabs _) (AddVocabs _) = EQ
+  compare (MarkWakaru _) (MarkWakaru _) = EQ
+  compare (MarkWakaru _) (AddVocabs _) = LT
+  compare (AddVocabs _) (MarkWakaru _) = GT
+  compare _ _ = EQ
+
+importChoices vIds = ((MarkWakaru vIds) =: ("Mark 知る"))
+  <> ((AddVocabs vIds) =: ("Add to Srs"))
+
+importSelectionWidget :: AppMonad t m
+  => ([(Text, Either () SrsEntryId)]
+     , [(NonEmpty VocabId, Text)]
+     , [NonEmpty Text])
+  -> AppMonadT t m ()
+importSelectionWidget (alreadyInDb, newEs, notFound) = do
+  let showNewEntry (vIds, mf) = el "tr" $ do
+        el "td" $ text mf
+        dd <- el "td" $ dropdown (MarkWakaru vIds)
+          (constDyn $ importChoices vIds) def
+        return $ value dd
+
+      showNotFound [] = return ()
+      showNotFound es = do
+        text "Not found in database: "
+        text $ mconcat $ intersperse ", " $ map fold es
+      showAlreadyInDb [] = return ()
+      showAlreadyInDb es = do
+        let
+          isSrs = [x | (x, Right _) <- es]
+          wakaru = [x | (x, Left _) <- es]
+        text "Already in Srs: "
+        text $ mconcat $ intersperse ", " $ isSrs
+        text "Marked Wakaru: "
+        text $ mconcat $ intersperse ", " $ wakaru
+
+  showNotFound notFound
+  showAlreadyInDb alreadyInDb
+  newEsDyn <- sequence <$> do
+    elClass "table" "table table-striped table-bordered" $ el "tbody" $
+      mapM showNewEntry newEs
+  addEv <- btn "btn-primary" "Import"
+  getWebSocketResponse $ ImportData <$> tagDyn newEsDyn addEv
+  return ()
