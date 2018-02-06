@@ -87,7 +87,7 @@ readingPane docEv = do
   return (switchPromptlyDyn (fst <$> v)
          , switchPromptlyDyn (snd <$> v))
 
-readerSettingsControls rsDef = divClass "col-sm-10 form-inline" $ divClass "" $ do
+readerSettingsControls rsDef = divClass "col-sm-12 well-lg form-inline" $ divClass "" $ do
   let
     ddConf :: _
     ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
@@ -131,10 +131,11 @@ readingPaneInt :: AppMonad t m
   -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
 readingPaneInt docEv rsDef = do
   (closeEv,fullScrEv, rsDyn) <- divClass "row" $ do
-    closeEv <- btn "btn-default btn-sm" "Close"
-    fullScrEv <- btn "btn-default btn-sm" "Full Screen"
-
-    rsDyn <- readerSettingsControls rsDef
+    rsDyn <- divClass "col-sm-9" $ readerSettingsControls rsDef
+    (closeEv, fullScrEv) <- divClass "col-sm-3" $ do
+      closeEv <- btn "btn-default btn-sm" "Close"
+      fullScrEv <- btn "btn-default btn-sm" "Full Screen"
+      return (closeEv, fullScrEv)
     return (closeEv,fullScrEv, rsDyn)
 
   getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
