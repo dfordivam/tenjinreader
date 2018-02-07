@@ -134,7 +134,7 @@ makeLenses ''SrsWidgetState
 
 data ReviewStateEvent rt
   = DoReviewEv (SrsEntryId, ActualReviewType rt, Bool)
-  | AddItemsEv [ReviewItem] Int
+  | AddItemsEv [ReviewItem] (Maybe Int)
   | UndoReview
 
 
@@ -144,7 +144,9 @@ widgetStateFun st (AddItemsEv ri pendCount) = st
   & reviewQueue %~ Map.union
      (Map.fromList $ map (\r@(ReviewItem i _ _ _) -> (i,(r, initState r))) ri)
   & resultQueue .~ Nothing
-  & reviewStats . srsReviewStats_pendingCount .~ pendCount
+  & case pendCount of
+    (Just p) -> reviewStats . srsReviewStats_pendingCount .~ p
+    Nothing -> identity
 
 widgetStateFun st (DoReviewEv (i,res,b)) = st
   & reviewQueue %~ (Map.update upF i)
@@ -211,7 +213,7 @@ syncResultWithServer rt refreshEv addEv widgetStateDyn = do
       , FetchPendingReviews <$ refreshEv
       , RetrySendResult <$ never ]
 
-  return $ uncurry AddItemsEv
+  return $ (\(a,b) -> AddItemsEv a (Just b))
     <$> fmapMaybeCheap identity sendResResp
 
 handlerSendResultEv :: ResultSyncEvent -> ResultsSyncState -> ResultsSyncState

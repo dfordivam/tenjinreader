@@ -582,7 +582,7 @@ inputFieldWidget doRecog fullASR (ri@(ReviewItem i k m r), rt) = do
       addEditEv <- divClass "col-sm-2" $ do
         ev <- btn "btn-primary" "Show/Edit details"
         newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
-        return $ (\s -> AddItemsEv [getReviewItem s] 0) <$> newSrsEntryEv
+        return $ (\s -> AddItemsEv [getReviewItem s] Nothing) <$> newSrsEntryEv
       let shiruRes = (\b -> DoReviewEv (i, rt, b)) <$>
             leftmost [True <$ shirimasu, False <$ shiranai]
       return (shiruRes , addEditEv, recog, False <$ shimesu)
