@@ -461,7 +461,7 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
       => Maybe ((Text, Maybe e) , [(Entry, VocabSrsState)])
       -> AppMonadT t m (Event t ())
     wd (Just ((s,e),es)) = (wrapper e)
-      (mapM_ (showEntry s) (orderEntries (fst) es))
+      (mapM_ (showEntry $ Just s) (orderEntries (fst) es))
     wd Nothing = return never
 
   detailsEv1 <- getWebSocketResponse $ GetVocabDetails
@@ -478,11 +478,16 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
 
   return ()
 
-showEntry surface (e, sId) = divClass "well-sm" $ do
+showEntry surfaceMB (e, sId) = divClass "well-sm" $ do
+  let
+    surface = maybe (e ^. entryReadingElements . to (NE.head)
+             . readingPhrase . to (unReadingPhrase))
+      identity surfaceMB
+
   divClass "" $ do
     elClass "span" "well-sm" $ do
       entryKanjiAndReading surface e
-    addEditSrsEntryWidget (Right $ e ^. entryUniqueId) (Just surface) sId
+    addEditSrsEntryWidget (Right $ e ^. entryUniqueId) surfaceMB sId
     openEv <- btn "btn-xs btn-primary" "Sentences"
     openSentenceWidget (surface, e ^.. entrySenses . traverse .
                          senseGlosses . traverse . glossDefinition)

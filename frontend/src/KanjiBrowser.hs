@@ -291,7 +291,7 @@ vocabListWindow req listEv = do
     lsDyn <- foldDyn fun [] (align listEv lmEv)
     divClass "" $  do
       -- NW 1.1
-      dyn $ (mapM (showEntry "")) <$> lsDyn
+      dyn $ (mapM (showEntry Nothing)) <$> lsDyn
       -- NW 1.2
     ev <- do
       showWSProcessing ev lmEv
