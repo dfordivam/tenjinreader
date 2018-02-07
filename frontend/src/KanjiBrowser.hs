@@ -245,8 +245,10 @@ kanjiDetailsWidget ev = do
   widgetHold (return()) (kanjiDetailWindow <$> (f1 <$> ev))
   vocabListWindow LoadMoreKanjiVocab (f2 <$> ev)
 
-kanjiDetailWindow :: (DomBuilder t m) => (KanjiDetails, VocabSrsState, [Text]) -> m ()
-kanjiDetailWindow (k,_,rads) = divClass "well" $ do
+kanjiDetailWindow :: AppMonad t m
+  => (KanjiDetails, VocabSrsState, [Text])
+  -> AppMonadT t m ()
+kanjiDetailWindow (k,vSt,rads) = divClass "well" $ do
   let
     maybeLabel l Nothing = return ()
     maybeLabel l (Just v) = elClass "span" "label label-default" $
@@ -259,6 +261,9 @@ kanjiDetailWindow (k,_,rads) = divClass "well" $ do
       elClass "span" "label label-default" $ do
         text "Radicals: "
         text $ T.intercalate " " $ rads
+
+      addEditSrsEntryWidget (Left $ _kanjiId k) Nothing vSt
+
       divClass "" $ do
         maybeLabel "Rank" (unRank <$> k ^. kanjiMostUsedRank)
         maybeLabel "JLPT" (unJlptLevel <$> k ^. kanjiJlptLevel)
