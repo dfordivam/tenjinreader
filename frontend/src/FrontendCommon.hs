@@ -324,7 +324,7 @@ openSentenceWidget header open = do
 
 sentenceWidgetView :: AppMonad t m
   => (Text, [Text])
-  -> ([VocabId], [(SentenceId, SentenceData, Bool)])
+  -> ([VocabId], [((Bool, SentenceId), SentenceData)])
   -> AppMonadT t m (Event t ())
 sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
   closeEvTop <- divClass "modal-header" $ do
@@ -341,34 +341,44 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
           <> ("style" =: "height: 80vh;\
               \overflow-y: auto")
 
-  vIdEvs <- elAttr "div" bodyAttr $ do
-    forM ss $ \(sId, (SentenceData sg njps), fav) -> divClass "well well-sm" $ do
-      let hasEng = not $ null njps
-          rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
-      (evs, visDyn) <- elAttr "div" rowAttr $ do
-        evs <- divClass "col-sm-11" $
-          forM sg $ \s -> do
-            renderOnePara (constDyn vIds) (constDyn 100) s
+      fg ls = Map.fromList $ ls & each . _2 %~ Just
 
-        visDyn <- divClass "col-sm-1" $ do
-          rec
-            isFav <- toggle fav tEv
-            tEv <- switchPromptly never
-              =<< (dyn ((\f -> btn "btn-xs btn-primary"
-                          (if f then "unFav" else "Fav")) <$> isFav))
-          getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
+  vIdEv <- elAttr "div" bodyAttr $ do
+    rec
+      vIdMap <- listHoldWithKey (Map.fromList ss) addMoreEv $
+        \(notFav, sId) (SentenceData sg njps) -> divClass "well well-sm" $ do
+          let hasEng = not $ null njps
+              rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
+          (evs, visDyn) <- elAttr "div" rowAttr $ do
+            evs <- divClass "col-sm-11" $
+              forM sg $ \s -> do
+                renderOnePara (constDyn vIds) (constDyn 100) s
 
-          if hasEng
-            then toggle False
-              =<< (btn "btn-xs btn-primary" "意味")
-            else return $ constDyn False
-        return (evs,visDyn)
+            visDyn <- divClass "col-sm-1" $ do
+              rec
+                isFav <- toggle (not notFav) tEv
+                tEv <- switchPromptly never
+                  =<< (dyn ((\f -> btn "btn-xs btn-primary"
+                              (if f then "unFav" else "Fav")) <$> isFav))
+              getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
 
-      when hasEng $ void $ handleVisibility True visDyn $
-        forM njps $ \t -> el "p" $ text t
-      return $ NE.toList evs
+              if hasEng
+                then toggle False
+                  =<< (btn "btn-xs btn-primary" "意味")
+                else return $ constDyn False
+            return (evs,visDyn)
 
-  let vIdEv = leftmost $ concat vIdEvs
+          when hasEng $ void $ handleVisibility True visDyn $
+            forM njps $ \t -> el "p" $ text t
+          return $ NE.toList evs
+
+      loadMoreEv <- do
+        showWSProcessing loadMoreEv addMoreEv
+        btn "btn-block btn-primary" "Load More"
+      addMoreEv <- fmap fg <$> getWebSocketResponse
+        (LoadMoreSentences vIds <$> tagDyn ((map snd) . Map.keys <$> vIdMap) loadMoreEv)
+
+    return $ switchPromptlyDyn ((leftmost . concat . Map.elems) <$> vIdMap)
 
   showVocabDetailsWidget vIdEv
   return closeEvTop

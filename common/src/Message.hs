@@ -71,6 +71,7 @@ type AppRequest
 
   :<|> GetVocabDetails
   :<|> GetVocabSentences
+  :<|> LoadMoreSentences
   :<|> ToggleSentenceFav
 
   :<|> ImportSearchFields
@@ -366,7 +367,15 @@ data GetVocabSentences = GetVocabSentences (Either VocabId SrsEntryId)
 
 instance WebSocketMessage AppRequest GetVocabSentences where
   type ResponseT AppRequest GetVocabSentences =
-    ([VocabId], [(SentenceId, SentenceData, Bool)])
+    ([VocabId], [((Bool, SentenceId), SentenceData)])
+
+----------------------------------------------------------------
+data LoadMoreSentences = LoadMoreSentences [VocabId] [SentenceId]
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest LoadMoreSentences where
+  type ResponseT AppRequest LoadMoreSentences =
+    [((Bool, SentenceId), SentenceData)]
 
 ----------------------------------------------------------------
 data ToggleSentenceFav = ToggleSentenceFav SentenceId

@@ -374,30 +374,37 @@ getVocabDetails (GetVocabDetails eIds) = do
 
 
 getVocabSentences :: GetVocabSentences
-  -> WsHandlerM ([VocabId], [(SentenceId, SentenceData, Bool)])
+  -> WsHandlerM ([VocabId], [((Bool, SentenceId), SentenceData)])
 getVocabSentences (GetVocabSentences svId) = do
-  vocabSentenceDb <- lift $ asks appVocabSentenceDb
-  sentenceDb <- lift $ asks appSentenceDb
-
   eId <- case svId of
     (Left eId) -> return $ Just eId
     (Right sId) -> transactReadOnlySrsDB $ \rd ->
       Tree.lookupTree sId (rd ^. srsKanjiVocabMap)
         >>= mapM (\e -> return $ either (const Nothing) Just e)
         >>= (\x -> return $ join x)
-  favSet <- transactReadOnlySrsDB (pure . view favouriteSentences)
 
+  ss <- getLoadMoreSentences (LoadMoreSentences (maybeToList eId) [])
+  return (maybeToList eId, ss)
+
+getLoadMoreSentences :: LoadMoreSentences
+  -> WsHandlerM [((Bool, SentenceId), SentenceData)]
+getLoadMoreSentences (LoadMoreSentences [] _) = return []
+getLoadMoreSentences (LoadMoreSentences (eId:_) alreadySent) = do
+  vocabSentenceDb <- lift $ asks appVocabSentenceDb
+  sentenceDb <- lift $ asks appSentenceDb
+  favSet <- transactReadOnlySrsDB (pure . view favouriteSentences)
   let
     ss = maybe [] (catMaybes . map g) (f <$> sSetMB)
 
-    f sSet = take 20 (favs ++ others)
+    f allSet = take 10 $ (favs ++ others)
       where
+        sSet = Set.difference allSet (Set.fromList alreadySent)
         favs = (\i -> (i,True)) <$> (Set.toList $ Set.intersection favSet sSet)
         others = (\i -> (i,False)) <$> (Set.toList $ Set.difference sSet favSet)
 
-    g (sId,b) = (,,) <$> pure sId <*> arrayLookupMaybe sentenceDb sId <*> pure b
-    sSetMB = join ((\i -> Map.lookup i vocabSentenceDb) <$> eId)
-  return (maybeToList eId, ss)
+    g (sId,b) = (,) <$> pure (not b, sId) <*> arrayLookupMaybe sentenceDb sId
+    sSetMB = Map.lookup eId vocabSentenceDb
+  return (ss)
 
 getToggleSentenceFav :: ToggleSentenceFav
   -> WsHandlerM ()
