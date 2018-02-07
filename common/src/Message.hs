@@ -367,7 +367,7 @@ data GetVocabSentences = GetVocabSentences (Either VocabId SrsEntryId)
 
 instance WebSocketMessage AppRequest GetVocabSentences where
   type ResponseT AppRequest GetVocabSentences =
-    ([VocabId], [((Bool, SentenceId), SentenceData)])
+    ([VocabId], [((Bool, SentenceId), SentenceData)]) -- Bool -> not favourite
 
 ----------------------------------------------------------------
 data LoadMoreSentences = LoadMoreSentences [VocabId] [SentenceId]
@@ -375,7 +375,7 @@ data LoadMoreSentences = LoadMoreSentences [VocabId] [SentenceId]
 
 instance WebSocketMessage AppRequest LoadMoreSentences where
   type ResponseT AppRequest LoadMoreSentences =
-    [((Bool, SentenceId), SentenceData)]
+    [((Bool, SentenceId), SentenceData)] -- Bool -> not favourite
 
 ----------------------------------------------------------------
 data ToggleSentenceFav = ToggleSentenceFav SentenceId

@@ -346,6 +346,7 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
   vIdEv <- elAttr "div" bodyAttr $ do
     rec
       vIdMap <- listHoldWithKey (Map.fromList ss) addMoreEv $
+        -- The notFav in key puts the favourite sentences first
         \(notFav, sId) (SentenceData sg njps) -> divClass "well well-sm" $ do
           let hasEng = not $ null njps
               rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
