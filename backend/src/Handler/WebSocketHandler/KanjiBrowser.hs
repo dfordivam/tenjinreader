@@ -27,6 +27,7 @@ import Data.BTree.Alloc (AllocM, AllocReaderM)
 import qualified Data.Array as A
 import Data.Array (Array)
 import Mecab
+import Radicals
 
 searchResultCount = 20
 
@@ -134,11 +135,14 @@ getLoadMoreKanjiResults _ = do
 getKanjiDetails :: GetKanjiDetails -> WsHandlerM (Maybe KanjiSelectionDetails)
 getKanjiDetails (GetKanjiDetails kId _) = do
   kanjiDb <- lift $ asks appKanjiDb
+  radicalDb <- lift $ asks appRadicalDb
   let kd = arrayLookupMaybe kanjiDb kId
+      rads = maybe [] ((map (\(RadicalDetails t _) -> t)) . catMaybes
+                        . (map (\i -> Map.lookup i radicalTable))
+          . Set.toList . _kanjiRadicalSet) kd
 
       keys = maybe [] (Set.toList . _kanjiVocabSet) kd
 
-  uId <- asks currentUserId
   rs <- transactReadOnlySrsDB $ \rd ->
     getVocabSrsState <$> Tree.lookupTree kId (rd ^. kanjiSrsMap)
 
@@ -146,8 +150,8 @@ getKanjiDetails (GetKanjiDetails kId _) = do
 
   asks kanjiVocabResult >>= \ref ->
     liftIO $ writeIORef ref (keys, searchResultCount)
-  return $ KanjiSelectionDetails <$> kd ^? _Just . kanjiDetails
-    <*> pure rs <*> pure vs
+  return $ KanjiSelectionDetails <$> ((,,) <$> kd ^? _Just . kanjiDetails
+    <*> pure rs <*> pure rads) <*> pure vs
 
 loadVocabList keys = do
   vocabDb <- lift $ asks appVocabDb

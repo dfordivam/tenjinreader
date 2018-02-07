@@ -240,32 +240,34 @@ kanjiDetailsWidget
   :: AppMonad t m
   => Event t KanjiSelectionDetails -> AppMonadT t m ()
 kanjiDetailsWidget ev = do
-  let f1 (KanjiSelectionDetails k s v) = k
-  let f2 (KanjiSelectionDetails k s v) = v
+  let f1 (KanjiSelectionDetails k v) = k
+  let f2 (KanjiSelectionDetails k v) = v
   widgetHold (return()) (kanjiDetailWindow <$> (f1 <$> ev))
   vocabListWindow LoadMoreKanjiVocab (f2 <$> ev)
 
-kanjiDetailWindow :: (DomBuilder t m) => KanjiDetails -> m ()
-kanjiDetailWindow k = do
-  elClass "table" "table" $ el "tbody" $ do
-    el "tr" $ do
-      el "td" $ do
-        elClass "i" "" $
-          text (unKanji $ k ^. kanjiCharacter)
-      el "td" $ do
-        text "Radicals here"
+kanjiDetailWindow :: (DomBuilder t m) => (KanjiDetails, VocabSrsState, [Text]) -> m ()
+kanjiDetailWindow (k,_,rads) = divClass "well" $ do
+  let
+    maybeLabel l Nothing = return ()
+    maybeLabel l (Just v) = elClass "span" "label label-default" $
+      text l >> text ": " >> text (tshow v)
 
-    el "tr" $ do
-      el "td" $ do
-        text $ T.intercalate "," $ map unMeaning $
-          k ^. kanjiMeanings
+  divClass "row" $ do
+    divClass "col-sm-4" $ el "h1" $ elClass "span" "label label-default" $
+      text (unKanji $ k ^. kanjiCharacter)
+    divClass "col-sm-8" $ do
+      elClass "span" "label label-default" $ do
+        text "Radicals: "
+        text $ T.intercalate " " $ rads
+      divClass "" $ do
+        maybeLabel "Rank" (unRank <$> k ^. kanjiMostUsedRank)
+        maybeLabel "JLPT" (unJlptLevel <$> k ^. kanjiJlptLevel)
+        maybeLabel "WaniKani Lvl" (unWkLevel <$> k ^. kanjiWkLevel)
 
-      el "td" $ do
-        textMay (tshow <$> (unRank <$> k ^. kanjiMostUsedRank))
-
-      -- divClass "" $ do
-      --   textMay (unOnYomiT <$> on)
-      --   textMay (unKunYomiT <$> ku)
+      divClass "" $
+        text $ T.intercalate ", " $
+          map (\m -> T.unwords $ T.words m & _head  %~ capitalize) $
+          map unMeaning $ k ^. kanjiMeanings
 
 vocabListWindow
   :: (AppMonad t m

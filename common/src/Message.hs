@@ -130,7 +130,7 @@ data VocabSrsState
 type VocabList = [(Entry, VocabSrsState)]
 
 data KanjiSelectionDetails =
-  KanjiSelectionDetails KanjiDetails VocabSrsState VocabList
+  KanjiSelectionDetails (KanjiDetails, VocabSrsState, [Text]) VocabList
   deriving (Generic, Show, ToJSON, FromJSON)
 
 data LoadMoreKanjiVocab = LoadMoreKanjiVocab
