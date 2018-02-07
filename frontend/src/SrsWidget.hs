@@ -401,12 +401,20 @@ getRevItemDyn :: _
   -> Event t ()
   -> m (Dynamic t (Maybe (ReviewItem, ActualReviewType rt)))
 getRevItemDyn widgetStateDyn ev = do
-  v <- performEvent $ ffor (tagDyn widgetStateDyn ev) $ \st -> do
-    rss <- liftIO $ getRandomItems (Map.toList (_reviewQueue st)) 1
-    toss <- liftIO $ randomIO
-    return $ (\(_,(ri,rt)) -> (ri, getRandomRT ri rt toss)) <$> (headMay rss)
+  rec
+    v <- performEvent $ ffor (tagDyn ((,) <$> riDyn <*> widgetStateDyn) ev) $
+      \(last, st) -> do
+        let
+          allrs = (Map.toList (_reviewQueue st))
+          rs | length allrs > 1 = maybe allrs
+               (\(l,_) -> filter (\r -> (_reviewItemId l) /= (fst r)) allrs) last
+             | otherwise = allrs
+        rss <- liftIO $ getRandomItems rs 1
+        toss <- liftIO $ randomIO
+        return $ (\(_,(ri,rt)) -> (ri, getRandomRT ri rt toss)) <$> (headMay rss)
 
-  holdDyn Nothing v
+    riDyn <- holdDyn Nothing v
+  return riDyn
 
 
 getRandomItems :: [a] -> Int -> IO [a]

@@ -89,9 +89,9 @@ viewList lss = do
   elClass "table" "table table-striped" $ do
     el "thead" $ do
       el "tr" $ do
-        el "th" $ text "題名"
-        el "th" $ text "内容"
-        el "th" $ text ""
+        elClass "th" "col-sm-3" $ text "題名"
+        elClass "th" "col-sm-7" $ text "内容"
+        elClass "th" "col-sm-2" $ text ""
     el "tbody" $  do
       forM lss $ \(i, t, c) -> do
         el "tr" $ do
