@@ -59,14 +59,29 @@ type instance AppUserData OldDb = AppUserDataTreeOld OldDb
 
 data AppUserDataTreeOld t = AppUserDataTreeOld
   { _reviewsOld :: Tree SrsEntryId SrsEntry
-  , _readerDocumentsOld :: Tree ReaderDocumentId (ReaderDocument t)
+  , _readerDocumentsOld :: Tree ReaderDocumentId (ReaderDocument OldDb)
   , _kanjiSrsMapOld :: Tree KanjiId (Either () SrsEntryId)
   , _vocabSrsMapOld :: Tree VocabId (Either () SrsEntryId)
   -- An Srs Item may not have an entry in this map
   , _srsKanjiVocabMapOld :: Tree SrsEntryId (Either KanjiId VocabId)
   , _readerSettingsOld :: ReaderSettings t
+  , _favouriteSentencesOld :: Set SentenceId
+  , _documentAccessOrderOld :: [ReaderDocumentId]
   } deriving (Generic, Show, Typeable, Binary, Value)
 
+type instance ReaderDocument OldDb = ReaderDocumentTreeOld
+
+data ReaderDocumentTreeOld = ReaderDocumentOld
+  { _readerDocIdOld :: ReaderDocumentId
+  , _readerDocTitleOld :: Text
+  , _readerDocContentOld :: AnnotatedDocument
+  , _readerDocProgressOld :: (Int, Maybe Int) -- (Para, offset)
+  }
+  deriving (Generic, Show, Value, Binary)
+
+
+instance Value (Set SentenceId)
+instance Value (AnnotatedDocument)
 deriving instance Root (AppUserDataTreeOld OldDb)
 makeLenses ''AppUserDataTreeOld
 
@@ -114,7 +129,9 @@ migrateFun dbOld db = do
                , (d ^. kanjiSrsMapOld)
                , (d ^. vocabSrsMapOld)
                , (d ^. srsKanjiVocabMapOld)
-               , (d ^. readerSettingsOld))
+               , (d ^. readerSettingsOld)
+               , (d ^. favouriteSentencesOld)
+               , (d ^. documentAccessOrderOld))
                &   (_1 %%~ Tree.toList)
                >>= (_2 %%~ Tree.toList)
                >>= (_3 %%~ Tree.toList)
@@ -127,13 +144,13 @@ migrateFun dbOld db = do
       runNewDb $ transact $ \_ -> do
         newD <- AppUserDataTree
           <$> (Tree.fromList $ d ^. _1)
-          <*> (Tree.fromList $ coerce (d ^. _2))
+          <*> pure (Tree.empty)
           <*> (Tree.fromList $ d ^. _3)
           <*> (Tree.fromList $ d ^. _4)
           <*> (Tree.fromList $ d ^. _5)
           <*> pure (coerce (d ^. _6))
-          <*> pure (Set.empty)
-          <*> pure (map fst $ d ^. _2)
+          <*> pure (d ^. _7)
+          <*> pure ([])
 
         commit () (UserConcurrentDb newD)
 

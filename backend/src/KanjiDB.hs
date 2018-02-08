@@ -68,6 +68,10 @@ type SentenceDb = Array SentenceId SentenceData
 
 type VocabSentenceDb = Map EntryId (Set SentenceId)
 
+type BooksDb = Array BookId (Text, AnnotatedDocument)
+
+type ArticlesDb = Array ArticleId (Text, AnnotatedDocument)
+
 -- Sentence db
 -- Each sentence -> [Vocab] / [Entry]
 -- Entry -> [Sentence]
@@ -166,12 +170,16 @@ instance Binary SenseField
 instance Value SenseField
 
 instance Binary SentenceId
+instance Binary BookId
+instance Binary ArticleId
 instance Binary SentenceData
 instance Value SentenceId
 deriving instance Ix SentenceId
 deriving instance Ix RadicalId
 deriving instance Ix EntryId
 deriving instance Ix KanjiId
+deriving instance Ix BookId
+deriving instance Ix ArticleId
 makeLenses ''KanjiData
 makeLenses ''VocabData
 --
@@ -456,21 +464,13 @@ vocabSearchRankParamsNG =
 
 getSentenceDbs parseF sFp linkFp = do
   let binFile = "sentencedb.bin"
-  ex <- doesFileExist binFile
-  if ex
-    then do
-      bs <- Data.ByteString.Lazy.readFile binFile
-      return $ Data.Binary.decode bs
-    else do
-      ret <- getSentenceDbsInt parseF sFp linkFp
-      Data.ByteString.Lazy.writeFile binFile (Data.Binary.encode ret)
-      return ret
+  readDbOrCreate binFile $ createSentenceDbs parseF sFp linkFp
 
-getSentenceDbsInt :: (Text -> IO AnnotatedDocument)
+createSentenceDbs :: (Text -> IO AnnotatedDocument)
   -> Text
   -> Text
   -> IO (SentenceDb, VocabSentenceDb)
-getSentenceDbsInt parseF sFp linkFp = do
+createSentenceDbs parseF sFp linkFp = do
   sT <- T.readFile $ T.unpack sFp
   linkT <- T.readFile $ T.unpack linkFp
 
@@ -548,3 +548,36 @@ getVocabSentenceDb m (sId, s) = foldl' (flip (Map.alter f)) m es
     es = s ^.. sentenceContents . traverse . traverse . _Right . _2 . traverse
     f Nothing = Just $ Set.singleton sId
     f (Just s) = Just $ Set.insert sId s
+
+getBooksDb :: (Text -> IO AnnotatedDocument)
+  -> IO BooksDb
+getBooksDb parseF =
+  readDbOrCreate "booksdb.bin" (createBooksArticleDb parseF "books" BookId)
+
+getArticlesDb :: (Text -> IO AnnotatedDocument)
+  -> IO ArticlesDb
+getArticlesDb parseF =
+  readDbOrCreate "articlesdb.bin" (createBooksArticleDb parseF "articles" ArticleId)
+
+createBooksArticleDb parseF dirP c = do
+  files <- listDirectory dirP
+  let
+    p f = do
+      t <- T.readFile (dirP <> "/" <> f)
+      ad <- parseF t
+      let title = T.replace "_" " " $ snd $ T.breakOn "_" $ T.pack f
+      return (title, ad)
+  vs <- mapM p files
+  return $ makeArray $ zip (map c [1..]) vs
+
+readDbOrCreate :: (Binary a) => FilePath -> IO a -> IO a
+readDbOrCreate binFile createF = do
+  ex <- doesFileExist binFile
+  if ex
+    then do
+      bs <- Data.ByteString.Lazy.readFile binFile
+      return $ Data.Binary.decode bs
+    else do
+      ret <- createF
+      Data.ByteString.Lazy.writeFile binFile (Data.Binary.encode ret)
+      return ret

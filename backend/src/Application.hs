@@ -81,6 +81,10 @@ makeFoundation appSettings = do
       getSentenceDbs (parseAndSearch appVocabDb appVocabSearchEngNoGloss appMecabPtr)
         (appSentenceCsvPath appSettings) (appLinksCsvPath appSettings)
 
+    appBooksDb <- getBooksDb
+      (parseAndSearch appVocabDb appVocabSearchEngNoGloss appMecabPtr)
+    appArticlesDb <- getArticlesDb
+      (parseAndSearch appVocabDb appVocabSearchEngNoGloss appMecabPtr)
     -- We need a log function to create a connection pool. We need a connection
     -- pool to create our foundation. And we need our foundation to get a
     -- logging function. To get out of this loop, we initially create a

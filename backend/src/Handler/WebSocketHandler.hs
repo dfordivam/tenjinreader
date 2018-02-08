@@ -74,6 +74,8 @@ wsHandler = HandlerWrapper $
 
   :<&> h getAddOrEditDocument
   :<&> h getListDocuments
+  :<&> h getListBooks
+  :<&> h getListArticles
   :<&> h getViewDocument
   :<&> h getViewRawDocument
   :<&> h getDeleteDocument

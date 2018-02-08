@@ -245,7 +245,11 @@ getAddOrEditDocument :: AddOrEditDocument
   -> WsHandlerM (Maybe (ReaderDocumentData))
 getAddOrEditDocument (AddOrEditDocument dId title t) = do
   c <- lift $ makeReaderDocumentContent t
+  addEditNewDocumentCommon dId (MyDocument title c)
 
+addEditNewDocumentCommon dId docContent = do
+  booksDb <- lift $ asks appBooksDb
+  articlesDb <- lift $ asks appArticlesDb
   let
     upFun :: (AllocM m)
       => AppUserDataTree CurrentDb
@@ -260,9 +264,9 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
             = ReaderDocumentId (k + 1)
 
           docId = maybe newk id dId
-          nd = ReaderDocument docId title c (0,Nothing)
+          nd = ReaderDocument docId docContent (0,Nothing)
 
-      put $ Just (getReaderDocumentData nd Nothing)
+      put $ Just (getReaderDocumentData booksDb articlesDb nd Nothing)
       lift $ rd &
         readerDocuments %%~ Tree.insertTree docId nd
         >>= documentAccessOrder %%~ (\ol -> return $ newk : (List.delete newk ol))
@@ -278,21 +282,49 @@ getQuickAnalyzeText (QuickAnalyzeText t) = do
 getListDocuments :: ListDocuments
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]
 getListDocuments _ = do
+  booksDb <- lift $ asks appBooksDb
+  articlesDb <- lift $ asks appArticlesDb
   ds <- transactReadOnlySrsDB $ \rd -> do
     let dl = take 20 $ rd ^. documentAccessOrder
     catMaybes <$> mapM (\i -> Tree.lookupTree i (rd ^. readerDocuments)) dl
 
-  let f (ReaderDocument i t c _) = (i,t,p c)
-      p c = T.take 50 (foldl' fol "" c)
+  let
+    f (ReaderDocument i (MyDocument t c) _) = Just (i,t, getAnnDocContent c)
+    f (ReaderDocument i (Book bId) _) = (\(t,c) -> (i,t, getAnnDocContent c)) <$>
+      (arrayLookupMaybe booksDb bId)
+    f (ReaderDocument i (Article aId) _) = (\(t,c) -> (i,t, getAnnDocContent c)) <$>
+      (arrayLookupMaybe articlesDb aId)
+  return $ catMaybes $ map f ds
+
+getAnnDocContent c = T.take 50 (foldl' fol "" c)
+  where
       fol t ap = t <> (mconcat $ map getT ap)
       getT (Left t) = t
       getT (Right (v,_,_)) = vocabToText v
 
-  return $ map f ds
+getListBooks :: ListBooks
+  -> WsHandlerM [(BookId, Text, Text)]
+getListBooks _ = do
+  booksDb <- lift $ asks appBooksDb
+  let
+    xs = take 20 $ A.assocs booksDb
+  return (map (\(i,(t,c)) -> (i,t, getAnnDocContent c)) xs)
+
+
+getListArticles :: ListArticles
+  -> WsHandlerM [(ArticleId, Text, Text)]
+getListArticles _ = do
+  db <- lift $ asks appArticlesDb
+  let
+    xs = take 20 $ A.assocs db
+  return (map (\(i,(t,c)) -> (i,t, getAnnDocContent c)) xs)
 
 getViewDocument :: ViewDocument
   -> WsHandlerM (Maybe (ReaderDocumentData))
 getViewDocument (ViewDocument i paraNum) = do
+  booksDb <- lift $ asks appBooksDb
+  articlesDb <- lift $ asks appArticlesDb
+
   s <- transactReadOnlySrsDB $ \rd ->
     Tree.lookupTree i (rd ^. readerDocuments)
 
@@ -301,7 +333,7 @@ getViewDocument (ViewDocument i paraNum) = do
 
   let
     ret :: Maybe ReaderDocumentData
-    ret = flip getReaderDocumentData paraNum <$> s
+    ret = flip (getReaderDocumentData booksDb articlesDb) paraNum <$> s
 
   transactReadOnlySrsDB $ \rd -> do
     let
@@ -313,12 +345,26 @@ getViewDocument (ViewDocument i paraNum) = do
         return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
     ret & _Just . _5 . each . _2 . each . _Right %%~ f
 
-getReaderDocumentData r paraNum = (r ^. readerDocId, r ^. readerDocTitle
-                                  , p, endParaNum, slice)
+getViewDocument req = do
+  let
+    c = case req of
+      (ViewBook i) -> Book i
+      (ViewArticle i) -> Article i
+
+  addEditNewDocumentCommon Nothing c
+
+getReaderDocumentData booksDb articlesDb r paraNum =
+  (r ^. readerDocId, title, p, endParaNum, slice)
   where
-    slice = zip [startI..] $ V.toList $ V.slice startI len $ r ^. readerDocContent
+    (title, c) = case r ^. readerDoc of
+      (MyDocument t c) -> (t,c)
+      (Book i) -> maybe empVec id $ arrayLookupMaybe booksDb i
+      (Article i) -> maybe empVec id $ arrayLookupMaybe articlesDb i
+    empVec :: (Text, AnnotatedDocument)
+    empVec = ("", V.singleton [Left "error"])
+    slice = zip [startI..] $ V.toList $ V.slice startI len $ c
     len = min (totalLen - startI) 60
-    totalLen = (V.length $ r ^. readerDocContent)
+    totalLen = (V.length $ c)
     startI = maybe (max 0 (fst p - 20)) (\p -> min p (totalLen - 1)) paraNum
     p = r ^. readerDocProgress
     endParaNum = totalLen - 1
@@ -332,15 +378,15 @@ getViewRawDocument (ViewRawDocument i) = do
       getText ap = mconcat $ map getT ap
       getT (Left t) = t
       getT (Right (v,_,_)) = vocabToText v
-  return $ (\r -> (i, r ^. readerDocTitle
-                  , r ^. readerDocContent . to (combineToText)))
-                  <$> s
+      f (MyDocument t c) = Just (i, t, combineToText c)
+      f _ = Nothing
+  return $ f . _readerDoc =<< s
 
 getDeleteDocument :: DeleteDocument
   -> WsHandlerM [(ReaderDocumentId, Text, Text)]
 getDeleteDocument (DeleteDocument dId) = do
   transactSrsDB_ $ (readerDocuments %%~ Tree.deleteTree dId)
-  getListDocuments ListDocuments
+  getListDocuments (ListDocuments Nothing)
 
 getReaderSettings :: GetReaderSettings
   -> WsHandlerM (ReaderSettings CurrentDb)

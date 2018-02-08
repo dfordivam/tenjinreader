@@ -48,6 +48,8 @@ data App = App
     , appVocabDb     :: VocabDb
     , appRadicalDb   :: RadicalDb
     , appSentenceDb  :: SentenceDb
+    , appBooksDb     :: BooksDb
+    , appArticlesDb     :: ArticlesDb
     , appVocabSentenceDb :: VocabSentenceDb
     , appMecabPtr    :: MeCab
     , appKanjiSearchEng :: KanjiSearchEngine

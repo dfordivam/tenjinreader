@@ -69,6 +69,25 @@ instance Value (AppUserDataTree OldDb)
 instance Show (AppUserDataTree CurrentDb)
 instance Show (AppUserDataTree OldDb)
 
+type family ReaderDocument t
+type instance ReaderDocument CurrentDb = ReaderDocumentTree CurrentDb
+
+data ReaderDocumentTree t = ReaderDocument
+  { _readerDocId :: ReaderDocumentId
+  , _readerDoc :: ReaderDocumentType t
+  , _readerDocProgress :: (Int, Maybe Int) -- (Para, offset)
+  }
+  deriving (Generic, Show)
+
+type family ReaderDocumentType t
+type instance ReaderDocumentType t = ReaderDocumentTypeCurrent
+
+data ReaderDocumentTypeCurrent
+  = MyDocument Text AnnotatedDocument
+  | Book BookId
+  | Article ArticleId
+  deriving (Generic, Show)
+
 openUserDB :: FilePath -> IO (ConcurrentDb UserConcurrentDb, ConcurrentHandles)
 openUserDB fp =
   flip runFileStoreT defFileStoreConfig $
@@ -106,6 +125,7 @@ instance Binary ReaderDocumentId
 instance Value ReaderDocumentId
 instance Binary (ReaderDocumentTree t)
 instance (Typeable t) => Value (ReaderDocumentTree t)
+instance Binary (ReaderDocumentTypeCurrent)
 -- instance Binary (ReaderDocumentOldTree t)
 -- instance (Typeable t) => Value (ReaderDocumentOldTree t)
 
@@ -118,3 +138,4 @@ instance Key KanjiId
 instance Key VocabId
 
 makeLenses ''AppUserDataTree
+makeLenses ''ReaderDocumentTree
