@@ -86,7 +86,7 @@ data ReaderDocumentTypeCurrent
   = MyDocument Text AnnotatedDocument
   | Book BookId
   | Article ArticleId
-  deriving (Generic, Show)
+  deriving (Generic, Show, Eq)
 
 openUserDB :: FilePath -> IO (ConcurrentDb UserConcurrentDb, ConcurrentHandles)
 openUserDB fp =

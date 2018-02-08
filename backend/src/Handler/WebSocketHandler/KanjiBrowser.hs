@@ -346,12 +346,20 @@ getViewDocument (ViewDocument i paraNum) = do
     ret & _Just . _5 . each . _2 . each . _Right %%~ f
 
 getViewDocument req = do
+  rs <- transactReadOnlySrsDB $ \rd ->
+    Tree.toList (rd ^. readerDocuments)
   let
     c = case req of
       (ViewBook i) -> Book i
       (ViewArticle i) -> Article i
+    f (_,(ReaderDocument _ d _)) = d == c
 
-  addEditNewDocumentCommon Nothing c
+  case (headMay $ filter f rs) of
+    (Just r) ->
+      getViewDocument (ViewDocument (fst r) Nothing)
+    Nothing ->
+      addEditNewDocumentCommon Nothing c
+
 
 getReaderDocumentData booksDb articlesDb r paraNum =
   (r ^. readerDocId, title, p, endParaNum, slice)
