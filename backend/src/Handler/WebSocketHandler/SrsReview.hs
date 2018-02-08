@@ -384,7 +384,9 @@ makeSrsEntry v surface = do
       return $ TRM <$> f <*> r <*> m
 
   let get (TRM f r m) = SrsEntry
-        { _reviewState = These state state
+        { _reviewState = case v of
+            (Left _) -> This state
+            (Right _) -> These state state
           , _readings = r
           , _meaning  = m
           , _readingNotes = Nothing
