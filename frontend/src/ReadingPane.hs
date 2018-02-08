@@ -146,36 +146,6 @@ readingPaneInt docEv rsDef = do
     (verticalReader rsDyn fullScrEv <$> docEv)
   return (closeEv, never)
 
--- Display the complete document in one page
-readingPaneView :: AppMonad t m
-  => (ReaderDocument CurrentDb)
-  -> AppMonadT t m ()
-readingPaneView (ReaderDocument _ title annText _) = do
-  fontSizeDD <- dropdown 100 (constDyn fontSizeOptions) def
-  rubySizeDD <- dropdown 120 (constDyn fontSizeOptions) def
-  lineHeightDD <- dropdown 150 (constDyn lineHeightOptions) def
-  let divAttr = (\s l -> "style" =: ("font-size: " <> tshow s <>"%;"
-        <> "line-height: " <> tshow l <> "%;"))
-        <$> (value fontSizeDD) <*> (value lineHeightDD)
-
-  rec
-    let
-      -- vIdEv :: Event t ([VocabId], Text)
-      vIdEv = leftmost $ V.toList vIdEvs
-
-    vIdDyn <- holdDyn [] (fmap fst vIdEv)
-
-    vIdEvs <- elDynAttr "div" divAttr $ do
-      rec
-        (resEv,v) <- resizeDetector $ do
-          el "h3" $ text title
-          V.mapM (renderOnePara vIdDyn (value rubySizeDD)) annText
-      return v
-
-  showVocabDetailsWidget vIdEv
-  return ()
-
-
 ----------------------------------------------------------------------------------
 -- Vertical rendering
 

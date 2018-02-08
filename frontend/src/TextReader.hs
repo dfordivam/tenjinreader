@@ -17,6 +17,7 @@ import qualified Data.Map as Map
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Vector as V
+import Reflex.EventWriter
 
 data TextReaderWidgetView
   = ListOfDocumentsView
@@ -56,29 +57,98 @@ documentListViewer
   -> AppMonadT t m (Event t (ReaderDocumentData)
                    , Event t (Maybe (ReaderDocumentId, Text, Text)))
 documentListViewer refreshEv = do
+  (_, evAll) <- runEventWriterT $
+    tabDisplayUI identity "nav navbar-tabs" "active" "" $
+    Map.fromList
+      [ (1, ("Reading List", myDocumentsListViewer refreshEv))
+      , (2, ("Books", booksListViewer))
+      , (3, ("Articles", articlesListViewer))]
+
+  return $ (fmapMaybe (headMay . lefts) evAll
+           , fmapMaybe (headMay . rights) evAll)
+
+type ListViewTabsM t m a =
+  EventWriterT t
+    [Either (ReaderDocumentData)
+     (Maybe (ReaderDocumentId, Text, Text))]
+    (AppMonadT t m) a
+
+myDocumentsListViewer
+  :: forall t m . AppMonad t m
+  => Event t () -- refresh
+  -> ListViewTabsM t m ()
+myDocumentsListViewer refreshEv = do
   ev <- getPostBuild
   listEv <- getWebSocketResponse
-    (ListDocuments <$ (leftmost [ev,refreshEv]))
-
+    (ListDocuments Nothing <$ (leftmost [ev,refreshEv]))
   newDocEv <- btn "btn-info btn-block" "新作"
+
   rec
     showWSProcessing deleteEv delDone
-    evDyn <- widgetHold (return [])
+    evDyn <- lift $ widgetHold (return [])
       (viewList <$> (leftmost [listEv, delDone]))
     let
       deleteEv :: Event t DeleteDocument
       deleteEv = switchPromptlyDyn (leftmost <$> ((map (snd . snd)) <$> evDyn))
-    delDone <- getWebSocketResponse deleteEv
+    delDone <- lift $ getWebSocketResponse deleteEv
 
   let
     viewEv :: Event t ViewDocument
     viewEv = switchPromptlyDyn (leftmost <$> ((map fst) <$> evDyn))
     viewRawEv = switchPromptlyDyn (leftmost <$> ((map (fst . snd)) <$> evDyn))
 
-  editEv <- getWebSocketResponse viewRawEv
-  resp <- getWebSocketResponse viewEv
-  return $ (fmapMaybe identity resp
-           , leftmost [Nothing <$ newDocEv, editEv])
+  editEv <- lift $ getWebSocketResponse viewRawEv
+  resp <- lift $ getWebSocketResponse viewEv
+
+  tellEvent ((\e -> [Left e]) <$> fmapMaybe identity resp)
+  tellEvent ((\e -> [Right e]) <$> editEv)
+  tellEvent ([Right Nothing] <$ newDocEv)
+
+  return ()
+
+booksListViewer
+  :: forall t m . AppMonad t m
+  => ListViewTabsM t m ()
+booksListViewer = viewerCommon ListBooks ViewBook
+
+articlesListViewer
+  :: forall t m . AppMonad t m
+  => ListViewTabsM t m ()
+articlesListViewer = viewerCommon ListArticles ViewArticle
+
+viewerCommon
+  :: forall t m req i . (AppMonad t m
+                        , WebSocketMessage AppRequest req
+                        , ResponseT AppRequest req ~ [(i, Text, Text)])
+  => (Maybe Int -> req)
+  -> (i -> ViewDocument)
+  -> ListViewTabsM t m ()
+viewerCommon fetchF viewDocF = do
+  ev <- getPostBuild
+  listEv <- getWebSocketResponse (fetchF Nothing <$ ev)
+
+  let
+    viewF lss = do
+      elClass "table" "table table-striped" $ do
+        el "thead" $ do
+          el "tr" $ do
+            elClass "th" "col-sm-3" $ text "題名"
+            elClass "th" "col-sm-7" $ text "内容"
+        el "tbody" $  do
+          forM lss $ \(i, t, c) -> do
+            el "tr" $ do
+              (e1,_) <- el' "td" $ text t
+              (e2,_) <- el' "td" $ text c
+              return (viewDocF i
+                        <$ (leftmost [domEvent Click e1, domEvent Click e2]))
+  evDyn <- widgetHold (return [])
+                (viewF <$> listEv)
+
+  let
+    viewEv :: Event t ViewDocument
+    viewEv = switchPromptlyDyn (leftmost <$> evDyn)
+  resp <- lift $ getWebSocketResponse viewEv
+  tellEvent ((\e -> [Left e]) <$> fmapMaybe identity resp)
 
 viewList :: (AppMonad t m)
   => [(ReaderDocumentId, Text, Text)]
@@ -119,12 +189,6 @@ documentEditor editEv = divClass "" $ do
 
     titleSetEv = editEv & mapped %~ (maybe "" (view _2))
     contentSetEv = editEv & mapped %~ (maybe "" (view _3))
-    getContentText (ReaderDocument _ _ c _)
-      = T.unlines $ map toT (V.toList c)
-      where
-        toT ap = (mconcat $ map getT ap)
-        getT (Left t) = t
-        getT (Right (v,_,_)) = vocabToText v
 
   rdDyn <- holdDyn Nothing editEv
 

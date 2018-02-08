@@ -54,6 +54,8 @@ type AppRequest
 
   :<|> AddOrEditDocument
   :<|> ListDocuments
+  :<|> ListBooks
+  :<|> ListArticles
   :<|> ViewDocument
   :<|> ViewRawDocument
   :<|> DeleteDocument
@@ -291,7 +293,7 @@ instance WebSocketMessage AppRequest AddOrEditDocument where
     = (Maybe (ReaderDocumentData))
 
 ----------------------------------------------------------------
-data ListDocuments = ListDocuments
+data ListDocuments = ListDocuments (Maybe Int)
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest ListDocuments where
@@ -299,7 +301,26 @@ instance WebSocketMessage AppRequest ListDocuments where
     = [(ReaderDocumentId, Text, Text)]
 
 ----------------------------------------------------------------
-data ViewDocument = ViewDocument ReaderDocumentId (Maybe Int)
+data ListBooks = ListBooks (Maybe Int)
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest ListBooks where
+  type ResponseT AppRequest ListBooks
+    = [(BookId, Text, Text)]
+
+----------------------------------------------------------------
+data ListArticles = ListArticles (Maybe Int)
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest ListArticles where
+  type ResponseT AppRequest ListArticles
+    = [(ArticleId, Text, Text)]
+
+----------------------------------------------------------------
+data ViewDocument
+  = ViewDocument ReaderDocumentId (Maybe Int)
+  | ViewBook BookId
+  | ViewArticle ArticleId
   deriving (Generic, Show, ToJSON, FromJSON)
 
 instance WebSocketMessage AppRequest ViewDocument where

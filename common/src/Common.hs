@@ -184,15 +184,29 @@ type AnnotatedDocument = Vector AnnotatedPara
 newtype ReaderDocumentId = ReaderDocumentId { unReaderDocumentId :: Int }
   deriving (Eq, Ord, Generic, Show, Typeable, ToJSON, FromJSON)
 
+newtype BookId = BookId { unBookId :: Int }
+  deriving (Eq, Ord, Generic, Show, Typeable, ToJSON, FromJSON)
+
+newtype ArticleId = ArticleId { unArticleId :: Int }
+  deriving (Eq, Ord, Generic, Show, Typeable, ToJSON, FromJSON)
+
 type family ReaderDocument t
 type instance ReaderDocument t = ReaderDocumentTree t
 
 data ReaderDocumentTree t = ReaderDocument
   { _readerDocId :: ReaderDocumentId
-  , _readerDocTitle :: Text
-  , _readerDocContent :: AnnotatedDocument
+  , _readerDoc :: ReaderDocumentType t
   , _readerDocProgress :: (Int, Maybe Int) -- (Para, offset)
   }
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+type family ReaderDocumentType t
+type instance ReaderDocumentType t = ReaderDocumentTypeCurrent
+
+data ReaderDocumentTypeCurrent
+  = MyDocument Text AnnotatedDocument
+  | Book BookId
+  | Article ArticleId
   deriving (Generic, Show, ToJSON, FromJSON)
 
 type family ReaderSettings t
