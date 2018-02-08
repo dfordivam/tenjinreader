@@ -190,25 +190,6 @@ newtype BookId = BookId { unBookId :: Int }
 newtype ArticleId = ArticleId { unArticleId :: Int }
   deriving (Eq, Ord, Generic, Show, Typeable, ToJSON, FromJSON)
 
-type family ReaderDocument t
-type instance ReaderDocument t = ReaderDocumentTree t
-
-data ReaderDocumentTree t = ReaderDocument
-  { _readerDocId :: ReaderDocumentId
-  , _readerDoc :: ReaderDocumentType t
-  , _readerDocProgress :: (Int, Maybe Int) -- (Para, offset)
-  }
-  deriving (Generic, Show, ToJSON, FromJSON)
-
-type family ReaderDocumentType t
-type instance ReaderDocumentType t = ReaderDocumentTypeCurrent
-
-data ReaderDocumentTypeCurrent
-  = MyDocument Text AnnotatedDocument
-  | Book BookId
-  | Article ArticleId
-  deriving (Generic, Show, ToJSON, FromJSON)
-
 type family ReaderSettings t
 type instance ReaderSettings t
   = ReaderSettingsTree t
@@ -345,7 +326,6 @@ testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b)
 makeLenses ''SrsReviewStats
 makeLenses ''VocabDetails
 makeLenses ''KanjiDetails
-makeLenses ''ReaderDocumentTree
 
 makePrisms ''SrsEntryState
 makeLenses ''SrsEntryStats

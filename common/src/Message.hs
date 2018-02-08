@@ -65,11 +65,6 @@ type AppRequest
   :<|> GetReaderSettings
   :<|> SaveReaderSettings
   :<|> SaveReadingProgress
-  -- :<|> CreateT ReaderDocument
-  -- :<|> EditT ReaderDocument
-  -- :<|> ReadT ReaderDocument
-  -- :<|> ListT ReaderDocument
-  -- :<|> DeleteT ReaderDocument
 
   :<|> GetVocabDetails
   :<|> GetVocabSentences

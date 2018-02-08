@@ -47,7 +47,7 @@ textReaderTop = do
     (viewEv2, cancelEv) <- handleVisibility EditDocumentView vis $
       documentEditor editEv
 
-    (closeEv, editEv2) <- handleVisibility ReadingView vis $
+    (closeEv) <- handleVisibility ReadingView vis $
       readingPane viewEv
   return ()
 

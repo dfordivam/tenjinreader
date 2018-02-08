@@ -78,14 +78,13 @@ checkVerticalOverflow (ie,oe) r action = do
 
 readingPane :: AppMonad t m
   => Event t (ReaderDocumentData)
-  -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
+  -> AppMonadT t m (Event t ())
 readingPane docEv = do
   ev <- getPostBuild
   s <- getWebSocketResponse (GetReaderSettings <$ ev)
   v <- widgetHold (readingPaneInt docEv def)
     (readingPaneInt docEv <$> s)
-  return (switchPromptlyDyn (fst <$> v)
-         , switchPromptlyDyn (snd <$> v))
+  return (switchPromptlyDyn v)
 
 readerSettingsControls rsDef = divClass "col-sm-12 well-lg form-inline" $ divClass "" $ do
   let
@@ -128,7 +127,7 @@ divWrap rs fullscreenDyn w = do
 readingPaneInt :: AppMonad t m
   => Event t (ReaderDocumentData)
   -> ReaderSettings CurrentDb
-  -> AppMonadT t m (Event t (), Event t (ReaderDocument CurrentDb))
+  -> AppMonadT t m (Event t ())
 readingPaneInt docEv rsDef = do
   (closeEv,fullScrEv, rsDyn) <- divClass "row" $ do
     rsDyn <- divClass "col-sm-9" $ readerSettingsControls rsDef
@@ -144,7 +143,7 @@ readingPaneInt docEv rsDef = do
     -- (readingPaneView <$> docEv)
     -- (paginatedReader rsDyn fullScrEv <$> docEv)
     (verticalReader rsDyn fullScrEv <$> docEv)
-  return (closeEv, never)
+  return (closeEv)
 
 ----------------------------------------------------------------------------------
 -- Vertical rendering
