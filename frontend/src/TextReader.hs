@@ -58,7 +58,7 @@ documentListViewer
                    , Event t (Maybe (ReaderDocumentId, Text, Text)))
 documentListViewer refreshEv = do
   (_, evAll) <- runEventWriterT $
-    tabDisplayUI identity "nav navbar-tabs" "active" "" $
+    tabDisplayUI identity "nav nav-tabs" "active" "" $
     Map.fromList
       [ (1, ("Reading List", myDocumentsListViewer refreshEv))
       , (2, ("Books", booksListViewer))
