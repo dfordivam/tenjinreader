@@ -86,7 +86,7 @@ readingPane docEv = do
     (readingPaneInt docEv <$> s)
   return (switchPromptlyDyn v)
 
-readerSettingsControls rsDef = divClass "col-sm-12 well-lg form-inline" $ divClass "" $ do
+readerSettingsControls rsDef = divClass "col-sm-12 well well-sm form-inline" $ divClass "" $ do
   let
     ddConf :: _
     ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)

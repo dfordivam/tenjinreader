@@ -689,7 +689,7 @@ data SpeechRecogWidgetState
 
 btnText :: SpeechRecogWidgetState
   -> Text
-btnText NewReviewStart = "Start Recog"
+btnText NewReviewStart = "Recog Paused"
 btnText SpeechRecogStarted = "Ready"
 btnText WaitingForRecogResponse = "Listening"
 btnText WaitingForServerResponse = "Processing"
@@ -726,7 +726,7 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i k m r),rt) = do
   initEv <- switchPromptly never
     =<< (dyn $ ffor fullASR $ \b -> if b
       then delay 0.5 =<< getPostBuild
-      else btn "btn-primary" "Start Recog")
+      else btn "btn-sm btn-primary" "Start Recog")
 
   rec
     let
@@ -748,23 +748,18 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i k m r),rt) = do
 
     (resultEv, recogStartEv, recogEndEv, stopEv) <- lift $ doRecog stopRecogEv startRecogEv
 
+    allEvs <- batchOccurrences 2 $
+      mergeList [SpeechRecogStarted <$ startRecogEv
+               , WaitingForRecogResponse <$ recogStartEv
+               , WaitingForServerResponse <$ resultEv
+               , AnswerSuccessful <$ resultCorrectEv
+               , AnswerWrong <$ resultWrongEv
+               , RecogError <$ stopEv
+               , RecogStop <$ recogEndEv
+               ]
     retryEv <- switchPromptly never =<< (dyn $ ffor fullAsrActive $ \b -> if not b
       then return never
       else do
-        allEvs <- batchOccurrences 2 $
-          mergeList [SpeechRecogStarted <$ startRecogEv
-                   , WaitingForRecogResponse <$ recogStartEv
-                   , WaitingForServerResponse <$ resultEv
-                   , AnswerSuccessful <$ resultCorrectEv
-                   , AnswerWrong <$ resultWrongEv
-                   , RecogError <$ stopEv
-                   , RecogStop <$ recogEndEv
-                   ]
-        let stChangeEv = getStChangeEv allEvs
-        stDyn <- holdDyn NewReviewStart stChangeEv
-
-        dyn ((\t -> text (btnText t)) <$> stDyn)
-
         recogEndEvs <- batchOccurrences 2 $
           mergeList [ WaitingForServerResponse <$ resultEv
                    , AnswerSuccessful <$ resultCorrectEv
@@ -778,6 +773,11 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i k m r),rt) = do
 
     -- btnClick <- (dyn $ (\(c,t) -> btn c t) <$> (btnText <$> stDyn))
     --         >>= switchPromptly never
+
+  do
+    let stChangeEv = getStChangeEv allEvs
+    stDyn <- holdDyn NewReviewStart stChangeEv
+    el "h4" $ elClass "span" "label label-primary" $ dynText (btnText <$> stDyn)
 
   let
     -- shimesuEv -> Mark incorrect
