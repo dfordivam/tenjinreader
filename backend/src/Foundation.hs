@@ -18,7 +18,7 @@ import Yesod.Auth.Dummy
 
 import Yesod.Auth
 import Yesod.Auth.OAuth2.Github
-import Yesod.Auth.OAuth2.Google
+import Yesod.Auth.GoogleEmail2
 import Yesod.Auth.OAuth (authTwitterUsingUserId)
 
 import Yesod.Default.Util   (addStaticContentExternal)
@@ -253,7 +253,7 @@ instance YesodAuth App where
     authPlugins app =
       [oauth2Github (appGithubClientId $ appSettings app)
         (appGithubClientSecret $ appSettings app)
-      , oauth2Google (appGoogleClientId $ appSettings app)
+      , authGoogleEmail (appGoogleClientId $ appSettings app)
         (appGoogleClientSecret $ appSettings app)
       , authTwitterUsingUserId (TE.encodeUtf8 $ appTwitterClientId $ appSettings app)
         (TE.encodeUtf8 $ appTwitterClientSecret $ appSettings app)]

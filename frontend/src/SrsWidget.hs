@@ -825,7 +825,7 @@ checkForCommand r = (shimesuEv, shiruEv, tsugiEv, answerEv)
     shiranaiOpts = ["わからない", "分からない", "わかりません", "分かりません"
                  , "知らない", "しらない", "しりません", "知りません"]
     shimesuOpts = ["しめす", "しめします", "示す", "示します"]
-    tsugiOpts = ["つぎ", "次"]
+    tsugiOpts = ["つぎ", "次", "Next", "NEXT", "ネクスト"]
 
 getStChangeEv
   :: (Reflex t)
