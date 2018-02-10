@@ -85,7 +85,9 @@ wrapper m = elClass "nav" "navbar navbar-default" $
       elClass "a" "navbar-brand" $ text "てんじん Reader"
     a <- m
     elClass "ul" "nav navbar-nav navbar-right" $ do
-      ev <- btn "btn-default" "Toggle"
+      el "li" $ elAttr "a" ("href" =: "https://tenjinreader.com/testing1/auth/logout")
+        $ text "Logout"
+      ev <- el "li" $ btn "navbar-btn btn-default" "Toggle"
       toggleTheme ev
     return a
 
