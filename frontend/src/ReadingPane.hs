@@ -199,17 +199,26 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
                              , fforMaybe evVisible (\(_,a) -> if isNothing a
                                                      then Just ()
                                                      else Nothing)
+                             , stopOnHitEnd
+                             , stopOnHitStart
                              ]
 
         stopTicks1 = fforMaybe (tag (current stopTicksMaybe) evVisible) $ \case
           Nothing -> Nothing
           (Just c) -> if c > 20 then Just () else Nothing
 
+    stopOnHitEnd <- (flip filterOnEq) Nothing <$>
+      debounce 2 (updated nextParaMaybe)
+    stopOnHitStart <- (flip filterOnEq) Nothing <$>
+      debounce 2 (updated prevParaMaybe)
+
     stopTicksMaybe <- foldDyn doStop Nothing $
       leftmost [Nothing <$ stopTicks,(snd <$> evVisible)]
 
-  --------------------------------
-  rec
+
+    nextParaMaybe <- holdUniqDyn $ getNextParaMaybe <$> lastDisplayedPara <*> textContent
+    prevParaMaybe <- holdUniqDyn $ getPrevParaMaybe <$> firstDisplayedPara <*> textContent
+
     let
       pageChangeEv = leftmost [BackwardGrow <$ prev, ForwardGrow <$ next]
 
@@ -220,9 +229,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
       lastDisplayedPara :: Dynamic t (ParaNum, ParaPos)
       lastDisplayedPara = ffor row1Dyn $ \(_,ps) ->
         (snd $ A.bounds ps, snd $ A.bounds $ (ps A.! (snd $ A.bounds ps)))
-
-      nextParaMaybe = getNextParaMaybe <$> lastDisplayedPara <*> textContent
-      prevParaMaybe = getPrevParaMaybe <$> firstDisplayedPara <*> textContent
 
       row1Len :: Dynamic t Int
       row1Len = ffor row1Dyn $ \(_,ps) ->

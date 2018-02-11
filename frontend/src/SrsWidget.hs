@@ -743,7 +743,7 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i k m r),rt) = do
 
     (resultCorrectEv, resultWrongEv) <- do
       bEv <- checkSpeechRecogResult (ri,rt) answerEv
-      return $ (filterOnEq bEv True, filterOnEq bEv False)
+      return $ (True <$ filterOnEq bEv True, filterOnEq bEv False)
 
 
     (resultEv, recogStartEv, recogEndEv, stopEv) <- lift $ doRecog stopRecogEv startRecogEv
