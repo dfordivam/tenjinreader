@@ -395,13 +395,15 @@ moreContentAccF [] o = o
 moreContentAccF n@(n1:_) o = A.array newBounds $ filter (f newBounds) $
   ((A.assocs pd) ++ (A.assocs o))
   where
-    f (l,u) (i,_) = if l >= i || i <= u then True else False
+    f (l,u) (i,_) = l >= i && i <= u
     (curFirst, curLast) = A.bounds o
     pd = makeParaData n
     (newFirst, newLast) = A.bounds pd
     newBounds = if newFirst > curLast
-      then ((max curFirst (ParaNum $ 120 - (unParaNum newLast))) , newLast)
-      else (newFirst, (min curLast (ParaNum $ 120 + (unParaNum newFirst))))
+      then assert (newFirst == (curLast + (ParaNum 1)))
+        ((max curFirst (ParaNum $ 120 - (unParaNum newLast))) , newLast)
+      else assert ((newLast + (ParaNum 1)) == curFirst)
+        (newFirst, (min curLast (ParaNum $ 120 + (unParaNum newFirst))))
 
 getState
   :: ParaData
