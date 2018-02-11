@@ -246,6 +246,12 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
         row1Dyn :: Dynamic t ((ParaPos, ParaPos), ParaData)
         row1Dyn = join row1Dyn'
 
+        pageChangeParaEv = fforMaybe
+          (attachDyn ((,) <$> prevParaMaybe <*> nextParaMaybe) pageChangeEv)
+          (\((p,n),d) -> case d of
+              ForwardGrow -> (,) <$> n <*> pure d
+              BackwardGrow -> (,) <$> p <*> pure d)
+
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
     display row1Len
@@ -253,7 +259,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
     display $ (\(ParaPos l, ParaPos u) -> ("(" <> tshow l <> "," <> tshow u <> ")"))
       . fst <$> row1Dyn
     textContent <- fetchMoreContentF docId (makeParaData annText) endParaNum
-      (traceEvent "fetchEv: " (attachDyn firstDisplayedPara pageChangeEv))
+      (traceEvent "fetchEv: " (pageChangeParaEv))
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
@@ -362,11 +368,11 @@ fetchMoreContentF docId annText endParaNum pageChangeEv = do
         firstAvailablePara = (fst . A.bounds) <$> textContent
         hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara pageChangeEv)
         hitEndF (ParaNum l,((ParaNum n,_), d))
-          | l < endParaNum && d == ForwardGrow && (l - n < 20) = Just (l + 1)
+          | l < endParaNum && d == ForwardGrow && (l - n < 30) = Just (l + 1)
           | otherwise = Nothing
         hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara pageChangeEv)
         hitStartF (ParaNum f,((ParaNum n,_), d))
-          | f > 0 && d == BackwardGrow && (n - f < 20) = Just (max 0 (f - 60))
+          | f > 0 && d == BackwardGrow && (n - f < 30) = Just (max 0 (f - 60))
           | otherwise = Nothing
 
     moreContentEv <- getWebSocketResponse $
@@ -395,14 +401,14 @@ moreContentAccF [] o = o
 moreContentAccF n@(n1:_) o = A.array newBounds $ filter (f newBounds) $
   ((A.assocs pd) ++ (A.assocs o))
   where
-    f (l,u) (i,_) = l >= i && i <= u
+    f (l,u) (i,_) = l <= i && i <= u
     (curFirst, curLast) = A.bounds o
     pd = makeParaData n
     (newFirst, newLast) = A.bounds pd
     newBounds = if newFirst > curLast
       then assert (newFirst == (curLast + (ParaNum 1)))
-        ((max curFirst (ParaNum $ 120 - (unParaNum newLast))) , newLast)
-      else assert ((newLast + (ParaNum 1)) == curFirst)
+        ((max curFirst (ParaNum $ (unParaNum newLast) - 120)) , newLast)
+      else assert ((newLast + (ParaNum 1)) >= curFirst)
         (newFirst, (min curLast (ParaNum $ 120 + (unParaNum newFirst))))
 
 getState
