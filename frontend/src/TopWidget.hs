@@ -82,7 +82,7 @@ widget = divClass "container" $ do
 wrapper m = elClass "nav" "navbar navbar-default" $
   divClass "container-fluid" $ do
     divClass "navbar-header" $
-      elClass "a" "navbar-brand" $ text "てんじん Reader"
+      elClass "a" "navbar-brand" $ text "てんじん"
     a <- m
     elClass "ul" "nav navbar-nav navbar-right" $ do
       el "li" $ elAttr "a" ("href" =: "https://tenjinreader.com/testing1/auth/logout")
