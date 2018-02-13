@@ -271,8 +271,7 @@ kanjiDetailWindow (k,vSt,rads) = divClass "well" $ do
 
       divClass "" $
         text $ T.intercalate ", " $
-          map (\m -> T.unwords $ T.words m & _head  %~ capitalize) $
-          map unMeaning $ k ^. kanjiMeanings
+          map capitalize (map unMeaning $ k ^. kanjiMeanings)
 
 vocabListWindow
   :: (AppMonad t m

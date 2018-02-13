@@ -13,7 +13,7 @@ module Common
   , module Data.JMDict.AST)
   where
 
-import Protolude hiding (to)
+import Protolude hiding (to, (&))
 -- import GHC.Generics
 import Control.Lens.TH
 import Control.Lens hiding (reviews)
@@ -205,6 +205,38 @@ data ReaderSettingsTree t = ReaderSettings
 
 instance Default (ReaderSettingsTree t) where
   def = ReaderSettings 120 105 150 False 400
+
+
+capitalize m = T.unwords $ T.words m & _head  %~ f
+  where
+    f t
+      | T.head t == ('-') = t
+      | elem t ignoreList = t
+      | otherwise = T.toTitle t
+    ignoreList = ["to"]
+
+showSense s = mconcat
+      [ showPos $ s ^.. sensePartOfSpeech . traverse
+      , p $ s ^.. senseInfo . traverse
+      , showGlosses $ take 5 $ s ^.. senseGlosses . traverse . glossDefinition]
+  where
+    p [] = ""
+    p c = "(" <> (T.intercalate ", " c) <> ") "
+
+    showGlosses ms = T.intercalate ", " $ map capitalize ms
+
+    showPos ps = p psDesc
+      where
+        psDesc = catMaybes $ map f ps
+        f PosNoun = Just $ "Noun"
+        f PosPronoun = Just $ "Pronoun"
+        f (PosVerb _ _) = Just $ "Verb"
+        f (PosAdverb _) = Just $ "Adv."
+        f (PosAdjective _) = Just $ "Adj."
+        f PosSuffix = Just $ "Suffix"
+        f PosPrefix = Just $ "Prefix"
+        f _ = Nothing
+
 -- SrsEntry
 
 newtype SrsInterval = SrsInterval { unSrsInterval :: Integer }

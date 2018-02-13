@@ -342,8 +342,6 @@ getQuickToggleWakaru (QuickToggleWakaru e) = do
 
   return $ maybe NotInSrs id ret
 
-data TRM = TRM SrsEntryField (NonEmpty Reading) (NonEmpty Meaning)
-
 makeSrsEntry
   :: (Either KanjiId VocabId)
   -> Maybe Text
@@ -351,7 +349,8 @@ makeSrsEntry
 makeSrsEntry v surface = do
   today <- liftIO $ utctDay <$> getCurrentTime
   let
-  tmp <- case v of
+    state = (NewReview, SrsEntryStats 0 0)
+  case v of
     (Left kId) -> do
       kanjiDb <- asks appKanjiDb
       let k = arrayLookupMaybe kanjiDb kId
@@ -361,7 +360,7 @@ makeSrsEntry v surface = do
           m = nonEmpty =<< k ^? _Just . kanjiDetails . kanjiMeanings
           f = k ^? _Just . kanjiDetails . kanjiCharacter . to unKanji
             . to (:|[])
-      return $ TRM <$> f <*> r <*> m
+      return $ SrsEntry <$> pure (This state) <*> r <*> m <*> pure Nothing <*> pure Nothing <*> f
 
     (Right vId) -> do
       vocabDb <- asks appVocabDb
@@ -380,21 +379,14 @@ makeSrsEntry v surface = do
           ks = v ^.. _Just . vocabEntry . entryKanjiElements
             . traverse . kanjiPhrase
 
+          ff [] = Nothing
+          ff (s:ss) = case s ^.. senseInfo . traverse of
+            [] -> ff ss
+            _ -> Just (showSense s) <> ff ss
 
-      return $ TRM <$> f <*> r <*> m
+          mn = MeaningNotes <$> (v ^. _Just . vocabEntry . entrySenses . to ff)
 
-  let get (TRM f r m) = SrsEntry
-        { _reviewState = case v of
-            (Left _) -> This state
-            (Right _) -> These state state
-          , _readings = r
-          , _meaning  = m
-          , _readingNotes = Nothing
-          , _meaningNotes = Nothing
-          , _field = f
-        }
-      state = (NewReview, SrsEntryStats 0 0)
-  return (get <$> tmp)
+      return $ SrsEntry <$> pure (These state state) <*> r <*> m <*> pure Nothing <*> pure mn <*> f
 
 isSurfaceKana (Just t) (Just v) = if isKanaOnly t
   then if t == v then Just (t:|[]) else Just (t:|[v])

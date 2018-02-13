@@ -508,42 +508,8 @@ showEntry surfaceMB (e, sId) = divClass "well-sm" $ do
                          senseGlosses . traverse . glossDefinition)
       ((Left $ e ^. entryUniqueId) <$ openEv)
 
-  let
-    showGlosses ms = mapM_ text $ intersperse ", " $
-      map (\m -> T.unwords $ T.words m & _head  %~ capitalize)
-      ms
-    showInfo [] = return ()
-    showInfo is = do
-      mapM_ text $ ["("] ++ (intersperse ", " is) ++ [")"]
-    showSense s = divClass "" $ do
-      showPos $ s ^.. sensePartOfSpeech . traverse
-      showInfo $ s ^.. senseInfo . traverse
-      showGlosses $ take 5 $ s ^.. senseGlosses . traverse . glossDefinition
-
   divClass "" $ do
-    mapM showSense $ take 3 $ e ^.. entrySenses . traverse
-
-capitalize t
-  | T.head t == ('-') = t
-  | elem t ignoreList = t
-  | otherwise = T.toTitle t
-  where ignoreList = ["to"]
-
-showPos ps = do
-  elClass "span" "small" $ do
-    mapM_ text $ p $ (intersperse ", ") psDesc
-  where
-    p [] = []
-    p c = ["("] ++ c ++ [") "]
-    psDesc = catMaybes $ map f ps
-    f PosNoun = Just $ "Noun"
-    f PosPronoun = Just $ "Pronoun"
-    f (PosVerb _ _) = Just $ "Verb"
-    f (PosAdverb _) = Just $ "Adv."
-    f (PosAdjective _) = Just $ "Adj."
-    f PosSuffix = Just $ "Suffix"
-    f PosPrefix = Just $ "Prefix"
-    f _ = Nothing
+    mapM (\s -> divClass "" $ text $ showSense s) $ take 3 $ e ^.. entrySenses . traverse
 
 entryKanjiAndReading :: (_) => Text -> Entry -> m ()
 entryKanjiAndReading surface e = do
