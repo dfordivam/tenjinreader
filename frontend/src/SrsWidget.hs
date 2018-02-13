@@ -466,15 +466,16 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
   (fullASR, closeEv) <- divClass "panel-heading" $ do
     (e,_) <- elClass' "button" "close" $ text "Close"
 
+    let cEv = domEvent Click e
     fullASR <- do
-      cb <- checkbox False def
+      cb <- checkbox False $ def & checkboxConfig_setValue .~ (False <$ cEv)
       text "Auto ASR"
       return (value cb)
 
     divClass "" $ do
       elAttr "span" statsTextAttr $
         showStats
-    return $ (fullASR, domEvent Click e)
+    return $ (fullASR, cEv)
 
   let kanjiRowAttr = ("class" =: "center-block")
          <> ("style" =: "height: 15em;\
