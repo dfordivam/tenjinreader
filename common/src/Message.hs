@@ -68,6 +68,7 @@ type AppRequest
 
   :<|> GetVocabDetails
   :<|> GetVocabSentences
+  :<|> GetRandomSentence
   :<|> LoadMoreSentences
   :<|> ToggleSentenceFav
 
@@ -384,6 +385,16 @@ data GetVocabSentences = GetVocabSentences (Either VocabId SrsEntryId)
 instance WebSocketMessage AppRequest GetVocabSentences where
   type ResponseT AppRequest GetVocabSentences =
     ([VocabId], [((Bool, SentenceId), SentenceData)]) -- Bool -> not favourite
+
+----------------------------------------------------------------
+data GetRandomSentence
+  = GetRandomSentence
+  | GetRandomFavSentence
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+instance WebSocketMessage AppRequest GetRandomSentence where
+  type ResponseT AppRequest GetRandomSentence =
+    (((Bool, SentenceId), SentenceData)) -- Bool -> not favourite
 
 ----------------------------------------------------------------
 data LoadMoreSentences = LoadMoreSentences [VocabId] [SentenceId]

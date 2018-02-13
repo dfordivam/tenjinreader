@@ -28,6 +28,7 @@ import qualified Data.Array as A
 import Data.Array (Array)
 import Mecab
 import Radicals
+import System.Random
 
 searchResultCount = 20
 
@@ -426,6 +427,23 @@ getVocabDetails (GetVocabDetails eIds) = do
     findAll (_vocabSrsMap rd)
   return $ catMaybes es
 
+getRandomSentence :: GetRandomSentence
+  -> WsHandlerM ((Bool, SentenceId), SentenceData)
+getRandomSentence req = do
+  sentenceDb <- lift $ asks appSentenceDb
+  favSet <- transactReadOnlySrsDB (pure . view favouriteSentences)
+
+  sId <- case (Set.null favSet, req) of
+    (False, GetRandomFavSentence) -> do
+      i <- liftIO $ randomRIO (0, Set.size favSet - 1)
+      return $ Set.elemAt i favSet
+    _ -> SentenceId <$> (liftIO $ randomRIO $ (A.bounds sentenceDb) & both %~ unSentenceId)
+
+  let
+    isFav = Set.member sId favSet
+    g (sId,b) = (,) <$> pure (not b, sId) <*> arrayLookupMaybe sentenceDb sId
+    (Just val) = g (sId, isFav)
+  return val
 
 getVocabSentences :: GetVocabSentences
   -> WsHandlerM ([VocabId], [((Bool, SentenceId), SentenceData)])

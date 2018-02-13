@@ -212,6 +212,15 @@ documentEditor editEv = divClass "" $ do
   return $ (fmapMaybe identity annTextEv
     , cancelEv)
 
+sentenceWidget
+  :: AppMonad t m
+  => AppMonadT t m ()
+sentenceWidget = do
+  tabDisplayUI identity "nav nav-tabs" "active" "" $
+    Map.fromList
+      [ (1, ("Analyze", quickAnalyzeTop))
+      , (2, ("Random", randomSentenceTop))]
+
 quickAnalyzeTop
   :: AppMonad t m
   => AppMonadT t m ()
@@ -235,6 +244,29 @@ quickAnalyzeTop = do
     divWrap rsDyn (constDyn False) $ do
       widgetHold (return [])
         ((\r -> mapM renderF $ map snd r) <$> resp)
+
+  let vIdEv = switchPromptlyDyn $ leftmost <$> v
+
+  showVocabDetailsWidget vIdEv
+  return ()
+
+randomSentenceTop
+  :: AppMonad t m
+  => AppMonadT t m ()
+randomSentenceTop = do
+  (ev1, ev2) <- divClass "row" $ do
+    ev1 <- divClass "col-sm-4 well-sm" $ btn "btn-primary" "Random Sentence"
+    ev2 <- divClass "col-sm-4 well-sm" $ btn "btn-primary" "Random Fav Sentence"
+    return (ev1, ev2)
+
+  resp <- getWebSocketResponse $ leftmost [GetRandomSentence <$ ev1
+                                  , GetRandomFavSentence <$ ev2]
+
+  v <- divClass "row" $ do
+    rsDyn <- readerSettingsControls def
+    divWrap rsDyn (constDyn False) $ do
+      widgetHold (return [])
+        (uncurry (renderOneSentence []) <$> resp)
 
   let vIdEv = switchPromptlyDyn $ leftmost <$> v
 

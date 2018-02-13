@@ -75,7 +75,7 @@ widget = divClass "container" $ do
       ,(1, ("Kanji", kanjiBrowseWidget))
       , (2, ("Vocab", vocabSearchWidget))
       , (3, ("Reader", textReaderTop))
-      , (4, ("Sentence", quickAnalyzeTop))
+      , (4, ("Sentence", sentenceWidget))
       , (5, ("Import", importWidgetTop))
       ]
 

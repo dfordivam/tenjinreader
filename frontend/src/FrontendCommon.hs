@@ -348,32 +348,7 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
   vIdEv <- elAttr "div" bodyAttr $ do
     rec
       vIdMap <- listHoldWithKey (Map.fromList ss) addMoreEv $
-        -- The notFav in key puts the favourite sentences first
-        \(notFav, sId) (SentenceData sg njps) -> divClass "well well-sm" $ do
-          let hasEng = not $ null njps
-              rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
-          (evs, visDyn) <- elAttr "div" rowAttr $ do
-            evs <- divClass "col-sm-11" $
-              forM sg $ \s -> do
-                renderOnePara (constDyn vIds) (constDyn 100) s
-
-            visDyn <- divClass "col-sm-1" $ do
-              rec
-                isFav <- toggle (not notFav) tEv
-                tEv <- switchPromptly never
-                  =<< (dyn ((\f -> btn "btn-xs btn-primary"
-                              (if f then "unFav" else "Fav")) <$> isFav))
-              getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
-
-              if hasEng
-                then toggle False
-                  =<< (btn "btn-xs btn-primary" "意味")
-                else return $ constDyn False
-            return (evs,visDyn)
-
-          when hasEng $ void $ handleVisibility True visDyn $
-            forM njps $ \t -> el "p" $ text t
-          return $ NE.toList evs
+        renderOneSentence vIds
 
       loadMoreEv <- do
         showWSProcessing loadMoreEv addMoreEv
@@ -385,6 +360,33 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
 
   showVocabDetailsWidget vIdEv
   return closeEvTop
+
+-- The notFav in key puts the favourite sentences first
+renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "well well-sm" $ do
+  let hasEng = not $ null njps
+      rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
+  (evs, visDyn) <- elAttr "div" rowAttr $ do
+    evs <- divClass "col-sm-11" $
+      forM sg $ \s -> do
+        renderOnePara (constDyn vIds) (constDyn 100) s
+
+    visDyn <- divClass "col-sm-1" $ do
+      rec
+        isFav <- toggle (not notFav) tEv
+        tEv <- switchPromptly never
+          =<< (dyn ((\f -> btn "btn-xs btn-primary"
+                      (if f then "unFav" else "Fav")) <$> isFav))
+      getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
+
+      if hasEng
+        then toggle False
+          =<< (btn "btn-xs btn-primary" "意味")
+        else return $ constDyn False
+    return (evs,visDyn)
+
+  when hasEng $ void $ handleVisibility True visDyn $
+    forM njps $ \t -> el "p" $ text t
+  return $ NE.toList evs
 
 vocabRuby :: (_)
   => Dynamic t Bool

@@ -88,6 +88,7 @@ wsHandler = HandlerWrapper $
 
   :<&> h getVocabDetails
   :<&> h getVocabSentences
+  :<&> h getRandomSentence
   :<&> h getLoadMoreSentences
   :<&> h getToggleSentenceFav
 
