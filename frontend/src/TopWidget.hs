@@ -56,12 +56,12 @@ topWidget = do
     ws = case proto of
       "http:" -> "ws://"
       _ -> "wss://"
-  (_,ws) <- withWSConnection
+  (_,wsConn) <- withWSConnection
     url
     never -- close event
     True -- reconnect
     widget
-  let resp = traceEvent ("Response") (_webSocket_recv ws)
+  let resp = traceEvent ("Response") (_webSocket_recv wsConn)
   d <- holdDyn "" resp
   dynText ((tshow . BS.length) <$> d)
   return ()
@@ -103,7 +103,7 @@ toggleTheme ev = do
     d <- holdDyn False (not <$> (tag (current d) ev))
 
   let
-    toggle b = X.liftJSM $ do
+    toggleW b = X.liftJSM $ do
       let css = custom_css <> if b
             then slate_bootstrap_css
             else readable_bootstrap_css
@@ -114,5 +114,5 @@ toggleTheme ev = do
           <> "</style>" --TODO: Fix this
 
   void $ widgetHold (return ())
-    (toggle <$> updated d)
+    (toggleW <$> updated d)
 

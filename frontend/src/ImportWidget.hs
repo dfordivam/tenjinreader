@@ -11,7 +11,6 @@ module ImportWidget where
 import FrontendCommon
 
 import qualified Data.Text as T
-import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
@@ -41,7 +40,7 @@ importWidgetTop = do
   -- let d = ((\a b c -> (a,b,c)) <$> value ta <*> value sep <*> value sep2)
 
   -- widgetHold (return ())
-  --   (parseInput <$> (tagDyn d ev))
+  --   (parseInput <$> (tagPromptlyDyn d ev))
 
   importWaniKaniVocab
   return ()
@@ -138,7 +137,7 @@ coloumnSelectionWidget vs = do
         return fDyn
 
   widgetHold (return ())
-    (previewDataWidget vs <$> tagDyn fDyn checkEv)
+    (previewDataWidget vs <$> tagPromptlyDyn fDyn checkEv)
   return ()
 
 previewDataWidget vs fs = do
@@ -148,7 +147,7 @@ previewDataWidget vs fs = do
     mn = V.elemIndices MeaningField fs
     rnf = V.elemIndices ReadingNoteField fs
     mnf = V.elemIndices MeaningNoteField fs
-    nrd = V.elemIndices NextReviewDateField fs
+    -- nrd = V.elemIndices NextReviewDateField fs
 
     isNonJp t = not $ T.all (\c -> isKana c || isKanji c) t
     makeF :: Vector [Text] -> Either (FieldType, Vector [Text]) NewEntryUserData
@@ -192,36 +191,28 @@ previewDataWidget vs fs = do
 -- SrsEntry -> Either [VocabId] NewEntry
 -- Wakaru -> Only if (NonEntry VocabId)
 -- Ignore - Do Nothing
+previewEntriesWidget
+  :: DomBuilder t m
+  => [NewEntryUserData] -> m ()
 previewEntriesWidget ds = do
-  let
-    preview ds = do
-      elClass "table" "table table-striped table-bordered" $ do
-        el "thead" $ do
-          el "th" $ text ""
-          el "th" $ text "Main"
-          el "th" $ text "Reading"
-          el "th" $ text "Meaning"
-          el "th" $ text "RNotes"
-          el "th" $ text "MNotes"
+  elClass "table" "table table-striped table-bordered" $ do
+    el "thead" $ do
+      el "th" $ text ""
+      el "th" $ text "Main"
+      el "th" $ text "Reading"
+      el "th" $ text "Meaning"
+      el "th" $ text "RNotes"
+      el "th" $ text "MNotes"
 
-        let f l = if T.length t > 25 then (T.take 25 t) <> ".." else t
-              where t = mconcat $ intersperse ", " l
-        el "tbody" $ forM (zip [1..] ds) $ \(i,d) -> el "tr" $ do
-          el "td" $ text $ tshow i
-          el "td" $ text $ f (NE.toList $ mainField d)
-          el "td" $ text $ f (readingField d)
-          el "td" $ text $ f (NE.toList $ meaningField d)
-          el "td" $ text $ f (readingNotesField d)
-          el "td" $ text $ f (meaningNotesField d)
-
-  preview ds
-  -- searchEv <- btn "btn-primary" "Next2"
-
-  -- let req = 
-  -- resp <- getWebSocketResponse req
-  -- widgetHold (return ())
-  --   (searchResultWidget <$> resp)
-  return ()
+    let f l = if T.length t > 25 then (T.take 25 t) <> ".." else t
+          where t = mconcat $ intersperse ", " l
+    el "tbody" $ forM_ (zip [1..] ds) $ \(i,d) -> el "tr" $ do
+      el "td" $ text $ tshow i
+      el "td" $ text $ f (NE.toList $ mainField d)
+      el "td" $ text $ f (readingField d)
+      el "td" $ text $ f (NE.toList $ meaningField d)
+      el "td" $ text $ f (readingNotesField d)
+      el "td" $ text $ f (meaningNotesField d)
 
 getTextFromFile :: (MonadWidget t m) => Event t File -> m (Event t Text)
 getTextFromFile fEv = do
@@ -246,7 +237,7 @@ importWaniKaniVocab = do
     files <- value <$> fileInput def
     ev <- btn "btn-default" "Read File"
     let
-      fEv = fmapMaybe headMay (tagDyn files ev)
+      fEv = fmapMaybe headMay (tagPromptlyDyn files ev)
     getTextFromFile fEv
 
   let
@@ -271,7 +262,6 @@ importWaniKaniVocab = do
     getMainField _ = Nothing
     req = makeReq <$> tEv
 
-  reqDyn <- holdDyn (ImportSearchFields []) req
   resp <- getWebSocketResponse req
   showWSProcessing req resp
   impDone <- widgetHoldWithRemoveAfterEvent
@@ -330,4 +320,4 @@ importSelectionWidget (alreadyInDb, newEs, notFound) = el "div" $ do
   addEv <- if null newEs
     then return never
     else btn "btn-primary" "Import"
-  getWebSocketResponse $ ImportData <$> tagDyn newEsDyn addEv
+  getWebSocketResponse $ ImportData <$> tagPromptlyDyn newEsDyn addEv

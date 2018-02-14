@@ -12,38 +12,31 @@ module ReadingPane where
 
 import FrontendCommon
 
-import qualified Data.Text as T
-import qualified Data.Set as Set
 import qualified Data.Map as Map
-import qualified Data.List as List
-import Data.List.NonEmpty (NonEmpty)
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Vector as V
 import qualified Data.Array as A
 import Data.Array (Array, Ix)
 import qualified GHCJS.DOM.DOMRectReadOnly as DOM
 import qualified GHCJS.DOM.Element as DOM
-import qualified GHCJS.DOM.Document as DOM
-import qualified GHCJS.DOM as DOM
 import qualified GHCJS.DOM.Types as DOM
-import qualified GHCJS.DOM.IntersectionObserverEntry as DOM hiding (getBoundingClientRect)
-import qualified GHCJS.DOM.IntersectionObserverCallback as DOM
-import qualified GHCJS.DOM.IntersectionObserver as DOM
 import Control.Exception
-import Reflex.Dom.Widget.Resize
-import Language.Javascript.JSaddle.Value
-import JavaScript.Object
 
-checkOverFlow e heightDyn = do
-  v <- sample $ current heightDyn
-  let overFlowThreshold = fromIntegral v
-  rect <- DOM.getBoundingClientRect (_element_raw e)
-  trects <- DOM.getClientRects (_element_raw e)
-  y <- DOM.getY rect
-  h <- DOM.getHeight rect
-  -- text $ "Coords: " <> (tshow y) <> ", " <> (tshow h)
-  return (y + h > overFlowThreshold)
+-- checkOverFlow e heightDyn = do
+--   v <- sample $ current heightDyn
+--   let overFlowThreshold = fromIntegral v
+--   rect <- DOM.getBoundingClientRect (_element_raw e)
+--   trects <- DOM.getClientRects (_element_raw e)
+--   y <- DOM.getY rect
+--   h <- DOM.getHeight rect
+--   -- text $ "Coords: " <> (tshow y) <> ", " <> (tshow h)
+--   return (y + h > overFlowThreshold)
 
+checkVerticalOverflow
+  :: (Num t, DOM.IsElement self1,
+       DOM.IsElement self2, DOM.IsElement self, DOM.MonadJSM m)
+  => (self2, self1)
+  -> self
+  -> ((t, Maybe TextAdjust) -> IO b)
+  -> m b
 checkVerticalOverflow (ie,oe) r action = do
   rx <- DOM.getX =<< DOM.getBoundingClientRect r
   ix <- DOM.getX =<< DOM.getBoundingClientRect ie
@@ -86,9 +79,13 @@ readingPane docEv = do
     (readingPaneInt docEv <$> s)
   return (switchPromptlyDyn v)
 
+readerSettingsControls
+  :: (MonadFix m, MonadHold t m,
+       PostBuild t m, DomBuilder t m)
+  => ReaderSettingsTree CurrentDb
+  -> m (Dynamic t (ReaderSettingsTree CurrentDb))
 readerSettingsControls rsDef = divClass "col-sm-12 well well-sm form-inline" $ divClass "" $ do
   let
-    ddConf :: _
     ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
     ddAttr = ("class" =: "form-control input-sm")
   fontSizeDD <- divClass "col-sm-3" $ do
@@ -110,9 +107,11 @@ readerSettingsControls rsDef = divClass "col-sm-12 well well-sm form-inline" $ d
       writingModeDD = constDyn True
   return rsDyn
 
+divWrap :: (PostBuild t m, DomBuilder t m) =>
+           Dynamic t (ReaderSettingsTree CurrentDb) -> Dynamic t Bool -> m a -> m a
 divWrap rs fullscreenDyn w = do
   let
-    divAttr = (\s l h fs -> ("style" =:
+    divAttr = (\s l _ fs -> ("style" =:
       ("font-size: " <> tshow s <>"%;"
         <> "line-height: " <> tshow l <> "%;"
         -- <> "height: " <> tshow h <> "px;"
@@ -139,7 +138,7 @@ readingPaneInt docEv rsDef = do
 
   getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
 
-  widgetHold ((text "waiting for document data"))
+  _ <- widgetHold ((text "waiting for document data"))
     -- (readingPaneView <$> docEv)
     -- (paginatedReader rsDyn fullScrEv <$> docEv)
     (verticalReader rsDyn fullScrEv <$> docEv)
@@ -164,7 +163,7 @@ verticalReader :: forall t m . AppMonad t m
   -> Event t ()
   -> (ReaderDocumentData)
   -> AppMonadT t m ()
-verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) = do
+verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
   (evVisible, action) <- newTriggerEvent
 
   visDyn <- holdDyn (0,Nothing) evVisible
@@ -234,14 +233,14 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
       row1Len = ffor row1Dyn $ \(_,ps) ->
         foldl (\len (l,u) -> len + (unParaPos (u - l))) 0 (map A.bounds $ A.elems ps)
 
-    let foldF (len, (d, tc)) =
+    let foldF (len, (d1, tc)) =
           foldDyn f st ((\d -> (tc,d)) <$> dEv)
-          where f = case d of
+          where f = case d1 of
                   ForwardGrow -> textAdjustF
                   BackwardGrow -> textAdjustRevF
-                st = getState tc len d
+                st = getState tc len d1
 
-        newStateEv = attachDyn row1Len $ attachWith af (current
+        newStateEv = attachPromptlyDyn row1Len $ attachWith af (current
           ((,) <$> (getCurrentViewContent <$> textContent <*> nextParaMaybe)
                <*> (getPrevViewContent <$> textContent <*> prevParaMaybe)))
                      pageChangeEv
@@ -253,7 +252,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
         row1Dyn = join row1Dyn'
 
         pageChangeParaEv = fforMaybe
-          (attachDyn ((,) <$> prevParaMaybe <*> nextParaMaybe) pageChangeEv)
+          (attachPromptlyDyn ((,) <$> prevParaMaybe <*> nextParaMaybe) pageChangeEv)
           (\((p,n),d) -> case d of
               ForwardGrow -> (,) <$> n <*> pure d
               BackwardGrow -> (,) <$> p <*> pure d)
@@ -287,34 +286,31 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
 
     --------------------------------
     (resizeEv, (rowRoot, (inside, outside, vIdEv, closeEv))) <- resizeDetector $ do
-      rec
-        let
-          closeEv = tup ^. _2 . _4
-          dispFullScr m = do
-            dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
+      let
+        dispFullScr m = do
+          dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
 
-        tup <- elDynAttr "div" wrapDynAttr $ elDynAttr' "div" divAttr $ do
-          closeEv <- do
-            (e,_) <- elClass' "button" "close" $ do
-              dispFullScr (text "Close")
-            return (domEvent Click e)
+      elDynAttr "div" wrapDynAttr $ elDynAttr' "div" divAttr $ do
+        cEv <- do
+          (e,_) <- elClass' "button" "close" $ do
+            dispFullScr (text "Close")
+          return (domEvent Click e)
 
-          vIdEv <- el "div" $ do
-            let renderF = ffor (isNothing . snd <$> visDyn) $ \b -> if b
-                  then renderDynParas
-                  else renderDynParasLight
-            dyn ((\f -> f rs (snd <$> row1Dyn)) <$> renderF)
-              >>= switchPromptly never
+        vIdEv1 <- el "div" $ do
+          let renderF = ffor (isNothing . snd <$> visDyn) $ \b -> if b
+                then renderDynParas
+                else renderDynParasLight
+          dyn ((\f -> f rs (snd <$> row1Dyn)) <$> renderF)
+            >>= switchPromptly never
 
-          (inside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
-            text ""
-          elAttr "div" ("style" =: "height: 1em; width: 2em;") $ do
-            text ""
-          (outside, _) <- elAttr' "div" ("style" =: "height: 1em; width: 2em;") $ do
-            text ""
-            return ()
-          return (inside, outside, vIdEv, closeEv)
-      return tup
+        (i, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
+          text ""
+        elAttr "div" ("style" =: "height: 1em; width: 2em;") $ do
+          text ""
+        (o, _) <- elAttr' "div" ("style" =: "height: 1em; width: 2em;") $ do
+          text ""
+          return ()
+        return (i, o, vIdEv1, cEv)
 
     (next,prev) <- leftRightButtons fullscreenDyn nextParaMaybe prevParaMaybe stopTicks
 
@@ -323,7 +319,7 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
 
   firstParaDyn <- holdUniqDyn firstDisplayedPara
 
-  getWebSocketResponse
+  _ <- getWebSocketResponse
     ((\(ParaNum p, ParaPos o) -> SaveReadingProgress docId (p,Just o))
       <$> updated firstParaDyn)
 
@@ -331,8 +327,6 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
 
   let inEl = _element_raw inside
       outEl = _element_raw outside
-
-  time <- liftIO $ getCurrentTime
 
   let
     -- TODO Stop if we hit end of text, close the document
@@ -353,13 +347,13 @@ verticalReader rs fullScrEv (docId, title, startParaMaybe, endParaNum, annText) 
 
   tickEv <- ticksWidget
 
-  performEvent (checkVerticalOverflow (inEl, outEl)
+  performEvent_ (checkVerticalOverflow (inEl, outEl)
                 (_element_raw rowRoot) action <$ tickEv)
 
   return ()
 
 fetchMoreContentF :: (AppMonad t m)
-  => _
+  => ReaderDocumentId
   -> ParaData
   -> Int
   -> Event t ((ParaNum, ParaPos), TextAdjustDirection)
@@ -372,11 +366,11 @@ fetchMoreContentF docId annText endParaNum pageChangeEv = do
 
         lastAvailablePara = (snd . A.bounds) <$> textContent
         firstAvailablePara = (fst . A.bounds) <$> textContent
-        hitEndEv = fmapMaybe hitEndF (attachDyn lastAvailablePara pageChangeEv)
+        hitEndEv = fmapMaybe hitEndF (attachPromptlyDyn lastAvailablePara pageChangeEv)
         hitEndF (ParaNum l,((ParaNum n,_), d))
           | l < endParaNum && d == ForwardGrow && (l - n < 30) = Just (l + 1)
           | otherwise = Nothing
-        hitStartEv = fmapMaybe hitStartF (attachDyn firstAvailablePara pageChangeEv)
+        hitStartEv = fmapMaybe hitStartF (attachPromptlyDyn firstAvailablePara pageChangeEv)
         hitStartF (ParaNum f,((ParaNum n,_), d))
           | f > 0 && d == BackwardGrow && (n - f < 30) = Just (max 0 (f - 60))
           | otherwise = Nothing
@@ -399,12 +393,12 @@ makeParaData :: [(Int, AnnotatedPara)] -> ParaData
 makeParaData [] = A.listArray (ParaNum 0, ParaNum (-1)) []
 makeParaData n@(n1:_) = A.array (ParaNum (fst n1), ParaNum (fst l)) $ map f n
   where
-    f (n,c) = (ParaNum n, A.listArray (ParaPos 1, ParaPos (length c)) c)
+    f (n1,c) = (ParaNum n1, A.listArray (ParaPos 1, ParaPos (length c)) c)
     (l:_) = reverse n
 
 moreContentAccF :: [(Int, AnnotatedPara)] -> ParaData -> ParaData
 moreContentAccF [] o = o
-moreContentAccF n@(n1:_) o = A.array newBounds $ filter (f newBounds) $
+moreContentAccF n o = A.array newBounds $ filter (f newBounds) $
   ((A.assocs pd) ++ (A.assocs o))
   where
     f (l,u) (i,_) = l <= i && i <= u
@@ -420,7 +414,7 @@ moreContentAccF n@(n1:_) o = A.array newBounds $ filter (f newBounds) $
 getState
   :: ParaData
   -> Int
-  -> _
+  -> TextAdjustDirection
   -> ((ParaPos, ParaPos), ParaData)
 getState tc len d = (A.bounds (snd lp), pd)
   where
@@ -431,7 +425,7 @@ getState tc len d = (A.bounds (snd lp), pd)
       ForwardGrow -> recF len tcL
       BackwardGrow -> recF len tcU
 
-    recF :: Int -> ParaNum -> [(ParaNum, Array ParaPos _)]
+    recF :: Int -> ParaNum -> [(ParaNum, Array ParaPos (Either Text (Vocab, [VocabId], Bool)))]
     recF l n = case d of
       ForwardGrow
         | nl > l -> [(n, A.ixmap (lb, lb + (ParaPos l)) identity nd)]
@@ -501,6 +495,14 @@ getPrevParaMaybe (p, pos) textContent
 -- On click of left or right button hide both
 -- wait for stopTicks, then show the button again if the next/prev value is Just
 -- Change the button size if full screen
+leftRightButtons
+  :: (MonadFix m, MonadHold t m, PostBuild t m,
+       DomBuilder t m) =>
+     Dynamic t Bool
+  -> Dynamic t (Maybe a1)
+  -> Dynamic t (Maybe a)
+  -> Event t b
+  -> m (Event t (), Event t ())
 leftRightButtons fullscreenDyn nextParaMaybe prevParaMaybe stopTicks = do
 
   let
@@ -520,10 +522,10 @@ leftRightButtons fullscreenDyn nextParaMaybe prevParaMaybe stopTicks = do
   rec
     let btnPress = leftmost [next,prev]
     leftBtnVis <- holdDyn (False) $
-      leftmost [tagDyn (isJust <$> nextParaMaybe) stopTicks
+      leftmost [tagPromptlyDyn (isJust <$> nextParaMaybe) stopTicks
                , False <$ btnPress]
     rightBtnVis <- holdDyn (False) $
-      leftmost [tagDyn (isJust <$> prevParaMaybe) stopTicks
+      leftmost [tagPromptlyDyn (isJust <$> prevParaMaybe) stopTicks
                , False <$ btnPress]
 
     prev <- do
@@ -539,6 +541,7 @@ data TextAdjust = ShrinkText | GrowText
   deriving (Show, Eq)
 
 
+halfParaPos :: ParaPos -> ParaPos -> ParaPos
 halfParaPos (ParaPos u) (ParaPos l)
   = ParaPos $ ceiling $ (fromIntegral (u - l) / 2)
 
@@ -556,7 +559,7 @@ textAdjustF, textAdjustRevF
   -> ((ParaPos, ParaPos), ParaData)
   -> ((ParaPos, ParaPos), ParaData)
 
-textAdjustF (viewPD, (Just ShrinkText)) ((li,ui), ps)
+textAdjustF (viewPD, (Just ShrinkText)) ((li,_), ps)
   | lpU == lpL
     -- drop the last Para
     = assert (lpN > fpN)
@@ -599,12 +602,11 @@ textAdjustF (viewPD, (Just GrowText)) ((li,ui), ps)
 
 textAdjustF (viewPD, Nothing) (_, ps) = (A.bounds lp,ps)
   where
-    (fpN,lpN) = A.bounds ps
-    lp = viewPD A.! lpN
+    lp = viewPD A.! (snd $ A.bounds ps)
 
 -- lower bound is towards end, upper bound is towards start
 -- Do binary search between these bounds
-textAdjustRevF (viewPD, (Just ShrinkText)) ((li,ui), ps)
+textAdjustRevF (viewPD, (Just ShrinkText)) ((_,ui), ps)
   | fpL == fpU
     -- drop the first Para
     = assert (lpN > fpN)
@@ -648,10 +650,14 @@ textAdjustRevF (viewPD, (Just GrowText)) ((li,ui), ps)
 
 textAdjustRevF (viewPD, Nothing) (_, ps) = (A.bounds fp,ps)
   where
-    (fpN,lpN) = A.bounds ps
-    fp = viewPD A.! fpN
+    fp = viewPD A.! (fst $ A.bounds ps)
 
-renderDynParas :: (_)
+renderDynParas
+  :: ((RawElement (DomBuilderSpace m) ~ e,
+        DomBuilder t m,
+        PostBuild t m,
+        MonadHold t m,
+        MonadFix m))
   => Dynamic t (ReaderSettings CurrentDb) -- Used for rubySize
   -> Dynamic t ParaData
   -> m (Event t ([VocabId], (Text, Maybe e)))
@@ -669,11 +675,11 @@ renderDynParas rs dynParas = do
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
   return (vIdEv)
 
-vocabRubyLight :: (_)
+vocabRubyLight :: (DomBuilder t m)
   => Int
   -> Bool
   -> Vocab -> m ()
-vocabRubyLight fontSizePct vis v@(Vocab ks) = do
+vocabRubyLight fontSizePct vis (Vocab ks) = do
   let
     rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) fontSizePct
     g r True = r
@@ -686,26 +692,29 @@ vocabRubyLight fontSizePct vis v@(Vocab ks) = do
 
   void $ el "span" $ mapM f ks
 
-renderOneParaLight :: (_)
+renderOneParaLight :: (DomBuilder t m)
   => Int
   -> [Either Text (Vocab, [VocabId], Bool)]
   -> m ()
-renderOneParaLight rubySize annTextPara = do
+renderOneParaLight rSize annTextPara = do
   el "p" $ do
     let f (Left t) = text t
-        f (Right (v, vId, vis)) = vocabRubyLight rubySize vis v
+        f (Right (v, _, vis)) = vocabRubyLight rSize vis v
     void $ mapM f (annTextPara)
 
-renderDynParasLight :: (_)
+renderDynParasLight
+  :: (MonadSample t m,
+       PostBuild t m,
+       DomBuilder t m)
   => Dynamic t (ReaderSettings CurrentDb) -- Used for rubySize
   -> Dynamic t ParaData
   -> m (Event t ([VocabId], (Text, Maybe (DOM.Element))))
-renderDynParasLight rs dynParas = do
+renderDynParasLight rsDyn dynParas = do
   let renderEachPara rs dt = do
         renderOneParaLight (_rubySize rs) dt
 
-  rsC <- sample $ current rs
-  dyn ((mapM (renderEachPara rsC)) <$> ((\a -> A.elems (fmap A.elems a)) <$> dynParas))
+  rsC <- sample $ current rsDyn
+  void $ dyn ((mapM (renderEachPara rsC)) <$> ((\a -> A.elems (fmap A.elems a)) <$> dynParas))
   return never
 
 ----------------------------------------------------------------------------------

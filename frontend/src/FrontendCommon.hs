@@ -7,6 +7,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE LambdaCase #-}
 
 module FrontendCommon
   ( module FrontendCommon
@@ -33,15 +34,12 @@ import Data.Time.Clock as X
 import Data.Time.Calendar as X
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import qualified Data.List as List
 import Data.These as X
 import Data.Align as X
 
 import Language.Javascript.JSaddle as X (call, eval)
 import qualified GHCJS.DOM.DOMRectReadOnly as DOM
 import qualified GHCJS.DOM.Element as DOM
-import qualified GHCJS.DOM.Document as DOM
-import qualified GHCJS.DOM as DOM
 import qualified GHCJS.DOM.Types as DOM
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty)
@@ -63,6 +61,7 @@ handleVisibility v dv mv = elDynAttr "div" (f <$> dv) mv
 tshow :: (Show a) => a -> Text
 tshow = (T.pack . show)
 
+filterOnEq :: (Eq a, Functor f, FunctorMaybe f) => f a -> a -> f ()
 filterOnEq ev v = fmapMaybe identity $ ffor ev
   (\b -> if b == v then Just () else Nothing)
 
@@ -76,7 +75,10 @@ displayVocabT (Vocab ks) = do
           el "rt" $ text r
   mapM_ f ks
 
-btn :: (_) => Text -> Text -> m (Event t ())
+btn :: (DomBuilder t m, _)
+  => Text
+  -> Text
+  -> m (Event t ())
 btn cl t = do
   (e,_) <- elClass' "button" ("btn " <> cl) $ text t
   return $ domEvent Click e
@@ -89,10 +91,10 @@ addEditSrsEntryWidget :: AppMonad t m
   -> AppMonadT t m ()
 addEditSrsEntryWidget i t s = do
   let
-    widget s = case s of
+    widget = \case
       (InSrs sId) -> do
         ev <- btn "btn-xs btn-primary" "Edit SRS"
-        openEditSrsItemWidget (sId <$ ev)
+        _ <- openEditSrsItemWidget (sId <$ ev)
         return never
 
       (IsWakaru) -> do
@@ -143,13 +145,14 @@ openEditSrsItemWidget ev = do
       editWidget (sId, s) = do
         rec
           (sNew, saveEv, closeEv) <- editWidgetView s ev
-          let sEv = tagDyn sNew saveEv
+          let sEv = tagPromptlyDyn sNew saveEv
           ev <- getWebSocketResponse $ EditSrsItem sId <$> sEv
         return (closeEv, (,) sId <$> sEv)
 
   switchPromptlyDyn
     <$> widgetHold (return never) (modalWidget <$> srsItEv)
 
+modalDiv :: DomBuilder t m => m b -> m b
 modalDiv m = do
   divClass "modal-backdrop fade in" $ return ()
   elAttr "div" attr $ elAttr "div" attr2
@@ -251,7 +254,7 @@ editWidgetView s savedEv = modalDiv $ do
     saveEv <- btn "btn-primary" "Save"
     closeEv <- btn "btn-default" "Close"
     showWSProcessing saveEv savedEv
-    widgetHold (return ()) (savedIcon <$ savedEv)
+    _ <- widgetHold (return ()) (savedIcon <$ savedEv)
     return (ret, saveEv, leftmost[closeEv, closeEvTop])
 
 
@@ -275,10 +278,10 @@ editNonEmptyList ne conT renderFun = do
   rec
     let
       remAddEv = Map.fromList . NE.toList <$> mergeList [addEv, remEv]
-      addEv = attachDyn newKeyDyn (tagDyn (Just . conT <$> value ti) enterPress)
+      addEv = attachPromptlyDyn newKeyDyn (tagPromptlyDyn (Just . conT <$> value ti) enterPress)
       remEv1 = switchPromptlyDyn $
         (leftmost . (fmap snd) . Map.elems) <$> d
-      remEv = fmapMaybe g (attachDyn d remEv1)
+      remEv = fmapMaybe g (attachPromptlyDyn d remEv1)
       g (m,e) = if Map.size m > 1
         then Just e
         else Nothing
@@ -296,7 +299,7 @@ editNonEmptyList ne conT renderFun = do
 
   return $ (NE.fromList . (fmap fst) . Map.elems) <$> d
 
-showWSProcessing :: (_)
+showWSProcessing :: (MonadHold t m, DomBuilder t m)
   => Event t a
   -> Event t b
   -> m ()
@@ -354,7 +357,7 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
         showWSProcessing loadMoreEv addMoreEv
         btn "btn-block btn-primary" "Load More"
       addMoreEv <- fmap fg <$> getWebSocketResponse
-        (LoadMoreSentences vIds <$> tagDyn ((map snd) . Map.keys <$> vIdMap) loadMoreEv)
+        (LoadMoreSentences vIds <$> tagPromptlyDyn ((map snd) . Map.keys <$> vIdMap) loadMoreEv)
 
     return $ switchPromptlyDyn ((leftmost . concat . Map.elems) <$> vIdMap)
 
@@ -362,6 +365,12 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
   return closeEvTop
 
 -- The notFav in key puts the favourite sentences first
+renderOneSentence
+  :: AppMonad t m
+  => [VocabId]
+  -> (Bool, SentenceId)
+  -> SentenceData
+  -> AppMonadT t m [Event t ([VocabId], (Text, Maybe (RawElement (DomBuilderSpace m))))]
 renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "well well-sm" $ do
   let hasEng = not $ null njps
       rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
@@ -376,7 +385,7 @@ renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "well wel
         tEv <- switchPromptly never
           =<< (dyn ((\f -> btn "btn-xs btn-primary"
                       (if f then "unFav" else "Fav")) <$> isFav))
-      getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
+      _ <- getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
 
       if hasEng
         then toggle False
@@ -392,8 +401,10 @@ vocabRuby :: (_)
   => Dynamic t Bool
   -> Dynamic t Int
   -> Dynamic t Bool
-  -> Vocab -> m (_)
-vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
+  -> Vocab
+  -> m (Maybe (RawElement (DomBuilderSpace m)), Event t1 (),
+         Event t2 (), Event t3 ())
+vocabRuby markDyn fontSizePctDyn visDyn (Vocab ks) = do
   let
     attr = ffor markDyn $ \b -> if b then ("class" =: "highlight-word") else Map.empty
     rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
@@ -411,12 +422,16 @@ vocabRuby markDyn fontSizePctDyn visDyn v@(Vocab ks) = do
          , domEvent Mouseenter e
          , domEvent Mouseleave e)
 
-renderOnePara :: (_)
+renderOnePara
+  :: (MonadFix m,
+       MonadHold t m,
+       PostBuild t m,
+       DomBuilder t m)
   => Dynamic t [VocabId] -- Used for mark
   -> Dynamic t Int
   -> [Either Text (Vocab, [VocabId], Bool)]
-  -> m (Event t ([VocabId], (Text,_)))
-renderOnePara vIdDyn rubySize annTextPara = do
+  -> m (Event t ([VocabId], (Text, Maybe (RawElement (DomBuilderSpace m)))))
+renderOnePara vIdDyn rSizeDyn annTextPara = do
   -- let showAllFurigana = constDyn False
   el "p" $ do
     let f (Left t) = never <$ text t
@@ -426,13 +441,13 @@ renderOnePara vIdDyn rubySize annTextPara = do
                 markDyn = (any (\eId -> (elem eId vId))) <$> vIdDyn
             visDyn <- holdDyn vis evVis
             (e, ek, eme, eml) <-
-              vocabRuby markDyn rubySize visDyn v
+              vocabRuby markDyn rSizeDyn visDyn v
           return $ (vId, (vocabToText v, e)) <$ ek
 
     leftmost <$> mapM f (annTextPara)
 
 showVocabDetailsWidget :: forall t m e . (AppMonad t m, DOM.IsElement e)
-  => Event t (_,(Text, Maybe e))
+  => Event t ([VocabId], (Text, Maybe e))
   -> AppMonadT t m ()
 showVocabDetailsWidget vIdEv = divClass "" $ do
   let
@@ -448,12 +463,15 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
               <> ("style" =: "z-index: 1060;\
                          \padding: 10px;")
 
-    wrapper :: (_) => _ -> AppMonadT t m a -> AppMonadT t m (Event t ())
+    wrapper :: (DOM.IsElement e)
+      => Maybe e
+      -> AppMonadT t m a
+      -> AppMonadT t m (Event t ())
     wrapper e m = do
       (y,h) <- case e of
         Nothing -> return (0,0)
-        (Just e) -> DOM.liftJSM $ do
-          rect <- DOM.getBoundingClientRect (e)
+        (Just e') -> DOM.liftJSM $ do
+          rect <- DOM.getBoundingClientRect (e')
           y <- DOM.getY rect
           h <- DOM.getHeight rect
           return (y,h)
@@ -465,11 +483,11 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
                            \overflow-y: auto;\
                            \overflow-x: hidden;\
                            \padding: 15px;")) $ do
-            (e,_) <- elClass' "button" "close" $ text "Close"
+            (e2,_) <- elClass' "button" "close" $ text "Close"
             -- text $ ("(" <> tshow y <> "," <> tshow h <> ")")
-            m
+            _ <- m
             return $ leftmost
-              [domEvent Click e
+              [domEvent Click e2
               , domEvent Click e1]
 
     wd :: (AppMonad t m, DOM.IsElement e)
@@ -483,7 +501,7 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
     <$> fmapMaybeCheap ((fmap NE.toList) . NE.nonEmpty)
         (fmap fst vIdEv)
   surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
-  let detailsEv = attachDyn surfDyn detailsEv1
+  let detailsEv = attachPromptlyDyn surfDyn detailsEv1
 
   rec
     let ev = leftmost [Just <$> detailsEv
@@ -493,6 +511,10 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
 
   return ()
 
+showEntry :: AppMonad t m
+  => Maybe Text
+  -> (Entry, VocabSrsState)
+  -> AppMonadT t m ()
 showEntry surfaceMB (e, sId) = divClass "well-sm" $ do
   let
     surface = maybe (e ^. entryReadingElements . to (NE.head)
@@ -509,9 +531,9 @@ showEntry surfaceMB (e, sId) = divClass "well-sm" $ do
       ((Left $ e ^. entryUniqueId) <$ openEv)
 
   divClass "" $ do
-    mapM (\s -> divClass "" $ text $ showSense s) $ take 3 $ e ^.. entrySenses . traverse
+    mapM_ (\s -> divClass "" $ text $ showSense s) $ take 3 $ e ^.. entrySenses . traverse
 
-entryKanjiAndReading :: (_) => Text -> Entry -> m ()
+entryKanjiAndReading :: (DomBuilder t m) => Text -> Entry -> m ()
 entryKanjiAndReading surface e = do
   sequenceA_ (intersperse sep els)
   where
@@ -581,13 +603,13 @@ orderElements e = sortBy (comparing f)
       filter (view $ readingRestrictKanji . to (null)) $
       (e ^.. entryReadingElements . traverse)
 
-renderElement :: (_)
+renderElement :: (DomBuilder t m)
   => Text
   -> Map KanjiPhrase ReadingElement
   -> ReadingPhrase
   -> (Either KanjiElement ReadingElement)
   -> m ()
-renderElement surface restMap defR (Left ke) = case v of
+renderElement surface restMap defR (Left ke) = case v1 of
   (Right v) -> dispInSpan (vocabToText v) $ displayVocabT v
   (Left _) ->
     (\t -> dispInSpan t $ text t) $ unKanjiPhrase $ ke ^. kanjiPhrase
@@ -595,7 +617,7 @@ renderElement surface restMap defR (Left ke) = case v of
     dispInSpan t = el (spanAttr t)
     spanAttr t = if (T.isPrefixOf surface t) then "strong" else "span"
     kp = (ke ^. kanjiPhrase)
-    v = case Map.lookup kp restMap of
+    v1 = case Map.lookup kp restMap of
           (Just r) -> makeFurigana kp (r ^. readingPhrase)
           Nothing -> makeFurigana kp defR
 
@@ -605,19 +627,22 @@ renderElement surface _ _ (Right re) =
     dispInSpan t = el (spanAttr t)
     spanAttr t = if (T.isPrefixOf surface t) then "strong" else "span"
 
-widgetHoldWithRemoveAfterEvent :: (_)
+widgetHoldWithRemoveAfterEvent
+  :: (MonadFix m,
+       MonadHold t m,
+       DomBuilder t m)
   => Event t (m (Event t a))
   -> m (Event t a)
-widgetHoldWithRemoveAfterEvent w = do
+widgetHoldWithRemoveAfterEvent wEv = do
   let
-    w1 w = do
+    f1 w = do
       rec
         let ev = switchPromptlyDyn evDyn
         evDyn <- widgetHold (w)
           (return never <$ ev)
       return ev
   evDyn <- widgetHold (return never)
-    (w1 <$> w)
+    (f1 <$> wEv)
   return $ switchPromptlyDyn evDyn
 
 -- | A widget to construct a tabbed view that shows only one of its child widgets at a time.

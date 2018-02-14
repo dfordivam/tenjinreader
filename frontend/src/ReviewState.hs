@@ -20,9 +20,7 @@ import FrontendCommon
 import Control.Lens
 
 import qualified Data.Text as T
-import qualified Data.Set as Set
 import qualified Data.Map as Map
-import System.Random
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import NLP.Japanese.Utils
@@ -68,6 +66,7 @@ instance SrsReviewType ProdReview where
   getInputFieldPlaceHolder _ = "日本語で（かな）"
   getRandomRT _ _ _ = ReadingProdReview
 
+hasKanaInField :: ReviewItem -> Bool
 hasKanaInField ri = any (not . (any isKanji) . T.unpack)
   (NE.toList $ fst $ getField ri ReadingRecogReview)
 
@@ -182,7 +181,7 @@ data ResultSyncEvent
   | RespRecieved
   | RetrySendResult
 
-syncResultWithServer :: (AppMonad t m, SrsReviewType rt)
+syncResultWithServer :: (AppMonad t m)
   => ReviewType
   -> Event t ()
   -> Event t Result
@@ -193,7 +192,7 @@ syncResultWithServer rt refreshEv addEv widgetStateDyn = do
     let
       sendResultEv =
         fmapMaybeCheap sendResultEvFun $
-        attachDyn widgetStateDyn $ updated sendResultDyn
+        attachPromptlyDyn widgetStateDyn $ updated sendResultDyn
 
       sendResultEvFun (st, (DoSync r))
         = Just $ SyncReviewItems rt r

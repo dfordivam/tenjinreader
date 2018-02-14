@@ -10,7 +10,6 @@ module SpeechRecog
   where
 
 import Protolude hiding (on)
-import Control.Lens
 import FrontendCommon
 import qualified Data.Text as T
 import Data.JSString.Text

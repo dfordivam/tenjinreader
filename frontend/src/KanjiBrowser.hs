@@ -157,8 +157,8 @@ radicalMatrix evValid = do
       renderMatrix = do
         divClass "row well-lg hidden-xs" $ do
           r <- btn "btn-block btn-default btn-xs" "Reset"
-          ev <- mapM showRadical (Map.toList radicalTable)
-          return (ev, r)
+          ev1 <- mapM showRadical (Map.toList radicalTable)
+          return (ev1, r)
 
       showRadical :: (RadicalId, RadicalDetails) -> m (Event t RadicalId)
       showRadical (i,(RadicalDetails r _)) = do
@@ -179,13 +179,13 @@ radicalMatrix evValid = do
 
         (e,_) <- elDynAttr' "button" attr $
           elAttr "span" spanAttr $ text r
-        let ev = attachDynWithMaybe f
+        let ev1 = attachPromptlyDynWithMaybe f
                    (zipDyn valid disableAll)
                    (domEvent Click e)
             f (_,True) _ = Nothing
             f (True,_) _ = Just ()
             f _ _ = Nothing
-        return (i <$ ev)
+        return (i <$ ev1)
 
     (ev, resetEv) <- renderMatrix
 
@@ -197,12 +197,13 @@ radicalMatrix evValid = do
   return $ Set.toList <$> selectedRadicals
 
 
--- kanjiListWidget
---   :: (DomBuilder t m, MonadHold t m)
---   => Event t KanjiList -> m (Event t KanjiId)
+kanjiListWidget
+  :: (AppMonad t m)
+  => Event t [(KanjiId, Kanji, Maybe Rank, [Meaning])]
+  -> AppMonadT t m (Event t KanjiId)
 kanjiListWidget listEv = do
   let
-    listItem itm@(i, k, r, m) = do
+    listItem (i, k, r, m) = do
           (e, _) <- el' "tr" $ do
             el "td" $ text $ (unKanji k)
             el "td" $ text $ maybe ""
@@ -240,9 +241,9 @@ kanjiDetailsWidget
   :: AppMonad t m
   => Event t KanjiSelectionDetails -> AppMonadT t m ()
 kanjiDetailsWidget ev = do
-  let f1 (KanjiSelectionDetails k v) = k
-  let f2 (KanjiSelectionDetails k v) = v
-  widgetHold (return()) (kanjiDetailWindow <$> (f1 <$> ev))
+  let f1 (KanjiSelectionDetails k _) = k
+  let f2 (KanjiSelectionDetails _ v) = v
+  _ <- widgetHold (return()) (kanjiDetailWindow <$> (f1 <$> ev))
   vocabListWindow LoadMoreKanjiVocab (f2 <$> ev)
 
 kanjiDetailWindow :: AppMonad t m
@@ -250,7 +251,7 @@ kanjiDetailWindow :: AppMonad t m
   -> AppMonadT t m ()
 kanjiDetailWindow (k,vSt,rads) = divClass "well" $ do
   let
-    maybeLabel l Nothing = return ()
+    maybeLabel _ Nothing = return ()
     maybeLabel l (Just v) = elClass "span" "label label-default" $
       text l >> text ": " >> text (tshow v)
 
@@ -288,7 +289,7 @@ vocabListWindow req listEv = do
   rec
     lmEv <- getWebSocketResponse $ req <$ ev
     lsDyn <- foldDyn fun [] (align listEv lmEv)
-    divClass "" $  do
+    _ <- divClass "" $  do
       -- NW 1.1
       dyn $ (mapM (showEntry Nothing)) <$> lsDyn
       -- NW 1.2
@@ -296,9 +297,6 @@ vocabListWindow req listEv = do
       showWSProcessing ev lmEv
       btn "btn-block btn-primary" "Load More"
   return ()
-
-textMay (Just v) = text v
-textMay Nothing = text ""
 
 vocabSearchWidget
   :: AppMonad t m

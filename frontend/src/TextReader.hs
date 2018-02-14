@@ -11,13 +11,7 @@ module TextReader where
 import FrontendCommon
 import ReadingPane
 
-import qualified Data.Text as T
-import qualified Data.Set as Set
 import qualified Data.Map as Map
-import Data.List.NonEmpty (NonEmpty)
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Vector as V
-import Reflex.EventWriter
 
 data TextReaderWidgetView
   = ListOfDocumentsView
@@ -207,7 +201,7 @@ documentEditor editEv = divClass "" $ do
         <*> (value ti)
         <*> (value ta)
   annTextEv <- getWebSocketResponse
-    $ tagDyn evDyn saveEv
+    $ tagPromptlyDyn evDyn saveEv
   showWSProcessing saveEv annTextEv
   return $ (fmapMaybe identity annTextEv
     , cancelEv)

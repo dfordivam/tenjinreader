@@ -16,7 +16,6 @@ import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.List.NonEmpty as NE
-import NLP.Romkan (toHiragana)
 import Data.List.NonEmpty (NonEmpty)
 import System.Random
 import qualified GHCJS.DOM.HTMLElement as DOM
@@ -92,35 +91,6 @@ showStatsWidget (recog, prod) = do
     [ShowReviewWindow ReviewTypeRecogReview <$ ev1
     , ShowReviewWindow ReviewTypeProdReview <$ ev2
     , ShowBrowseSrsItemsWindow <$ browseEv]
-
-statsCard t val = divClass "" $ do
-  divClass "" $
-    divClass "" $
-      text $ tshow val
-  divClass "" $
-    divClass "" $
-      text t
-
-progressStatsCard l l1 l2 (v1,v2) =
-  divClass "" $ do
-    divClass "" $
-      divClass "" $
-        text $ tshow (v1 + v2)
-    divClass "" $
-      divClass "" $
-        text l
-    divClass "" $ do
-      divClass "" $ do
-        divClass "" $
-          divClass "" $ text l1
-        divClass "" $
-          divClass "" $ text $ tshow v1
-
-      divClass "" $ do
-        divClass "" $
-          divClass "" $ text l2
-        divClass "" $
-          divClass "" $ text $ tshow v2
 
 srsLevels = Map.fromList
   [ (LearningLvl, "Learning" :: Text)
@@ -207,7 +177,7 @@ browseSrsItemsWidget = do
             forM es $ checkBoxListEl selAllEv
 
         let f (v, True) = Just v
-            f (v, False) = Nothing
+            f (_, False) = Nothing
             ds = distributeListOverDynPure dyns
 
         return $ (catMaybes . (map f)) <$> ds
@@ -221,7 +191,7 @@ browseSrsItemsWidget = do
         text $ fold $ NE.intersperse ", " $ t
       ev <- elClass "td" "el-sm-2" $
         btn "btn-sm btn-primary" "edit"
-      openEditSrsItemWidget $ i <$ ev
+      _ <- openEditSrsItemWidget $ i <$ ev
       return $ (,) i <$> (value c1)
 
   -- UI
@@ -240,8 +210,8 @@ browseSrsItemsWidget = do
 
         reqEv = leftmost
           [updated browseSrsFilterDyn
-          , tagDyn browseSrsFilterDyn editDone
-          , tagDyn browseSrsFilterDyn evPB]
+          , tagPromptlyDyn browseSrsFilterDyn editDone
+          , tagPromptlyDyn browseSrsFilterDyn evPB]
       itemEv <- getWebSocketResponse reqEv
 
       -- List and selection checkBox
@@ -257,7 +227,11 @@ browseSrsItemsWidget = do
 
   return $ (ShowStatsWindow <$ closeEv, editDone)
 
-buttonWithDisable t active = do
+btnWithDisable :: (_)
+  => Text
+  -> Dynamic t1 Bool
+  -> m (Event t ())
+btnWithDisable t active = do
   let attr True = ("type" =: "button") <> ("class" =: "btn btn-primary active")
       attr False = ("type" =: "button") <> ("class" =: "btn btn-primary disabled")
   (e, _) <- elDynAttr' "button" (attr <$> active) $ text t
@@ -274,21 +248,20 @@ bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "panel-foo
 
   let
       felem = flip elem
-      btn = buttonWithDisable
 
   el "table" $ el "tbody" $ do
     suspendEv <-
       el "td" $
-      btn "Suspend" $ (felem [BrowseSrsItemsDue, BrowseSrsItemsOther]) <$> filtOptsDyn
+      btnWithDisable "Suspend" $ (felem [BrowseSrsItemsDue, BrowseSrsItemsOther]) <$> filtOptsDyn
 
     markDueEv <- el "td" $
-      btn "Mark Due" $ (felem [BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
+      btnWithDisable "Mark Due" $ (felem [BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
 
     deleteEv <- el "td" $
-      btn "Delete" (constDyn True)
+      btnWithDisable "Delete" (constDyn True)
 
     reviewDateChange <- el "td" $
-      btn "Change Review Date" $ (felem [BrowseSrsItemsDue,
+      btnWithDisable "Change Review Date" $ (felem [BrowseSrsItemsDue,
          BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
 
     dateDyn <- el "td" $ datePicker today
@@ -298,7 +271,7 @@ bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "panel-foo
           , SuspendSrsItems <$ suspendEv
           , ChangeSrsReviewData <$> tagPromptlyDyn dateDyn reviewDateChange]
     doUpdate <- getWebSocketResponse $
-      (attachDynWith ($) (BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
+      (attachPromptlyDynWith ($) (BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
     showWSProcessing bEditOp doUpdate
     return $ fmapMaybe identity doUpdate
 
@@ -309,7 +282,7 @@ datePicker today = divClass "" $ do
   let dayList = makeList [1..31]
       monthList = makeList [1..12]
       yearList = makeList [2000..2030]
-      makeList x = constDyn $ Map.fromList $ (\x -> (x, tshow x)) <$> x
+      makeList x1 = constDyn $ Map.fromList $ (\x -> (x, tshow x)) <$> x1
       (currentYear, currentMonth, currentDay)
         = toGregorian today
       mycol = divClass ""
@@ -343,7 +316,7 @@ reviewDataPicker inp = do
     (r,d) <- handleVisibility True vDyn selectDateW
   let
       f :: Reflex t => (Dynamic t a) -> Bool -> Dynamic t (Maybe a)
-      f d True = Just <$> d
+      f a True = Just <$> a
       f _ _ = pure Nothing
   return $ join $ f d <$> vDyn
 
@@ -396,13 +369,18 @@ reviewWidget p refreshEv = do
 
 -- Start initEv (show review if available)
 -- review done ev, fetch new event after update of dyn
-getRevItemDyn :: _
+getRevItemDyn
+  :: (MonadFix m,
+       MonadHold t m,
+       SrsReviewType rt,
+       MonadIO (Performable m),
+       PerformEvent t m)
   => Dynamic t (SrsWidgetState rt)
   -> Event t ()
   -> m (Dynamic t (Maybe (ReviewItem, ActualReviewType rt)))
 getRevItemDyn widgetStateDyn ev = do
   rec
-    v <- performEvent $ ffor (tagDyn ((,) <$> riDyn <*> widgetStateDyn) ev) $
+    v <- performEvent $ ffor (tagPromptlyDyn ((,) <$> riDyn <*> widgetStateDyn) ev) $
       \(last, st) -> do
         let
           allrs = (Map.toList (_reviewQueue st))
@@ -448,7 +426,7 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
     statsTextAttr = ("style" =: "font-size: large;")
       <> ("class" =: "center-block text-center")
 
-    showStats = do
+    showStatsW = do
       let colour c = ("style" =: ("color: " <> c <>";" ))
           labelText t = elClass "span" "small text-muted" $ text t
       labelText "Pending "
@@ -474,7 +452,7 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
 
     divClass "" $ do
       elAttr "span" statsTextAttr $
-        showStats
+        showStatsW
     return $ (fullASR, cEv)
 
   let kanjiRowAttr = ("class" =: "center-block")
@@ -483,7 +461,7 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
       kanjiCellAttr = ("style" =: "vertical-align: middle;\
              \max-width: 25em; display: table-cell;")
 
-  elAttr "div" kanjiRowAttr $ elAttr "div" kanjiCellAttr $ do
+  _ <- elAttr "div" kanjiRowAttr $ elAttr "div" kanjiCellAttr $ do
     let
       showNE (Just (ne, stl)) = elAttr "span" kanjiTextAttr $ do
           mapM_ text (NE.intersperse ", " ne)
@@ -508,15 +486,14 @@ inputFieldWidget
   -> Dynamic t Bool
   -> (ReviewItem, ActualReviewType rt)
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
-inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m r), rt) = do
+inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
   let
     tiId = "JP-TextInput-IME-Input"
     style = "text-align: center; width: 100%;" <> color
     color = getInputFieldStyle rt
     ph = getInputFieldPlaceHolder rt
-    inputField ev = do
+    inputField = do
       let tiAttr = def
-            & textInputConfig_setValue .~ ev
             & textInputConfig_attributes
             .~ constDyn (("style" =: style)
                         <> ("id" =: tiId)
@@ -543,10 +520,9 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m r), rt) = do
           (Right _) -> forMOf_ (reviewItemReading . _2 . _Just . to unReadingNotes) ri
             $ \mn -> text $ "> " <> mn
 
-  rec
-    inpField <- inputField inpTxtEv
-    (dr, inpTxtEv, resEv) <-
-      reviewInputFieldHandler inpField rt ri
+  inpField <- inputField
+  (dr, resEv) <-
+    reviewInputFieldHandler inpField rt ri
 
   -- Need dalay, otherwise focus doesn't work
   evPB <- delay 0.1 =<< getPostBuild
@@ -556,13 +532,13 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m r), rt) = do
         let ans = getAnswer ri rt
         when (isRight ans) bindWanaKana
 
-  widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ evPB)
+  _ <- widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ evPB)
 
   let resultDisAttr = ("class" =: "")
           <> ("style" =: "height: 6em;\
               \overflow-y: auto")
   rec
-    elAttr "div" resultDisAttr $
+    _ <- elAttr "div" resultDisAttr $
       widgetHold (return ()) (showResult <$> (leftmost [resEv, shimesuEv, recogCorrectEv]))
 
     -- Footer
@@ -586,14 +562,14 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m r), rt) = do
         openSentenceWidget (NE.head k, map (unMeaning) $ NE.toList (fst m)) (Right i <$ openEv)
         return openEv
 
-      (recogStop2, addEditEv) <- divClass "col-sm-2" $ do
+      (recogStop2, aeEv) <- divClass "col-sm-2" $ do
         ev <- btn "btn-primary" "Show/Edit details"
         newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
         return $ (,) ev ((\s -> AddItemsEv [getReviewItem s] Nothing) <$> newSrsEntryEv)
 
       let shiruRes = (\b -> DoReviewEv (i, rt, b)) <$>
             leftmost [True <$ shirimasu, False <$ shiranai]
-      return (shiruRes , addEditEv, recog, False <$ shimesu
+      return (shiruRes , aeEv, recog, False <$ shimesu
              , leftmost [recogStop2, recogStop1, shirimasu, closeEv])
 
   return $ leftmost [ shiruResEv , recogResEv
@@ -607,29 +583,22 @@ reviewInputFieldHandler
  => TextInput t
  -> ActualReviewType rt
  -> ReviewItem
- -> m (Event t (ReviewStateEvent rt), Event t Text, Event t Bool)
-reviewInputFieldHandler ti rt ri@(ReviewItem i k m r) = do
+ -> m (Event t (ReviewStateEvent rt), Event t Bool)
+reviewInputFieldHandler ti rt ri@(ReviewItem i _ _ _) = do
   let enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
       correct = checkAnswer n <$> value ti
       n = getAnswer ri rt
       h _ ReviewStart = ShowAnswer
       h _ ShowAnswer = NextReview
       h _ _ = ReviewStart
-  dyn <- foldDyn h ReviewStart enterPress
+  d <- foldDyn h ReviewStart enterPress
   let
 
-    hiragana = never
-    -- case rt of
-    --   RecogMeaningReview -> never
-    --   -- TODO Implement proper kana writing support
-    -- Wanakana or make reflex IME
-    --   RecogReadingReview -> toHiragana <$> (ti ^. textInput_input)
-
   -- the dr event will fire after the correctEv (on second enter press)
-    correctEv = tagDyn correct enterPress
-    sendResult = ffilter (== NextReview) (tagDyn dyn enterPress)
-    dr = (\b -> DoReviewEv (i, rt, b)) <$> tagDyn correct sendResult
-  return (dr, hiragana, correctEv)
+    correctEv = tagPromptlyDyn correct enterPress
+    sendResult = ffilter (== NextReview) (tagPromptlyDyn d enterPress)
+    dr = (\b -> DoReviewEv (i, rt, b)) <$> tagPromptlyDyn correct sendResult
+  return (dr, correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
 checkAnswer :: (Either (NonEmpty Meaning) (NonEmpty Reading))
@@ -660,7 +629,7 @@ checkSpeechRecogResult (ri,rt) resEv = do
         r2 = any ((checkAnswer n) . snd) (concat res)
         n = getAnswer ri rt
         readings = case n of
-          (Left m) -> []
+          (Left _) -> []
           (Right r) -> NE.toList r
       if r1 || r2
         then return (True <$ ev)
@@ -712,7 +681,7 @@ speechRecogWidget :: forall t m rt . (AppMonad t m, SrsReviewType rt)
   -> Dynamic t Bool
   -> (ReviewItem, ActualReviewType rt)
   -> AppMonadT t m (Event t Bool, Event t (ReviewStateEvent rt))
-speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i k m r),rt) = do
+speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i _ _ _),rt) = do
 
   initVal <- sample (current fullASR)
   rec
@@ -749,15 +718,6 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i k m r),rt) = do
 
     (resultEv, recogStartEv, recogEndEv, stopEv) <- lift $ doRecog stopRecogEv startRecogEv
 
-    allEvs <- batchOccurrences 2 $
-      mergeList [SpeechRecogStarted <$ startRecogEv
-               , WaitingForRecogResponse <$ recogStartEv
-               , WaitingForServerResponse <$ resultEv
-               , AnswerSuccessful <$ resultCorrectEv
-               , AnswerWrong <$ resultWrongEv
-               , RecogError <$ stopEv
-               , RecogStop <$ recogEndEv
-               ]
     retryEv <- switchPromptly never =<< (dyn $ ffor fullAsrActive $ \b -> if not b
       then return never
       else do
@@ -768,12 +728,21 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i k m r),rt) = do
                    , RecogError <$ stopEv
                    , RecogStop <$ recogEndEv
                    ]
-        let recogChangeEv = getStChangeEv allEvs
+        let recogChangeEv = getStChangeEv recogEndEvs
         return $ leftmost [(filterOnEq recogChangeEv RecogStop)
                           , filterOnEq recogChangeEv RecogError])
 
     -- btnClick <- (dyn $ (\(c,t) -> btn c t) <$> (btnText <$> stDyn))
     --         >>= switchPromptly never
+
+  allEvs <- batchOccurrences 2 $
+    mergeList [SpeechRecogStarted <$ startRecogEv
+             , WaitingForRecogResponse <$ recogStartEv
+             , WaitingForServerResponse <$ resultEv
+             , AnswerSuccessful <$ resultCorrectEv
+             , AnswerWrong <$ resultWrongEv
+             , RecogError <$ stopEv
+             , RecogStop <$ recogEndEv]
 
   do
     let stChangeEv = getStChangeEv allEvs
