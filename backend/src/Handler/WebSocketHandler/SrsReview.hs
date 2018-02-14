@@ -382,7 +382,7 @@ makeSrsEntry v surface = do
           ff [] = Nothing
           ff (s:ss) = case s ^.. senseInfo . traverse of
             [] -> ff ss
-            _ -> Just (showSense s) <> ff ss
+            _ -> Just (showSense s) <> Just "\n" <> ff ss
 
           mn = MeaningNotes <$> (v ^. _Just . vocabEntry . entrySenses . to ff)
 
