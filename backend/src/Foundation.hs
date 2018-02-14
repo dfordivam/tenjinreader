@@ -9,14 +9,11 @@
 module Foundation where
 
 import Import.NoFoundation
-import Database.Persist.Sql (ConnectionPool, runSqlPool, fromSqlKey)
+import Database.Persist.Sql (ConnectionPool, runSqlPool)
 import Text.Hamlet          (hamletFile)
 import Text.Jasmine         (minifym)
 
--- Used only when in "auth-dummy-login" setting is enabled.
-import Yesod.Auth.Dummy
-
-import Yesod.Auth
+import Yesod.Auth ()
 import Yesod.Auth.OAuth2.Github
 import Yesod.Auth.GoogleEmail2
 import Yesod.Auth.OAuth (authTwitterUsingUserId)
@@ -27,9 +24,8 @@ import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 
-import Common (CurrentDb, OldDb)
 import KanjiDB
-import SrsDB
+-- import SrsDB
 import Text.MeCab
 
 -- | The foundation datatype for your application. This can be a good place to
@@ -169,7 +165,6 @@ instance Yesod App where
 
     -- Routes not requiring authentication.
     isAuthorized (AuthR _) _ = return Authorized
-    isAuthorized CommentR _ = return Authorized
     isAuthorized HomeR _ = return Authorized
     isAuthorized FaviconR _ = return Authorized
     isAuthorized RobotsR _ = return Authorized
@@ -246,7 +241,6 @@ instance YesodAuth App where
               uid <- insert User
                 { userIdent = userId
                 , userService = (credsPlugin creds)
-                , userPassword = Nothing
                 }
               return $ Authenticated uid
 

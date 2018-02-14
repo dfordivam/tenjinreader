@@ -12,7 +12,8 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  ghc-options:         -Wall -O2
+  -- ghc-options:         -Wall -O2
+  ghc-options: -Wall -fwarn-tabs -O0 -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
   exposed-modules:     Message
                        Common
                        Radicals

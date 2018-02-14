@@ -10,23 +10,12 @@ module Mecab
 
 import Protolude hiding (to, (&))
 import           Control.Lens
-import qualified Data.List.NonEmpty as NE
-import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Text as T
-import qualified Data.Set as Set
-import           Data.Set (Set)
-import qualified Data.Map as Map
-import Data.Maybe
-import Text.Read
 import Data.JMDict.AST
-import Data.Char
-import Text.Pretty.Simple
 import Common
 import KanjiDB
 import NLP.Japanese.Utils
-import KanjiDB.JMDict
 
-import Data.Ix
 import Text.MeCab
 import Data.SearchEngine
 import qualified Data.Vector as V
@@ -74,6 +63,7 @@ getOriginalReading term (Vocab ks) = mconcat $ map f $ zip kgs1 ks
     f (k, _) = katakanaToHiragana k
     kgs1 = T.groupBy (\ a b -> (isKana a) == (isKana b)) term
 
+testGetOriginalReading :: [Either Text Bool]
 testGetOriginalReading = map (\((a,b), (c,d)) ->
   (\v -> Right $ v == d) =<< (getOriginalReading c <$> makeFurigana (KanjiPhrase a) (ReadingPhrase b)))
   [ (("いじり回す", "いじりまわす")
@@ -102,6 +92,7 @@ testGetOriginalReading = map (\((a,b), (c,d)) ->
    , ("命", "いのち"))
   ]
 
+getVocabFurigana :: (Text, Text) -> Vocab
 getVocabFurigana (surf, reading)
   | isKanaOnly surf = Vocab [Kana surf]
   | otherwise = case makeFurigana (KanjiPhrase surf) (ReadingPhrase reading) of
@@ -109,8 +100,8 @@ getVocabFurigana (surf, reading)
     (Right v) -> v
 
 parseMecab :: MeCab -> Text -> IO ([(Text, Maybe MecabNodeFeatures)])
-parseMecab m t = do
-  let spaceReplaced = T.map rep t
+parseMecab m txt = do
+  let spaceReplaced = T.map rep txt
       rep ' ' = '�'
       rep c = c
   nodes <- parseToNodes m spaceReplaced

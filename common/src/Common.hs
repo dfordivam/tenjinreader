@@ -22,7 +22,7 @@ import Data.Default
 import Data.Time.Calendar
 import Data.JMDict.AST
 import Data.List.NonEmpty (NonEmpty(..))
-import DerivingInstances
+import DerivingInstances ()
 import qualified Data.Text as T
 import NLP.Japanese.Utils
 import Data.These
@@ -100,6 +100,7 @@ vocabToKana (Vocab ks) = mconcat $ map getFur ks
     getFur (KanjiWithReading _ t) = t
     getFur (Kana t) = t
 
+vocabToText :: Vocab -> Text
 vocabToText (Vocab ks) = mconcat $ map f ks
   where f (KanjiWithReading (Kanji k) _) = k
         f (Kana k) = k
@@ -206,7 +207,7 @@ data ReaderSettingsTree t = ReaderSettings
 instance Default (ReaderSettingsTree t) where
   def = ReaderSettings 120 105 150 False 400
 
-
+capitalize :: Text -> Text
 capitalize m = T.unwords $ T.words m & _head  %~ f
   where
     f t
@@ -215,6 +216,7 @@ capitalize m = T.unwords $ T.words m & _head  %~ f
       | otherwise = T.toTitle t
     ignoreList = ["to"]
 
+showSense :: Sense -> Text
 showSense s = mconcat
       [ showPos $ s ^.. sensePartOfSpeech . traverse
       , p $ s ^.. senseInfo . traverse
@@ -285,8 +287,8 @@ data SrsEntry = SrsEntry
 -- APIs -- may be move from here
 
 makeFurigana :: KanjiPhrase -> ReadingPhrase -> Either Text Vocab
-makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab
-  <$> (g kgs (katakanaToHiragana r))
+makeFurigana (KanjiPhrase k) (ReadingPhrase rp) = Vocab
+  <$> (g k_gs (katakanaToHiragana rp))
   where
     g kgs r = case reverse kgs of
       ((kl, Just klr):krev) -> case T.stripSuffix kl r of
@@ -294,10 +296,10 @@ makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab
         Nothing -> Left "stripSuffix issue"
       _ -> f kgs r
 
-    kgs1 = T.groupBy (\ a b -> (isKana a) == (isKana b)) k
+    k_gsF = T.groupBy (\ a b -> (isKana a) == (isKana b)) k
 
-    kgs :: [(Text, Maybe Text)]
-    kgs = (flip map) kgs1 (\grp -> if (isKana $ T.head grp)
+    k_gs :: [(Text, Maybe Text)]
+    k_gs = (flip map) k_gsF (\grp -> if (isKana $ T.head grp)
                      then (katakanaToHiragana grp, Just grp) -- Store original kana form
                      else (grp, Nothing))
 
@@ -327,6 +329,9 @@ makeFurigana (KanjiPhrase k) (ReadingPhrase r) = Vocab
             -> (KanjiWithReading (Kanji kg) (T.cons (T.head r) rk) :)
             <$> (f ((kg2, Just kgr2):kgs) rs)
 
+    f _ _ = Left "Invalid input, should be grouped by isKana"
+
+testMakeFurigana :: [Either Text Vocab]
 testMakeFurigana = map (\(a,b) -> makeFurigana (KanjiPhrase a) (ReadingPhrase b))
   [("いじり回す", "いじりまわす")
   ,("弄りまわす", "いじりまわす")

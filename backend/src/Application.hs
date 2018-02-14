@@ -40,7 +40,6 @@ import System.Log.FastLogger                (defaultBufSize, newStdoutLoggerSet,
 -- Don't forget to add new modules to your cabal file!
 import Handler.Common
 import Handler.Home
-import Handler.Comment
 import Handler.Profile
 import Handler.WebSocketHandler
 import Mecab
@@ -70,8 +69,7 @@ makeFoundation appSettings = do
     appMecabPtr <- new ["mecab", "-d"
       , unpack $ appMecabFilesDir appSettings]
 
-    (appKanjiDb, appVocabDb, appRadicalDb) <-
-      createDBs appMecabPtr
+    (appKanjiDb, appVocabDb, appRadicalDb) <- createDBs
 
     let appKanjiSearchEng = getKanjiSE appKanjiDb
         appVocabSearchEng = getVocabSE appVocabDb

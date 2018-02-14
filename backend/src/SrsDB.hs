@@ -2,7 +2,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -15,29 +14,24 @@
 module SrsDB where
 
 import Common
-import KanjiDB
-import Model hiding (Key)
+import KanjiDB ()
 
-import Control.Applicative (Applicative, (<$>))
+import Control.Applicative ((<$>))
 import Control.Lens
-import Control.Monad.IO.Class (MonadIO, liftIO)
 
-import Data.BTree.Alloc (AllocM, AllocReaderM)
-import Data.BTree.Impure (Tree, insertTree, lookupTree, toList)
+import Data.BTree.Impure (Tree)
 import Data.BTree.Primitives (Value, Key)
 import Data.Binary (Binary)
 import qualified Data.Set as Set
 import Data.Set (Set)
-import Data.Text (Text, unpack)
-import Data.Int (Int64)
-import Data.Typeable (Typeable, Typeable1)
+import Data.Text (Text)
+import Data.Typeable (Typeable)
 import qualified Data.BTree.Impure as Tree
 import Data.Default
 
 import Control.Monad.Haskey
 import Database.Haskey.Alloc.Concurrent (Root, ConcurrentHandles)
 import Database.Haskey.Alloc.Concurrent.Database
-import Data.Binary.Orphans
 import GHC.Generics (Generic)
 import Data.These
 import Data.List.NonEmpty (NonEmpty)
@@ -66,7 +60,7 @@ data AppUserDataTree t = AppUserDataTree
 deriving instance Root (AppUserDataTree CurrentDb)
 instance Value (AppUserDataTree CurrentDb)
 instance Value (AppUserDataTree OldDb)
-instance Show (AppUserDataTree CurrentDb)
+deriving instance Show (AppUserDataTree CurrentDb)
 instance Show (AppUserDataTree OldDb)
 
 type family ReaderDocument t

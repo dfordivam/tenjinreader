@@ -87,14 +87,13 @@ library
     , yesod-auth-oauth
     , common
   if (flag(dev)) || (flag(library-only))
-    ghc-options: -Wall -fwarn-tabs -O0
+    ghc-options: -Wall -fwarn-tabs -O0 -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
     cpp-options: -DDEVELOPMENT
   else
     ghc-options: -Wall -fwarn-tabs -O2
   exposed-modules:
       Application
       Foundation
-      Handler.Comment
       Handler.Common
       Handler.Home
       Handler.Profile

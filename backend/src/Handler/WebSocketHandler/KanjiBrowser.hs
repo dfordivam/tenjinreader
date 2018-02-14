@@ -18,11 +18,10 @@ import qualified Data.Set as Set
 import qualified Data.Vector as V
 import qualified Data.List as List
 
-import Text.Pretty.Simple
 import Data.SearchEngine
 import qualified Data.BTree.Impure as Tree
 import NLP.Japanese.Utils
-import Control.Monad.State hiding (foldM)
+import Control.Monad.State hiding (foldM, ap, forM_)
 import Data.BTree.Alloc (AllocM, AllocReaderM)
 import qualified Data.Array as A
 import Data.Array (Array)
@@ -32,6 +31,7 @@ import System.Random
 
 searchResultCount = 20
 
+mostUsedKanjis :: Array i KanjiData -> [KanjiId]
 mostUsedKanjis kanjiDb = take 1000 $ map _kanjiId
   $ sortBy (comparing f) $ map _kanjiDetails
   $ A.elems kanjiDb
@@ -41,9 +41,8 @@ mostUsedKanjis kanjiDb = take 1000 $ map _kanjiId
 
 -- Pagination,
 getKanjiFilterResult :: KanjiFilter -> WsHandlerM KanjiFilterResult
-getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt filtType _) rads) = do
+getKanjiFilterResult (KanjiFilter inpTxt (AdditionalFilter filtTxt _ _) rads) = do
   kanjiDb <- lift $ asks appKanjiDb
-  vocabDb <- lift $ asks appVocabDb
   radicalDb <- lift $ asks appRadicalDb
   kanjiSearchEng <- lift $ asks appKanjiSearchEng
   let uniqKanji = ordNub $ getKanjis inpTxt
@@ -136,7 +135,6 @@ getLoadMoreKanjiResults _ = do
 getKanjiDetails :: GetKanjiDetails -> WsHandlerM (Maybe KanjiSelectionDetails)
 getKanjiDetails (GetKanjiDetails kId _) = do
   kanjiDb <- lift $ asks appKanjiDb
-  radicalDb <- lift $ asks appRadicalDb
   let kd = arrayLookupMaybe kanjiDb kId
       rads = maybe [] ((map (\(RadicalDetails t _) -> t)) . catMaybes
                         . (map (\i -> Map.lookup i radicalTable))
@@ -154,6 +152,9 @@ getKanjiDetails (GetKanjiDetails kId _) = do
   return $ KanjiSelectionDetails <$> ((,,) <$> kd ^? _Just . kanjiDetails
     <*> pure rs <*> pure rads) <*> pure vs
 
+loadVocabList
+  :: [VocabId]
+  -> ReaderT WsHandlerEnv Handler [(Entry, VocabSrsState)]
 loadVocabList keys = do
   vocabDb <- lift $ asks appVocabDb
   let
@@ -165,18 +166,8 @@ loadVocabList keys = do
   return $ zip vocabs s
 
 getLoadMoreKanjiVocab :: LoadMoreKanjiVocab -> WsHandlerM VocabList
-getLoadMoreKanjiVocab _ = do
-  vocabDb <- lift $ asks appVocabDb
-
-  (keys, count) <- asks kanjiVocabResult >>= \ref ->
-    liftIO $ readIORef ref
-
-  vs <- loadVocabList (take searchResultCount
-                       $ drop count keys)
-
-  asks kanjiVocabResult >>= \ref ->
-    liftIO $ writeIORef ref (keys, count + (length vs))
-  return $ vs
+getLoadMoreKanjiVocab _ =
+  getLoadMoreVocabSearchResult LoadMoreVocabSearchResult
 
 getVocabSearch :: VocabSearch -> WsHandlerM VocabList
 getVocabSearch (VocabSearch m filt) = do
@@ -192,7 +183,6 @@ getVocabSearch (VocabSearch m filt) = do
       es = map _vocabEntry $ arrayLookup vocabDb keys1
       allVs = filter (filterPOS filt) es
       keys = map _entryUniqueId allVs
-      vs = (take searchResultCount allVs)
 
   vs <- loadVocabList (take searchResultCount keys)
   asks vocabSearchResult >>= \ref ->
@@ -218,24 +208,24 @@ filterPOS (Just pf) e = any f ePs
       (PosAdjective _) -> case p of
         (PosAdverb _) -> True
         (PosAdjective _) -> True
-        (PosAdverb _) -> True
         _ -> False
 
       _ -> True
 
 getLoadMoreVocabSearchResult :: LoadMoreVocabSearchResult -> WsHandlerM VocabList
 getLoadMoreVocabSearchResult _ = do
-  vocabDb <- lift $ asks appVocabDb
-
-  (keys, count) <- asks vocabSearchResult >>= \ref ->
+  (vIds, len) <- asks vocabSearchResult >>= \ref ->
     liftIO $ readIORef ref
 
   vs <- loadVocabList (take searchResultCount
-                       $ drop count keys)
+                       $ drop len vIds)
   asks vocabSearchResult >>= \ref ->
-    liftIO $ writeIORef ref (keys, count + (length vs))
+    liftIO $ writeIORef ref (vIds, len + (length vs))
   return $ vs
 
+makeReaderDocumentContent
+  :: (MonadIO m, MonadReader App m)
+  => Text -> m AnnotatedDocument
 makeReaderDocumentContent t = do
   vocabDb <- asks appVocabDb
   mec <- asks appMecabPtr
@@ -248,6 +238,10 @@ getAddOrEditDocument (AddOrEditDocument dId title t) = do
   c <- lift $ makeReaderDocumentContent t
   addEditNewDocumentCommon dId (MyDocument title c)
 
+addEditNewDocumentCommon
+  :: Maybe ReaderDocumentId
+  -> ReaderDocumentTypeCurrent
+  -> ReaderT WsHandlerEnv Handler (Maybe ReaderDocumentData)
 addEditNewDocumentCommon dId docContent = do
   booksDb <- lift $ asks appBooksDb
   articlesDb <- lift $ asks appArticlesDb
@@ -297,6 +291,7 @@ getListDocuments _ = do
       (arrayLookupMaybe articlesDb aId)
   return $ catMaybes $ map f ds
 
+getAnnDocContent :: AnnotatedDocument -> Text
 getAnnDocContent c = T.take 50 (foldl' fol "" c)
   where
       fol t ap = t <> (mconcat $ map getT ap)
@@ -329,7 +324,7 @@ getViewDocument (ViewDocument i paraNum) = do
   s <- transactReadOnlySrsDB $ \rd ->
     Tree.lookupTree i (rd ^. readerDocuments)
 
-  forM s $ \_ -> transactSrsDB_ $
+  forM_ s $ \_ -> transactSrsDB_ $
     documentAccessOrder %%~ (\ol -> return $ i : (List.delete i ol))
 
   let
@@ -342,7 +337,7 @@ getViewDocument (ViewDocument i paraNum) = do
         => (Vocab, [VocabId], Bool)
         -> m (Vocab, [VocabId], Bool)
       f v@(_,vIds,_) = do
-        sIds <- mapM (\i -> Tree.lookupTree i (rd ^. vocabSrsMap)) vIds
+        sIds <- mapM (\vi -> Tree.lookupTree vi (rd ^. vocabSrsMap)) vIds
         return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
     ret & _Just . _5 . each . _2 . each . _Right %%~ f
 
@@ -353,6 +348,7 @@ getViewDocument req = do
     c = case req of
       (ViewBook i) -> Book i
       (ViewArticle i) -> Article i
+      _ -> error "Cannot happen"
     f (_,(ReaderDocument _ d _)) = d == c
 
   case (headMay $ filter f rs) of
@@ -362,11 +358,18 @@ getViewDocument req = do
       addEditNewDocumentCommon Nothing c
 
 
+getReaderDocumentData
+  :: Array BookId (Text, AnnotatedDocument)
+  -> Array ArticleId (Text, AnnotatedDocument)
+  -> ReaderDocumentTree t0
+  -> Maybe Int
+  -> (ReaderDocumentId, Text, (Int, Maybe Int), Int,
+       [(Int, AnnotatedPara)])
 getReaderDocumentData booksDb articlesDb r paraNum =
-  (r ^. readerDocId, title, p, endParaNum, slice)
+  (r ^. readerDocId, title, pg, endParaNum, slice)
   where
     (title, c) = case r ^. readerDoc of
-      (MyDocument t c) -> (t,c)
+      (MyDocument t c') -> (t,c')
       (Book i) -> maybe empVec id $ arrayLookupMaybe booksDb i
       (Article i) -> maybe empVec id $ arrayLookupMaybe articlesDb i
     empVec :: (Text, AnnotatedDocument)
@@ -374,8 +377,8 @@ getReaderDocumentData booksDb articlesDb r paraNum =
     slice = zip [startI..] $ V.toList $ V.slice startI len $ c
     len = min (totalLen - startI) 60
     totalLen = (V.length $ c)
-    startI = maybe (max 0 (fst p - 20)) (\p -> min p (totalLen - 1)) paraNum
-    p = r ^. readerDocProgress
+    startI = maybe (max 0 (fst pg - 20)) (\p -> min p (totalLen - 1)) paraNum
+    pg = r ^. readerDocProgress
     endParaNum = totalLen - 1
 
 getViewRawDocument :: ViewRawDocument
@@ -441,7 +444,7 @@ getRandomSentence req = do
 
   let
     isFav = Set.member sId favSet
-    g (sId,b) = (,) <$> pure (not b, sId) <*> arrayLookupMaybe sentenceDb sId
+    g (i,b) = (,) <$> pure (not b, i) <*> arrayLookupMaybe sentenceDb i
     (Just val) = g (sId, isFav)
   return val
 

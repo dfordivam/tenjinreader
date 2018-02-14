@@ -20,7 +20,6 @@ import Message
 import Reflex.Dom.WebSocket.Message
 import Reflex.Dom.WebSocket.Server hiding (Handler)
 import qualified Reflex.Dom.WebSocket.Server (Handler)
-import qualified Data.Map as Map
 import qualified Data.Conduit.List
 import Database.Persist.Sql
 
@@ -31,6 +30,8 @@ getWebSocketHandlerR = do
     webSockets $ handleWebSocketConn uId
     redirect $ ("static/websocket/index.html" :: Text)
 
+handleWebSocketConn :: ToBackendKey SqlBackend record =>
+                       Key record -> WebSocketsT Handler ()
 handleWebSocketConn uId = do
   iref1  <- liftIO $ newIORef ([],0)
   iref2  <- liftIO $ newIORef ([],0)

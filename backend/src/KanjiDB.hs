@@ -183,12 +183,12 @@ deriving instance Ix ArticleId
 makeLenses ''KanjiData
 makeLenses ''VocabData
 --
+
+makeArray :: Ix a => [(a, e)] -> Array a e
 makeArray ls = A.array (minimum $ map fst ls, maximum $ map fst ls) ls
 
-createDBs ::
-  MeCab
-  -> IO (KanjiDb, VocabDb, RadicalDb)
-createDBs mecab = do
+createDBs :: IO (KanjiDb, VocabDb, RadicalDb)
+createDBs = do
   let kanjibin = "kanjidb.bin"
       jmDictFilePath = "/home/divam/nobup/jmdict/JMdict_e"
   ex <- doesFileExist kanjibin
@@ -214,8 +214,8 @@ createDBs mecab = do
 
           rDb <- makeArray <$> mapM
             (\r -> do
-                ks <- getRadicalKanjis r
-                return (r, Set.fromList ks))
+                ks1 <- getRadicalKanjis r
+                return (r, Set.fromList ks1))
             (Map.keys radicalTable)
 
           return (kDb, vDb, rDb)
@@ -397,7 +397,7 @@ featureFun e VocabPriority = sum $ map f allPr
 
 featureFun e VocabInfo = case (ki,ri) of
   ([],[]) -> 10
-  ([],ri) -> 5
+  ([],_) -> 5
   (_,_) -> 1
   where ki = e ^.. entryKanjiElements . traverse . kanjiInfo . traverse
         ri = e ^.. entryReadingElements . traverse . readingInfo . traverse
@@ -462,6 +462,8 @@ vocabSearchRankParamsNG =
     featFun VocabPriority = LogarithmicFunction 1
     featFun VocabInfo = LogarithmicFunction 1
 
+getSentenceDbs :: (Text -> IO AnnotatedDocument)
+               -> Text -> Text -> IO (SentenceDb, VocabSentenceDb)
 getSentenceDbs parseF sFp linkFp = do
   let binFile = "sentencedb.bin"
   readDbOrCreate binFile $ createSentenceDbs parseF sFp linkFp
@@ -485,11 +487,11 @@ createSentenceDbs parseF sFp linkFp = do
     lks :: [(Int64, Int64)]
     lks = ffor (T.lines linkT) $ \t -> case T.splitOn "\t" t of
       (t1:t2:_) -> case (treadMaybe t1, treadMaybe t2) of
-        (Just t1, Just t2) -> (t1,t2)
+        (Just t1', Just t2') -> (t1',t2')
         _ -> error "Error parsing links.csv"
       _ -> error "Error parsing links.csv"
 
-  ss2' <- forM ss $ \(i,l,s) -> case (l, treadMaybe i) of
+  ss2' <- forM ss $ \(i1,l,s) -> case (l, treadMaybe i1) of
       ("jpn", Just i) -> do
         a <- parseF s
         return $ Just $ Right (i, a V.! 0)
@@ -547,7 +549,7 @@ getVocabSentenceDb m (sId, s) = foldl' (flip (Map.alter f)) m es
   where
     es = s ^.. sentenceContents . traverse . traverse . _Right . _2 . traverse
     f Nothing = Just $ Set.singleton sId
-    f (Just s) = Just $ Set.insert sId s
+    f (Just s1) = Just $ Set.insert sId s1
 
 getBooksDb :: (Text -> IO AnnotatedDocument)
   -> IO BooksDb

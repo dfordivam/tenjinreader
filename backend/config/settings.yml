@@ -28,7 +28,8 @@ database:
   database: "_env:SQLITE_DATABASE:userdb.sqlite3"
   poolsize: "_env:SQLITE_POOLSIZE:10"
 
-copyright: Insert copyright statement here
+copyright: © 2018, Divam
+
 #analytics: UA-YOURCODE
 
 mecab-files-dir: "/home/divam/nobup/mecab-tools/with_jmdict"

@@ -40,7 +40,6 @@ executable frontend
                      , containers
                      , reflex
                      , jsaddle
-                     , romkan
                      , bytestring
                      , these
                      , random
@@ -48,7 +47,6 @@ executable frontend
                      , array
                      , hs-nlp-jp-utils
                      , ghcjs-dom
-
                      , jsaddle-warp
 
   -- Fix this
