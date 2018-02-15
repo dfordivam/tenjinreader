@@ -105,16 +105,27 @@ stripRubyInfo tOrig = (tOrig, [])
 
 parseTextForRuby :: Text -> _
 -- [TextTok]
-parseTextForRuby tOrig =
-  fullParses (E.parser gr) $ T.unpack tOrig
+parseTextForRuby tOrig = loop $ reverse $ T.unpack tOrig
   where
+    loop [] = []
+    loop toks = case reverse $ ps of
+      [] -> []
+      (p:_) -> p : loop unc
+      where
+        (ps, (Report _ _ unc)) = allParses (E.parser gr) toks
+
     gr :: Grammar r (Prod r Char Char _)
     gr = mdo
       kana <- rule $ satisfy isKana
-      kanji <- rule $ satisfy isKanji
-      ruby <- rule $ (,) <$> (kana *> many kanji)
-        <*> (token '《' *> many kana <* token '》')
-      r1 <- rule $ many ((Left <$> (kana <|> kanji))  <|> (Right <$> ruby))
+      kanji <- rule $ satisfy (\c -> ((isKanji) c) && (c /= '》') && (c /= '《'))
+      notKanji <- rule $ satisfy (\c -> ((not . isKanji) c) && (c /= '》') && (c /= '《'))
+
+      ruby <- rule $ (,) <$>
+        (token '》' *> many kana <* token '《') <*> (many kanji)
+
+      nonRuby <- rule $ (Left <$> many (notKanji <|> kanji))
+
+      r1 <- rule $ ((Right <$> ruby) <|> nonRuby)
       return $ r1 -- (,) <$> r1 <*> r2
 
 -- 重い    形容詞,自立,*,*,形容詞・アウオ段,基本形,重い,オモイ,オモイ
