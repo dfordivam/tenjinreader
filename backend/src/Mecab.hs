@@ -1,7 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
@@ -15,7 +17,10 @@ import Data.JMDict.AST
 import Common
 import KanjiDB
 import NLP.Japanese.Utils
+import Text.Earley as E
+import Data.Char
 
+import Control.Exception (assert)
 import Text.MeCab
 import Data.SearchEngine
 import qualified Data.Vector as V
@@ -23,32 +28,120 @@ import qualified Data.Array as A
 import Data.Array (Array)
 import Handler.WebSocketHandler.Utils
 
+-- Parse ruby characters and create Vocab using them
+--
+-- Example
+-- どの天皇様の御代《みよ》であったか、女御《にょご》とか更衣《こうい》とかいわれる後宮《こうきゅう》がおおぜいいた中に
+-- 御代《みよ》
+-- 女御《にょご》
+-- 更衣《こうい》
+-- 後宮《こうきゅう》
+
+-- 1. Strip the ruby info from original text and replace the surface (kanjis) with an identifier
+-- 2. Do mecab
+-- 3. parse the mecab output and patch/replace the identifier with the Vocab using ruby
+
+newtype Surface = Surface { unSurface :: Text}
+  deriving (Show, Eq)
+
+newtype OriginalForm = OriginalForm { unOriginalForm :: Text}
+  deriving (Show, Eq)
+
+data MecabOutputTok = MecabOutputTok Surface (Maybe (OriginalForm, ReadingPhrase))
+
 parseAndSearch :: Array EntryId VocabData
   -> VocabSearchEngineNoGloss
   -> MeCab
   -> Text
   -> IO AnnotatedDocument
 parseAndSearch es se m t = do
-  feats <- liftIO $ mapM (parseMecab m) (T.lines t)
+  -- remove ruby and store data
   let
-    fun ("", _) = Nothing
-    fun (surf, Nothing) = Just (Left surf)
-    fun (surf, Just feat) = Just $ Right $ (voc, vIds, True)
+    paras = T.lines t
+    onePara p = do
+      let (pt, rMap) = stripRubyInfo p
+      toks <- parseMecab m pt
+      let toks2 = replaceRubyTokens toks rMap
+      return (getParaData es se toks2)
+
+  V.fromList <$> mapM onePara paras
+
+getParaData
+  :: Array EntryId VocabData
+  -> VocabSearchEngineNoGloss
+  -> [MecabOutputTok]
+  -> AnnotatedPara
+getParaData es se = map g
+  where
+    g (MecabOutputTok (Surface s) Nothing) = Left s
+    g (MecabOutputTok surf (Just (o, r))) = Right (voc, vIds, True)
       where
-        voc = getVocabFurigana (surf,reading)
-        term = (_mecabNodeFeat7 feat)
-        reading = (_mecabNodeFeat8 feat)
+        voc = getVocabFurigana (surf,r)
+
         ffIds = filter f eIds
         vIds = if null ffIds then eIds else ffIds
-        eIds = query se [term]
-        origRead = getOriginalReading term voc
+        eIds = query se [unOriginalForm o]
+        origRead = getOriginalReading o voc
         f eId
-          | isKanaOnly surf = True
+          | isKanaOnly (unSurface surf) = True
           | otherwise = case arrayLookupMaybe es eId of
           Nothing -> False
           (Just e) -> elem origRead (e ^.. vocabEntry . entryReadingElements . traverse
                                     . readingPhrase . to (unReadingPhrase))
-  return $ V.fromList $ map (catMaybes . (fmap fun)) feats
+
+type RubyData = [(RubyIdentifier, (Surface, ReadingPhrase))]
+
+newtype RubyIdentifier = RubyIdentifier Int
+  deriving (Eq, Ord)
+
+
+data TextTok = SimpleText Text | RubyDef Surface ReadingPhrase
+
+--
+-- 重い外戚《がいせき》が背景になっていて、
+-- 重い《RUBID0》が背景になっていて
+stripRubyInfo :: Text -> (Text, RubyData)
+stripRubyInfo tOrig = (tOrig, [])
+
+parseTextForRuby :: Text -> _
+-- [TextTok]
+parseTextForRuby tOrig =
+  fullParses (E.parser gr) $ T.unpack tOrig
+  where
+    gr :: Grammar r (Prod r Char Char _)
+    gr = mdo
+      kana <- rule $ satisfy isKana
+      kanji <- rule $ satisfy isKanji
+      ruby <- rule $ (,) <$> (kana *> many kanji)
+        <*> (token '《' *> many kana <* token '》')
+      r1 <- rule $ many ((Left <$> (kana <|> kanji))  <|> (Right <$> ruby))
+      return $ r1 -- (,) <$> r1 <*> r2
+
+-- 重い    形容詞,自立,*,*,形容詞・アウオ段,基本形,重い,オモイ,オモイ
+-- 《      記号,括弧開,*,*,*,*,《,《,《
+-- RUBID   名詞,一般,*,*,*,*,*
+-- 0       名詞,数,*,*,*,*,*
+-- 》      記号,括弧閉,*,*,*,*,》,》,》
+-- が      助詞,格助詞,一般,*,*,*,が,ガ,ガ
+
+replaceRubyTokens :: [MecabOutputTok] -> RubyData -> [MecabOutputTok]
+replaceRubyTokens toks rData
+  | null rData = toks
+  | otherwise = loop toks rData
+  where
+    loop [] _ = []
+    loop (startTok:midTok:n:endTok:ts) (r:rs) = (getTok n r) : (loop ts rs)
+    loop (t:ts) rs = t : (loop ts rs)
+
+    startTok = MecabOutputTok (Surface "《") Nothing
+    endTok = MecabOutputTok (Surface "》") Nothing
+    midTok = MecabOutputTok (Surface "RUBID") Nothing
+
+    getTok n (rId, (s,r)) = assert (Just rId == (numTok n))
+      (MecabOutputTok s (Just (OriginalForm (unSurface s), r)))
+
+    numTok (MecabOutputTok (Surface n) Nothing) = RubyIdentifier <$> readMaybe (T.unpack n)
+    numTok _ = Nothing
 
 isKanaOnly :: T.Text -> Bool
 isKanaOnly = (all f) . T.unpack
@@ -56,8 +149,8 @@ isKanaOnly = (all f) . T.unpack
           -- isKana c || (elem c ['、', '〜', 'ー'])
 
 -- getOriginalReading "分かる" -> Vocab "分かり" -> "わかる"
-getOriginalReading :: Text -> Vocab -> Text
-getOriginalReading term (Vocab ks) = mconcat $ map f $ zip kgs1 ks
+getOriginalReading :: OriginalForm -> Vocab -> Text
+getOriginalReading (OriginalForm term) (Vocab ks) = mconcat $ map f $ zip kgs1 ks
   where
     f (_,(KanjiWithReading _ r)) = r
     f (k, _) = katakanaToHiragana k
@@ -65,7 +158,7 @@ getOriginalReading term (Vocab ks) = mconcat $ map f $ zip kgs1 ks
 
 testGetOriginalReading :: [Either Text Bool]
 testGetOriginalReading = map (\((a,b), (c,d)) ->
-  (\v -> Right $ v == d) =<< (getOriginalReading c <$> makeFurigana (KanjiPhrase a) (ReadingPhrase b)))
+  (\v -> Right $ v == d) =<< (getOriginalReading (OriginalForm c) <$> makeFurigana (KanjiPhrase a) (ReadingPhrase b)))
   [ (("いじり回す", "いじりまわす")
    , ("いじり回す", "いじりまわす"))
   , (("弄りまわし", "いじりまわし")
@@ -92,14 +185,14 @@ testGetOriginalReading = map (\((a,b), (c,d)) ->
    , ("命", "いのち"))
   ]
 
-getVocabFurigana :: (Text, Text) -> Vocab
-getVocabFurigana (surf, reading)
+getVocabFurigana :: (Surface, ReadingPhrase) -> Vocab
+getVocabFurigana (Surface surf, reading)
   | isKanaOnly surf = Vocab [Kana surf]
-  | otherwise = case makeFurigana (KanjiPhrase surf) (ReadingPhrase reading) of
+  | otherwise = case makeFurigana (KanjiPhrase surf) (reading) of
     (Left _) -> Vocab [Kana surf]
     (Right v) -> v
 
-parseMecab :: MeCab -> Text -> IO ([(Text, Maybe MecabNodeFeatures)])
+parseMecab :: MeCab -> Text -> IO [MecabOutputTok]
 parseMecab m txt = do
   let spaceReplaced = T.map rep txt
       rep ' ' = '�'
@@ -110,7 +203,15 @@ parseMecab m txt = do
         | T.any (== '�') t  = (T.replicate (T.length t) " "
                             , Nothing)
         | otherwise = (t,n)
-  return $ map unReplaceSpace $ zip (map nodeSurface nodes)
+
+  let
+    makeTok ("", _) = Nothing
+    makeTok (surf, Nothing) = Just (MecabOutputTok (Surface surf) Nothing)
+    makeTok (surf, Just feat) = Just (MecabOutputTok (Surface surf) v)
+      where v = Just (OriginalForm (_mecabNodeFeat7 feat)
+                     , ReadingPhrase (_mecabNodeFeat8 feat))
+
+  return $ catMaybes $ map (makeTok . unReplaceSpace) $ zip (map nodeSurface nodes)
     (fmap makeMecabFeat feats)
 
 makeMecabFeat :: Text -> Maybe MecabNodeFeatures
