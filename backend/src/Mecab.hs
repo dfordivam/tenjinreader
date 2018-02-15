@@ -96,6 +96,7 @@ newtype RubyIdentifier = RubyIdentifier Int
 
 
 data TextTok = SimpleText Text | RubyDef Surface ReadingPhrase
+  deriving (Show)
 
 --
 -- 重い外戚《がいせき》が背景になっていて、
@@ -103,14 +104,14 @@ data TextTok = SimpleText Text | RubyDef Surface ReadingPhrase
 stripRubyInfo :: Text -> (Text, RubyData)
 stripRubyInfo tOrig = (tOrig, [])
 
-parseTextForRuby :: Text -> _
--- [TextTok]
-parseTextForRuby tOrig = loop $ reverse $ T.unpack tOrig
+parseTextForRuby :: Text -> [TextTok]
+parseTextForRuby tOrig = reverse $ loop $ reverse $ T.unpack tOrig
   where
+
     loop [] = []
     loop toks = case reverse $ ps of
       [] -> []
-      (p:_) -> p : loop unc
+      (p:_) -> (fst p) : loop unc
       where
         (ps, (Report _ _ unc)) = allParses (E.parser gr) toks
 
@@ -120,13 +121,15 @@ parseTextForRuby tOrig = loop $ reverse $ T.unpack tOrig
       kanji <- rule $ satisfy (\c -> ((isKanji) c) && (c /= '》') && (c /= '《'))
       notKanji <- rule $ satisfy (\c -> ((not . isKanji) c) && (c /= '》') && (c /= '《'))
 
-      ruby <- rule $ (,) <$>
-        (token '》' *> many kana <* token '《') <*> (many kanji)
+      ruby <- rule $ (\r s -> RubyDef (Surface $ T.pack $ reverse s)
+                       (ReadingPhrase $ T.pack $ reverse r))
+        <$> (token '》' *> many kana <* token '《') <*> (many kanji)
 
-      nonRuby <- rule $ (Left <$> many (notKanji <|> kanji))
+      nonRuby <- rule $ (\t -> SimpleText (T.pack $ reverse t))
+        <$> (many (notKanji <|> kanji))
 
-      r1 <- rule $ ((Right <$> ruby) <|> nonRuby)
-      return $ r1 -- (,) <$> r1 <*> r2
+      rule $ ruby <|> nonRuby
+
 
 -- 重い    形容詞,自立,*,*,形容詞・アウオ段,基本形,重い,オモイ,オモイ
 -- 《      記号,括弧開,*,*,*,*,《,《,《
