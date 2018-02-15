@@ -48,6 +48,7 @@ newtype OriginalForm = OriginalForm { unOriginalForm :: Text}
   deriving (Show, Eq)
 
 data MecabOutputTok = MecabOutputTok Surface (Maybe (OriginalForm, ReadingPhrase))
+  deriving (Eq)
 
 parseAndSearch :: Array EntryId VocabData
   -> VocabSearchEngineNoGloss
@@ -100,9 +101,16 @@ data TextTok = SimpleText Text | RubyDef Surface ReadingPhrase
 
 --
 -- 重い外戚《がいせき》が背景になっていて、
--- 重い《RUBID0》が背景になっていて
+-- 重い《0》が背景になっていて
 stripRubyInfo :: Text -> (Text, RubyData)
-stripRubyInfo tOrig = (tOrig, [])
+stripRubyInfo tOrig = (foldl' ff ("", []) toks) & _2 %~ reverse
+  where
+    toks = parseTextForRuby tOrig
+    ff (t, rs) (SimpleText t1) = (t <> t1, rs)
+    ff (t, rs) (RubyDef s r) = (t <> t1, rd:rs)
+      where t1 = "《" <> (T.pack $ show n) <> "》"
+            rd = (RubyIdentifier n, (s,r))
+            n = length rs
 
 parseTextForRuby :: Text -> [TextTok]
 parseTextForRuby tOrig = reverse $ loop $ reverse $ T.unpack tOrig
@@ -133,7 +141,6 @@ parseTextForRuby tOrig = reverse $ loop $ reverse $ T.unpack tOrig
 
 -- 重い    形容詞,自立,*,*,形容詞・アウオ段,基本形,重い,オモイ,オモイ
 -- 《      記号,括弧開,*,*,*,*,《,《,《
--- RUBID   名詞,一般,*,*,*,*,*
 -- 0       名詞,数,*,*,*,*,*
 -- 》      記号,括弧閉,*,*,*,*,》,》,》
 -- が      助詞,格助詞,一般,*,*,*,が,ガ,ガ
@@ -144,12 +151,14 @@ replaceRubyTokens toks rData
   | otherwise = loop toks rData
   where
     loop [] _ = []
-    loop (startTok:midTok:n:endTok:ts) (r:rs) = (getTok n r) : (loop ts rs)
+    loop (t1:n:t3:ts) (r:rs)
+      | (t1 == startTok) && (t3 == endTok) = (getTok n r) : (loop ts rs)
+      | otherwise = t1 : (loop (n:t3:ts) (r:rs))
     loop (t:ts) rs = t : (loop ts rs)
 
-    startTok = MecabOutputTok (Surface "《") Nothing
-    endTok = MecabOutputTok (Surface "》") Nothing
-    midTok = MecabOutputTok (Surface "RUBID") Nothing
+    startTok = tokF "《"
+    tokF t = MecabOutputTok (Surface t) (Just (OriginalForm t, ReadingPhrase t))
+    endTok = tokF "》"
 
     getTok n (rId, (s,r)) = assert (Just rId == (numTok n))
       (MecabOutputTok s (Just (OriginalForm (unSurface s), r)))
