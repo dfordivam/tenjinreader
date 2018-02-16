@@ -84,6 +84,7 @@ library
     , transformers
     , these
     , array
+    , Earley
     , yesod-auth-oauth
     , common
   if (flag(dev)) || (flag(library-only))
@@ -156,6 +157,7 @@ executable server
     , time
     , case-insensitive
     , wai
+    , Earley
     , yesod-auth-oauth
     , server
     , foreign-store
