@@ -126,12 +126,13 @@ parseTextForRuby tOrig = reverse $ loop $ reverse $ T.unpack tOrig
     gr :: Grammar r (Prod r Char Char _)
     gr = mdo
       kana <- rule $ satisfy isKana
+      everyC <- rule $ satisfy (\c -> (c /= '》') && (c /= '《'))
       kanji <- rule $ satisfy (\c -> ((isKanji) c) && (c /= '》') && (c /= '《'))
       notKanji <- rule $ satisfy (\c -> ((not . isKanji) c) && (c /= '》') && (c /= '《'))
 
       ruby <- rule $ (\r s -> RubyDef (Surface $ T.pack $ reverse s)
                        (ReadingPhrase $ T.pack $ reverse r))
-        <$> (token '》' *> many kana <* token '《') <*> (many kanji)
+        <$> (token '》' *> many everyC <* token '《') <*> (many kanji)
 
       nonRuby <- rule $ (\t -> SimpleText (T.pack $ reverse t))
         <$> (many (notKanji <|> kanji))
