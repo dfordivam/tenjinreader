@@ -155,13 +155,14 @@ openEditSrsItemWidget ev = do
 modalDiv :: DomBuilder t m => m b -> m b
 modalDiv m = do
   divClass "modal-backdrop fade in" $ return ()
-  elAttr "div" attr $ elAttr "div" attr2
-    $ divClass "modal-content" m
+  elAttr "div" attr $ elAttr "div" attr2 m
   where attr = ("class" =: "modal")
           <> ("style" =: "display: block;")
-        attr2 = ("style" =: "width 90vw; height 90vh;\
+        attr2 = ("style" =: "width: 90vw; height: 96vh;\
                             \ max-width: 40em;\
-                            \ margin: 30px auto;")
+                            \ overflow-y: auto;\
+                            \ margin: 2vh auto;")
+                <> ("class" =: "modal-content")
 
 editWidgetView
   :: MonadWidget t m
@@ -170,15 +171,13 @@ editWidgetView
   -> m (Dynamic t SrsEntry
        , Event t (), Event t ())
 editWidgetView s savedEv = modalDiv $ do
-  closeEvTop <- divClass "modal-header" $ el "h3" $ do
+  closeEvTop <- divClass "modal-header" $ el "h4" $ do
     (e,_) <- elClass' "button" "close" $ text "Close"
     text $ "Edit " <> (s ^. field . to (NE.head))
     return (domEvent Click e)
 
   let bodyAttr = ("class" =: "modal-body")
-          <> ("style" =: "height: 400px;\
-              \overflow-x: hidden;\
-              \overflow-y: auto")
+          <> ("style" =: "")
       formAttr = ("class" =: "form-horizontal")
         <> ("onsubmit" =: "return false;")
       bodyForm m = elAttr "div" bodyAttr $
@@ -343,8 +342,7 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
     return (domEvent Click e)
 
   let bodyAttr = ("class" =: "modal-body")
-          <> ("style" =: "height: 80vh;\
-              \overflow-y: auto")
+          <> ("style" =: "")
 
       fg ls = Map.fromList $ ls & each . _2 %~ Just
 
