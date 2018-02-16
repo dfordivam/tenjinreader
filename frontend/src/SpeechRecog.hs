@@ -5,8 +5,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
 module SpeechRecog
-  (speechRecogSetup, Result
-  , initWanakaBindFn, bindWanaKana)
+  (speechRecogSetup, Result)
   where
 
 import Protolude hiding (on)
@@ -14,7 +13,7 @@ import FrontendCommon
 import qualified Data.Text as T
 import Data.JSString.Text
 
-#if defined (ghcjs_HOST_OS)
+#if defined (ENABLE_SPEECH_RECOG)
 import GHCJS.DOM.SpeechRecognition
 import GHCJS.DOM.SpeechRecognitionEvent
 import GHCJS.DOM.SpeechGrammar
@@ -36,29 +35,10 @@ import Language.Javascript.JSaddle.Types
 type Result = [[(Double, T.Text)]]
 
 -- CPP has issues with multi-line literal, so move all ifdef here
-initWanakaBindFn :: (MonadWidget t m) => m ()
-initWanakaBindFn =
-#if defined (ghcjs_HOST_OS)
-  void $ liftJSM $ eval ("globalFunc = function () {"
-                <> "var input = document.getElementById('JP-TextInput-IME-Input');"
-                <> "wanakana.bind(input);}" :: Text)
-#else
-  return ()
-#endif
-
-bindWanaKana :: (MonadWidget t m) => m ()
-bindWanaKana =
-#if defined (ghcjs_HOST_OS)
-        void $ liftJSM $
-          jsg0 ("globalFunc" :: Text)
-#else
-  return ()
-#endif
-
 speechRecogSetup :: MonadWidget t m
   => m (Event t () -> Event t () -> m (Event t Result, Event t (), Event t (), Event t ()))
 speechRecogSetup = do
-#if defined (ghcjs_HOST_OS)
+#if defined (ENABLE_SPEECH_RECOG)
   (trigEv, trigAction) <- newTriggerEvent
   (speechStartEv, speechStartAction) <- newTriggerEvent
   (errorEv, errorAction) <- newTriggerEvent
@@ -92,7 +72,7 @@ speechRecogSetup = do
   return (const $ const (return (never, never, never, never)))
 #endif
 
-#if defined (ghcjs_HOST_OS)
+#if defined (ENABLE_SPEECH_RECOG)
 onResultEv :: (Result -> IO ())
   -> EventM SpeechRecognition SpeechRecognitionEvent ()
 onResultEv trigAction = do

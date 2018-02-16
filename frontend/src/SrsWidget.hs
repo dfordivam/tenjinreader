@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -19,6 +20,11 @@ import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty)
 import System.Random
 import qualified GHCJS.DOM.HTMLElement as DOM
+
+#if defined (ghcjs_HOST_OS)
+import Language.Javascript.JSaddle.Object
+import Language.Javascript.JSaddle.Types
+#endif
 
 data SrsWidgetView =
   ShowStatsWindow | ShowReviewWindow ReviewType | ShowBrowseSrsItemsWindow
@@ -445,10 +451,14 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
     (e,_) <- elClass' "button" "close" $ text "Close"
 
     let cEv = domEvent Click e
+#if defined (ENABLE_SPEECH_RECOG)
     fullASR <- do
       cb <- checkbox False $ def & checkboxConfig_setValue .~ (False <$ cEv)
       text "Auto ASR"
       return (value cb)
+#else
+    let fullASR = constDyn False
+#endif
 
     divClass "" $ do
       elAttr "span" statsTextAttr $
@@ -456,10 +466,8 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
     return $ (fullASR, cEv)
 
   let kanjiRowAttr = ("class" =: "center-block")
-         <> ("style" =: "height: 15em;\
-             \display: table;")
-      kanjiCellAttr = ("style" =: "vertical-align: middle;\
-             \max-width: 25em; display: table-cell;")
+         <> ("style" =: "height: 15em; display: table;")
+      kanjiCellAttr = ("style" =: "vertical-align: middle; max-width: 25em; display: table-cell;")
 
   _ <- elAttr "div" kanjiRowAttr $ elAttr "div" kanjiCellAttr $ do
     let
@@ -535,16 +543,19 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
   _ <- widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ evPB)
 
   let resultDisAttr = ("class" =: "")
-          <> ("style" =: "height: 6em;\
-              \overflow-y: auto")
+          <> ("style" =: "height: 6em; overflow-y: auto")
   rec
     _ <- elAttr "div" resultDisAttr $
       widgetHold (return ()) (showResult <$> (leftmost [resEv, shimesuEv, recogCorrectEv]))
 
     -- Footer
     (shiruResEv , addEditEv, (recogCorrectEv, recogResEv), shimesuEv, recogStop) <- divClass "row" $ do
+#if defined (ENABLE_SPEECH_RECOG)
       recog <- divClass "col-sm-2" $
         speechRecogWidget doRecog recogStop fullASR (ri, rt)
+#else
+      let recog = (never,never)
+#endif
 
       shirimasu <- divClass "col-sm-2" $
         btn "btn-primary" "知ります"
@@ -802,3 +813,22 @@ getStChangeEv
   => Event t (Seq (NonEmpty SpeechRecogWidgetState))
   -> Event t SpeechRecogWidgetState
 getStChangeEv = fmap (\s -> minimum $ fold $ map NE.toList s)
+
+initWanakaBindFn :: (MonadWidget t m) => m ()
+initWanakaBindFn =
+#if defined (ghcjs_HOST_OS)
+  void $ liftJSM $ eval ("globalFunc = function () {"
+                <> "var input = document.getElementById('JP-TextInput-IME-Input');"
+                <> "wanakana.bind(input);}" :: Text)
+#else
+  return ()
+#endif
+
+bindWanaKana :: (MonadWidget t m) => m ()
+bindWanaKana =
+#if defined (ghcjs_HOST_OS)
+        void $ liftJSM $
+          jsg0 ("globalFunc" :: Text)
+#else
+  return ()
+#endif

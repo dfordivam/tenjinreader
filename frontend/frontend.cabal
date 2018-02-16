@@ -14,6 +14,11 @@ category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
 
+-- compile with  --flags=speechrecog
+Flag Speechrecog
+     Description: Enable speech recognition in GHCJS flow
+     Default: False
+
 executable frontend
   main-is:             Main.hs
   ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
@@ -55,5 +60,9 @@ executable frontend
                     , ghcjs-dom-jsffi
   else
      build-depends: jsaddle-dom
+
+  if impl (ghcjs) && flag(speechrecog)
+     CPP-options: "-DENABLE_SPEECH_RECOG"
+
   hs-source-dirs:      src
   default-language:    Haskell2010
