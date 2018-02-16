@@ -303,7 +303,7 @@ getListBooks :: ListBooks
 getListBooks _ = do
   booksDb <- lift $ asks appBooksDb
   let
-    xs = take 20 $ A.assocs booksDb
+    xs = A.assocs booksDb
   return (map (\(i,(t,c)) -> (i,t, getAnnDocContent c)) xs)
 
 

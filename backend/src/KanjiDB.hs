@@ -569,7 +569,7 @@ createBooksArticleDb parseF dirP c = do
       ad <- parseF t
       let title = T.replace "_" " " $ snd $ T.breakOn "_" $ T.pack f
       return (title, ad)
-  vs <- mapM p files
+  vs <- mapM p (sort files)
   return $ makeArray $ zip (map c [1..]) vs
 
 readDbOrCreate :: (Binary a) => FilePath -> IO a -> IO a

@@ -99,6 +99,8 @@ newtype RubyIdentifier = RubyIdentifier Int
 data TextTok = SimpleText Text | RubyDef Surface ReadingPhrase
   deriving (Show)
 
+startRubyTag = "{["
+endRubyTag = "}]"
 --
 -- 重い外戚《がいせき》が背景になっていて、
 -- 重い《0》が背景になっていて
@@ -108,7 +110,7 @@ stripRubyInfo tOrig = (foldl' ff ("", []) toks) & _2 %~ reverse
     toks = parseTextForRuby tOrig
     ff (t, rs) (SimpleText t1) = (t <> t1, rs)
     ff (t, rs) (RubyDef s r) = (t <> t1, rd:rs)
-      where t1 = "《" <> (T.pack $ show n) <> "》"
+      where t1 = startRubyTag <> (T.pack $ show n) <> endRubyTag
             rd = (RubyIdentifier n, (s,r))
             n = length rs
 
@@ -157,9 +159,10 @@ replaceRubyTokens toks rData
       | otherwise = t1 : (loop (n:t3:ts) (r:rs))
     loop (t:ts) rs = t : (loop ts rs)
 
-    startTok = tokF "《"
-    tokF t = MecabOutputTok (Surface t) (Just (OriginalForm t, ReadingPhrase t))
-    endTok = tokF "》"
+    startTok = tokF startRubyTag
+    tokF t = MecabOutputTok (Surface t) Nothing
+    -- (Just (OriginalForm t, ReadingPhrase t))
+    endTok = tokF endRubyTag
 
     getTok n (rId, (s,r)) = assert (Just rId == (numTok n))
       (MecabOutputTok s (Just (OriginalForm (unSurface s), r)))
