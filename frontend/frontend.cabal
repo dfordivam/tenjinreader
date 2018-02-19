@@ -19,6 +19,18 @@ Flag Speechrecog
      Description: Enable speech recognition in GHCJS flow
      Default: False
 
+Flag Debug
+     Description: Enable debug info
+     Default: False
+
+Flag Onlyreader
+     Description: Compile only reader widget
+     Default: False
+
+Flag Onlysrs
+     Description: Compile only srs widget
+     Default: False
+
 executable frontend
   main-is:             Main.hs
   ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
@@ -63,6 +75,15 @@ executable frontend
 
   if impl (ghcjs) && flag(speechrecog)
      CPP-options: "-DENABLE_SPEECH_RECOG"
+
+  if flag(debug)
+     CPP-options: "-DDEBUG"
+
+  if flag(onlyreader)
+     CPP-options: "-DONLY_READER"
+
+  if flag(onlysrs) && (!(flag(onlyreader)))
+     CPP-options: "-DONLY_SRS"
 
   hs-source-dirs:      src
   default-language:    Haskell2010

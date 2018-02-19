@@ -74,13 +74,23 @@ widget :: AppMonad t m => AppMonadT t m ()
 widget = divClass "container" $ do
   -- navigation with visibility control
   tabDisplayUI wrapper "nav navbar-nav" "active" "" $
-    Map.fromList
-      [ (0, ("SRS", srsWidget))
-      , (1, ("Kanji", kanjiBrowseWidget))
-      , (2, ("Vocab", vocabSearchWidget))
-      , (3, ("Reader", textReaderTop))
-      , (4, ("Sentence", sentenceWidget))
+    Map.fromList [
+#if !defined (ONLY_READER) && !defined (ONLY_SRS)
+        (2, ("Sentence", sentenceWidget))
+      , (3, ("Vocab", vocabSearchWidget))
+      , (4, ("Kanji", kanjiBrowseWidget))
       , (5, ("Import", importWidgetTop))
+      ,
+#endif
+#if !defined (ONLY_SRS)
+        (0, ("Reader", textReaderTop))
+#endif
+#if !defined (ONLY_READER) && !defined (ONLY_SRS)
+      ,
+#endif
+#if !defined (ONLY_READER)
+        (1, ("SRS", srsWidget))
+#endif
       ]
 
 wrapper m = elClass "nav" "navbar navbar-default" $

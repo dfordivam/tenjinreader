@@ -56,7 +56,8 @@ documentListViewer refreshEv = do
     Map.fromList
       [ (1, ("Reading List", myDocumentsListViewer refreshEv))
       , (2, ("Books", booksListViewer))
-      , (3, ("Articles", articlesListViewer))]
+      -- , (3, ("Articles", articlesListViewer))
+      ]
 
   return $ (fmapMaybe (headMay . lefts) evAll
            , fmapMaybe (headMay . rights) evAll)
