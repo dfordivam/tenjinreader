@@ -176,6 +176,11 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 #endif
 
   let
+    btnAttr vis = ("class" =: "btn")
+       <> ("style" =: ("height: 80%; width: 1em;" <> visV))
+       where
+         visV = if vis then "" else "visibility: hidden;"
+
     divAttr' = (\s l h fs -> ("style" =:
       ("font-size: " <> tshow s <>"%;"
         <> "line-height: " <> tshow l <> "%;"
@@ -293,7 +298,7 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
                                            , False <$ closeEv])
 
     --------------------------------
-    (resizeEv, (rowRoot, (inside, outside, vIdEv, closeEv))) <- resizeDetector $ do
+    (resizeEv, (rowRoot, (inside, outside, vIdEv, closeEv, (next,prev)))) <- divClass "" $ resizeDetector $ do
       let
         dispFullScr m = do
           dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
@@ -304,6 +309,18 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
             dispFullScr (text "Close")
           return (domEvent Click e)
 
+        let btnPress = leftmost [next,prev]
+        leftBtnVis <- holdDyn (False) $
+          leftmost [tagPromptlyDyn (isJust <$> nextParaMaybe) stopTicks
+                   , False <$ btnPress]
+        rightBtnVis <- holdDyn (False) $
+          leftmost [tagPromptlyDyn (isJust <$> prevParaMaybe) stopTicks
+                   , False <$ btnPress]
+
+        prev1 <- do
+          (e,_) <- elDynAttr' "button" (btnAttr <$> rightBtnVis) $ text ">"
+          return (domEvent Click e)
+
         vIdEv1 <- el "div" $ do
           let renderF = ffor (isNothing . snd <$> visDyn) $ \b -> if b
                 then renderDynParas
@@ -311,16 +328,18 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
           dyn ((\f -> f rs (snd <$> row1Dyn)) <$> renderF)
             >>= switchPromptly never
 
+        next1 <- do
+          (e,_) <- elDynAttr' "button" (btnAttr <$> leftBtnVis) $ text "<"
+          return (domEvent Click e)
+
         (i, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
           text ""
         elAttr "div" ("style" =: "height: 1em; width: 2em;") $ do
           text ""
-        (o, _) <- elAttr' "div" ("style" =: "height: 1em; width: 2em;") $ do
+        (o, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
           text ""
           return ()
-        return (i, o, vIdEv1, cEv)
-
-    (next,prev) <- leftRightButtons fullscreenDyn nextParaMaybe prevParaMaybe stopTicks
+        return (i, o, vIdEv1, cEv, (next1, prev1))
 
 
   showVocabDetailsWidget vIdEv
@@ -501,51 +520,6 @@ getPrevParaMaybe (p, pos) textContent
     pOT = textContent A.! p
     pp = textContent A.! (p - 1)
     (fp,_) = A.bounds textContent
-
--- On click of left or right button hide both
--- wait for stopTicks, then show the button again if the next/prev value is Just
--- Change the button size if full screen
-leftRightButtons
-  :: (MonadFix m, MonadHold t m, PostBuild t m,
-       DomBuilder t m) =>
-     Dynamic t Bool
-  -> Dynamic t (Maybe a1)
-  -> Dynamic t (Maybe a)
-  -> Event t b
-  -> m (Event t (), Event t ())
-leftRightButtons fullscreenDyn nextParaMaybe prevParaMaybe stopTicks = do
-
-  let
-    btnCommonAttr stl vis = (\fs -> ("class" =: "btn btn-xs")
-       <> ("style" =: ("height: " <> tshow (if fs then 80 else 60) <> "%;\
-            \top: "<> tshow (if fs then 10 else 30) <> "%; width: 20px;"
-            <> visV <>
-            "position: absolute; z-index: 1060;"
-          <> stl ))) <$> fullscreenDyn
-       where
-         visV = if vis then "" else "display: none;"
-
-    leftBtnAttr vis = btnCommonAttr "left: 10px;" =<< vis
-    rightBtnAttr vis = btnCommonAttr "right: 10px;" =<< vis
-
-  -- Buttons
-  rec
-    let btnPress = leftmost [next,prev]
-    leftBtnVis <- holdDyn (False) $
-      leftmost [tagPromptlyDyn (isJust <$> nextParaMaybe) stopTicks
-               , False <$ btnPress]
-    rightBtnVis <- holdDyn (False) $
-      leftmost [tagPromptlyDyn (isJust <$> prevParaMaybe) stopTicks
-               , False <$ btnPress]
-
-    prev <- do
-      (e,_) <- elDynAttr' "button" (rightBtnAttr rightBtnVis) $ text ">"
-      return (domEvent Click e)
-    next <- do
-      (e,_) <- elDynAttr' "button" (leftBtnAttr leftBtnVis) $ text "<"
-      return (domEvent Click e)
-
-  return (next,prev)
 
 data TextAdjust = ShrinkText | GrowText
   deriving (Show, Eq)
