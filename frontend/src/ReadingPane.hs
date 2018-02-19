@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module ReadingPane where
 
@@ -41,7 +42,10 @@ checkVerticalOverflow (ie,oe) r action = do
   rx <- DOM.getX =<< DOM.getBoundingClientRect r
   ix <- DOM.getX =<< DOM.getBoundingClientRect ie
   ox <- DOM.getX =<< DOM.getBoundingClientRect oe
+
+#if defined (DEBUG)
   liftIO $ putStrLn $ (show (rx,ix,ox) :: Text)
+#endif
   liftIO $ action $ if
     | (rx > ox && rx < ix) -> (0, Nothing) -- Outside
     | ix < rx -> (0, Just ShrinkText)
@@ -167,7 +171,9 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
   (evVisible, action) <- newTriggerEvent
 
   visDyn <- holdDyn (0,Nothing) evVisible
+#if defined (DEBUG)
   display visDyn
+#endif
 
   let
     divAttr' = (\s l h fs -> ("style" =:
@@ -188,13 +194,12 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
                  (getCurrentViewContent (makeParaData annText) (Just startPara))))
     dEv = snd <$> (evVisible)
 
-  text $ tshow startParaMaybe
   rec
     let doStop (Just GrowText) Nothing = Just 1
         doStop (Just GrowText) (Just c) = Just (c + 1)
         doStop (Just ShrinkText) _ = Nothing
         doStop Nothing _ = Nothing
-        stopTicks = traceEvent "stop" $ leftmost [stopTicks1
+        stopTicks = leftmost [stopTicks1
                              , fforMaybe evVisible (\(_,a) -> if isNothing a
                                                      then Just ()
                                                      else Nothing)
@@ -259,12 +264,15 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
+#if defined (DEBUG)
     display row1Len
     text "row1Dyn fst :"
     display $ (\(ParaPos l, ParaPos u) -> ("(" <> tshow l <> "," <> tshow u <> ")"))
       . fst <$> row1Dyn
+#endif
+
     textContent <- fetchMoreContentF docId (makeParaData annText) endParaNum
-      (traceEvent "fetchEv: " (pageChangeParaEv))
+      ((pageChangeParaEv))
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
@@ -381,11 +389,13 @@ fetchMoreContentF docId annText endParaNum pageChangeEv = do
     textContent <- foldDyn moreContentAccF annText ((\(_,_,_,_,c) -> c) <$>
                                     (fmapMaybe identity moreContentEv))
 
+#if defined (DEBUG)
   text "("
   display lastAvailablePara
   text ", "
   display firstAvailablePara
   text ")"
+#endif
 
   return textContent
 

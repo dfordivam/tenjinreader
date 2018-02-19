@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 
 module TopWidget
   (topWidget
@@ -61,9 +62,12 @@ topWidget = do
     never -- close event
     True -- reconnect
     widget
+
+#if defined (DEBUG)
   let resp = traceEvent ("Response") (_webSocket_recv wsConn)
   d <- holdDyn "" resp
   dynText ((tshow . BS.length) <$> d)
+#endif
   return ()
 
 widget :: AppMonad t m => AppMonadT t m ()
@@ -71,8 +75,8 @@ widget = divClass "container" $ do
   -- navigation with visibility control
   tabDisplayUI wrapper "nav navbar-nav" "active" "" $
     Map.fromList
-      [(0, ("SRS", srsWidget))
-      ,(1, ("Kanji", kanjiBrowseWidget))
+      [ (0, ("SRS", srsWidget))
+      , (1, ("Kanji", kanjiBrowseWidget))
       , (2, ("Vocab", vocabSearchWidget))
       , (3, ("Reader", textReaderTop))
       , (4, ("Sentence", sentenceWidget))
