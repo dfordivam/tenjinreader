@@ -14,27 +14,15 @@ category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
 
--- compile with  --flags=speechrecog
-Flag Speechrecog
-     Description: Enable speech recognition in GHCJS flow
-     Default: False
-
 Flag Debug
      Description: Enable debug info
      Default: False
 
-Flag Onlyreader
-     Description: Compile only reader widget
-     Default: False
-
-Flag Onlysrs
-     Description: Compile only srs widget
-     Default: False
-
-executable frontend
-  main-is:             Main.hs
-  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
-  other-modules:
+library
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:         -Wall -O2 -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  exposed-modules:
                        KanjiBrowser
                        SrsWidget
                        SpeechRecog
@@ -43,7 +31,7 @@ executable frontend
                        TextReader
                        ReadingPane
                        ImportWidget
-  -- other-extensions:
+
   build-depends:       base >=4.9 && <4.11
                      , common
                      , reflex-dom
@@ -66,6 +54,35 @@ executable frontend
                      , ghcjs-dom
                      , jsaddle-warp
 
+
+executable frontend
+  main-is:             Main.hs
+  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+
+  other-modules: TopWidget
+  build-depends: frontend
+
+  build-depends:       base >=4.9 && <4.11
+                     , common
+                     , reflex-dom
+                     , reflex-websocket-interface
+                     , reflex-websocket-interface-shared
+                     , protolude
+                     , text
+                     , file-embed
+                     , lens
+                     , time
+                     , containers
+                     , reflex
+                     , jsaddle
+                     , bytestring
+                     , these
+                     , random
+                     , vector
+                     , array
+                     , hs-nlp-jp-utils
+                     , ghcjs-dom
+                     , jsaddle-warp
   -- Fix this
   if impl(ghcjs)
      build-depends: ghcjs-base
@@ -73,17 +90,180 @@ executable frontend
   else
      build-depends: jsaddle-dom
 
-  if impl (ghcjs) && flag(speechrecog)
-     CPP-options: "-DENABLE_SPEECH_RECOG"
+  if flag(debug)
+     CPP-options: "-DDEBUG"
+
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+executable frontend-recog
+  main-is:             Main.hs
+  if impl (ghcjs)
+    CPP-options:  "-DENABLE_SPEECH_RECOG"
+  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+
+  other-modules: TopWidget
+  build-depends: frontend
+
+  build-depends:       base >=4.9 && <4.11
+                     , common
+                     , reflex-dom
+                     , reflex-websocket-interface
+                     , reflex-websocket-interface-shared
+                     , protolude
+                     , text
+                     , file-embed
+                     , lens
+                     , time
+                     , containers
+                     , reflex
+                     , jsaddle
+                     , bytestring
+                     , these
+                     , random
+                     , vector
+                     , array
+                     , hs-nlp-jp-utils
+                     , ghcjs-dom
+                     , jsaddle-warp
+  -- Fix this
+  if impl(ghcjs)
+     build-depends: ghcjs-base
+                    , ghcjs-dom-jsffi
+  else
+     build-depends: jsaddle-dom
 
   if flag(debug)
      CPP-options: "-DDEBUG"
 
-  if flag(onlyreader)
-     CPP-options: "-DONLY_READER"
+  hs-source-dirs:      src
+  default-language:    Haskell2010
 
-  if flag(onlysrs) && (!(flag(onlyreader)))
-     CPP-options: "-DONLY_SRS"
+executable frontend-reader-only
+  main-is:             Main.hs
+  CPP-options: "-DONLY_READER"
+  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+
+  other-modules: TopWidget
+  build-depends: frontend
+
+  build-depends:       base >=4.9 && <4.11
+                     , common
+                     , reflex-dom
+                     , reflex-websocket-interface
+                     , reflex-websocket-interface-shared
+                     , protolude
+                     , text
+                     , file-embed
+                     , lens
+                     , time
+                     , containers
+                     , reflex
+                     , jsaddle
+                     , bytestring
+                     , these
+                     , random
+                     , vector
+                     , array
+                     , hs-nlp-jp-utils
+                     , ghcjs-dom
+                     , jsaddle-warp
+
+  if impl(ghcjs)
+     build-depends: ghcjs-base
+                    , ghcjs-dom-jsffi
+  else
+     build-depends: jsaddle-dom
+
+  if flag(debug)
+     CPP-options: "-DDEBUG"
+
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+executable frontend-srs-only
+  main-is:             Main.hs
+  CPP-options: "-DONLY_SRS"
+  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+
+  other-modules: TopWidget
+  build-depends: frontend
+
+  build-depends:       base >=4.9 && <4.11
+                     , common
+                     , reflex-dom
+                     , reflex-websocket-interface
+                     , reflex-websocket-interface-shared
+                     , protolude
+                     , text
+                     , file-embed
+                     , lens
+                     , time
+                     , containers
+                     , reflex
+                     , jsaddle
+                     , bytestring
+                     , these
+                     , random
+                     , vector
+                     , array
+                     , hs-nlp-jp-utils
+                     , ghcjs-dom
+                     , jsaddle-warp
+
+  if impl(ghcjs)
+     build-depends: ghcjs-base
+                    , ghcjs-dom-jsffi
+  else
+     build-depends: jsaddle-dom
+
+  if flag(debug)
+     CPP-options: "-DDEBUG"
+
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+
+executable frontend-srs-only-recog
+  main-is:             Main.hs
+  CPP-options: "-DONLY_SRS"
+  if impl (ghcjs)
+    CPP-options:  "-DENABLE_SPEECH_RECOG"
+  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+
+  other-modules: TopWidget
+  build-depends: frontend
+
+  build-depends:       base >=4.9 && <4.11
+                     , common
+                     , reflex-dom
+                     , reflex-websocket-interface
+                     , reflex-websocket-interface-shared
+                     , protolude
+                     , text
+                     , file-embed
+                     , lens
+                     , time
+                     , containers
+                     , reflex
+                     , jsaddle
+                     , bytestring
+                     , these
+                     , random
+                     , vector
+                     , array
+                     , hs-nlp-jp-utils
+                     , ghcjs-dom
+                     , jsaddle-warp
+
+  if impl(ghcjs)
+     build-depends: ghcjs-base
+                    , ghcjs-dom-jsffi
+  else
+     build-depends: jsaddle-dom
+
+  if flag(debug)
+     CPP-options: "-DDEBUG"
 
   hs-source-dirs:      src
   default-language:    Haskell2010
