@@ -729,10 +729,10 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i _ _ _),rt) = do
 
     (resultEv, recogStartEv, recogEndEv, stopEv) <- lift $ doRecog stopRecogEv startRecogEv
 
-    retryEv <- delay 1 =<< switchPromptly never =<< (dyn $ ffor fullAsrActive $ \b -> if not b
+    retryEv <- switchPromptly never =<< (dyn $ ffor fullAsrActive $ \b -> if not b
       then return never
       else do
-        recogEndEvs <- batchOccurrences 2 $
+        recogEndEvs <- batchOccurrences 3 $
           mergeList [ WaitingForServerResponse <$ resultEv
                    , AnswerSuccessful <$ resultCorrectEv
                    , AnswerWrong <$ resultWrongEv
