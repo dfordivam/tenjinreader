@@ -372,28 +372,47 @@ renderOneSentence
 renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "well well-sm" $ do
   let hasEng = not $ null njps
       rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
-  (evs, visDyn) <- elAttr "div" rowAttr $ do
+  (evs, visDyn, showPlainEv) <- elAttr "div" rowAttr $ do
     evs <- divClass "col-sm-11" $
       forM sg $ \s -> do
         renderOnePara (constDyn vIds) (constDyn 100) s
 
-    visDyn <- divClass "col-sm-1" $ do
-      rec
-        isFav <- toggle (not notFav) tEv
-        tEv <- switchPromptly never
-          =<< (dyn ((\f -> btn "btn-xs btn-primary"
-                      (if f then "unFav" else "Fav")) <$> isFav))
-      _ <- getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
+    rec
+      (visDyn, showPlainEv) <- divClass "col-sm-1" $ do
+        rec
+          isFav <- toggle (not notFav) tEv
+          tEv <- switchPromptly never
+            =<< (dyn ((\f -> btn "btn-xs btn-primary"
+                        (if f then "unFav" else "Fav")) <$> isFav))
+          _ <- getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
 
-      if hasEng
-        then toggle False
-          =<< (btn "btn-xs btn-primary" "意味")
-        else return $ constDyn False
-    return (evs,visDyn)
+        bEv <- btn "btn-xs btn-primary" "《》"
+
+        d <- if hasEng
+          then toggle False
+            =<< (btn "btn-xs btn-primary" "意味")
+          else return $ constDyn False
+        return (d,bEv)
+
+    return (evs,visDyn, showPlainEv)
+
+  widgetHold (return ())
+    ((divClass "" $ showPlainForm sg) <$ showPlainEv)
 
   when hasEng $ void $ handleVisibility True visDyn $
     forM njps $ \t -> el "p" $ text t
   return $ NE.toList evs
+
+showPlainForm :: (_) => t AnnotatedPara -> m ()
+showPlainForm = mapM_ $ \s -> do
+  textInput $ def & textInputConfig_initialValue .~ (plainText s)
+  where
+    plainText :: AnnotatedPara -> Text
+    plainText = mconcat . (map (f))
+    f (Left t) = t
+    f (Right ((Vocab vs),_,_)) = mconcat $ map g vs
+    g (Kana k) = k
+    g (KanjiWithReading (Kanji k) r) = k <> "《" <> r <> "》"
 
 vocabRuby :: (_)
   => Dynamic t Bool
