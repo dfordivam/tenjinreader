@@ -8,11 +8,11 @@
     frontend = ./frontend;
   };
 
-  android.frontend = {
-    executableName = "frontend";
-    applicationId = "org.example.frontend";
-    displayName = "Example Android App";
-  };
+  #android.frontend = {
+  #  executableName = "frontend";
+  #  applicationId = "org.example.frontend";
+  #  displayName = "Example Android App";
+  #};
 
   shells = {
     ghc = ["common" "backend" "frontend" "kanjidbreader"];

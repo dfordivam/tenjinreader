@@ -177,7 +177,7 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 
   let
     btnAttr vis = ("class" =: "btn")
-       <> ("style" =: ("height: 80%; width: 1em;" <> visV))
+       <> ("style" =: ("writing-mode:lr; height: 80%; width: 1em;" <> visV))
        where
          visV = if vis then "" else "visibility: hidden;"
 
