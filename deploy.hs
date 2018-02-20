@@ -11,36 +11,28 @@ import qualified Data.Text.IO as T
 import Data.Text (Text)
 import Prelude hiding (FilePath)
 import Data.Monoid ((<>))
+import Control.Concurrent.Async
 default (T.Text)
 
 main = shelly $ verbosely $ escaping False $ do
-  -- let
-  --   beBuildCmd = "nix-build -o backend-result -A ghc.backend"
-  --   feBuildCmd = "nix-build -o frontend-result -A ghcjs.frontend"
+  let
+    beRes = "backend-result"
+    feRes = "frontend-result"
 
-  -- (be,fe) <- concurrently (shell beBuildCmd empty)
-  --   (shell feBuildCmd empty)
+  beBuild <- asyncSh $ run "nix-build" ["-o", toTextArg beRes, "-A", "ghc.backend"]
+  run "nix-build" ["-o", toTextArg feRes, "-A", "ghcjs.frontend"]
+  liftIO $ wait (beBuild)
 
-  -- if not (be == ExitSuccess && fe == ExitSuccess)
-  --   then putStrLn "Problem with nix-build"
-  --   else do
-  --     bePath <- realpath "backend-result"
-  --     fePath <- realpath "frontend-result"
-  --     putStrLn bePath
-  --     putStrLn fePath
+  bePath <- canonic beRes
+  fePath <- canonic feRes
 
   withTmpDir $ \tmp -> do
-    makeStaticDirContents exampleBePath exampleFePath tmp
-    doDeploy exampleBePath tmp
+    makeStaticDirContents bePath fePath tmp
+    doDeploy bePath tmp
 
   return ()
 
 destHost = "tenjinreader.com"
-
-exampleBePath :: FilePath
-exampleBePath = "/nix/store/kwvhlj6a0bvapm3rhgkhd737j5jxmy60-server-0.1.0"
-exampleFePath :: FilePath
-exampleFePath = "/nix/store/l91myjy2xq3054hb5sgrbml4xf7j8911-frontend-0.1.0.0"
 
 getHashFromPath :: FilePath -> Text
 getHashFromPath bePath = beHash
@@ -52,6 +44,7 @@ makeStaticDirContents :: FilePath -> FilePath -> FilePath -> Sh ()
 makeStaticDirContents bePath fePath deployDir = do
   let
     beHash = getHashFromPath bePath
+    wkjs = "deploy" </> "wanakana.min.js"
 
     outJsFile = (beHash) <.> "js"
 
@@ -60,6 +53,7 @@ makeStaticDirContents bePath fePath deployDir = do
           src = fePath </> s
           alljs = src </> "all.js"
           allextern = src </> "all.js.externs"
+          runmainjs = src </> "runmain.js"
           outF = dest </> outJsFile
           ccCmdArgs :: [Text]
           ccCmdArgs =
@@ -71,6 +65,8 @@ makeStaticDirContents bePath fePath deployDir = do
       mkdir dest
       run_ closureCompiler ccCmdArgs
       cp indexHtml dest
+      cp wkjs dest
+      cp runmainjs dest
 
     dirP = deployDir </> "static" </> "app"
     indexHtml = (deployDir </> "index.html")

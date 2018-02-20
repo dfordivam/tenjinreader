@@ -4,7 +4,11 @@
 - Nix build path
 
 ### FrontEnd
-- all.js, allnospeech.js -> closure_compiler -> index.html
+  frontend.jsexe -> complete-norecog
+  frontend-srs-only.jsexe -> srsonly-norecog
+  frontend-recog.jsexe -> complete
+  frontend-reader-only.jsexe -> readeronly
+  frontend-srs-only-recog.jsexe -> srsonly
 
 ## Static Data
 
@@ -16,9 +20,11 @@
   - articlesdb.bin
   
 - static/
+  - common/
+    - wanakana.min.js
+    - runmain.js
   - websocket/
     - manifest.webapp
-    - wanakana.js
 
 
 ## Runtime artifacts
@@ -31,3 +37,8 @@
 
 - mecab - executable
 - mecab-files-dir
+
+## Deploy Dependencies
+
+- closure-compiler - "/nix/store/n7h36mmdgd9y5g59qasznjvsl3psg0g2-closure-compiler-20170218"
+- index.html.template
