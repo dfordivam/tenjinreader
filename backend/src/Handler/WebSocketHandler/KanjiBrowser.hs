@@ -235,8 +235,19 @@ makeReaderDocumentContent t = do
 getAddOrEditDocument :: AddOrEditDocument
   -> WsHandlerM (Maybe (ReaderDocumentData))
 getAddOrEditDocument (AddOrEditDocument dId title t) = do
-  c <- lift $ makeReaderDocumentContent t
-  addEditNewDocumentCommon dId (MyDocument title c)
+  limitReached <- transactReadOnlySrsDB $ \rd -> do
+    ds <- Tree.toList (rd ^. readerDocuments)
+    let f (MyDocument _ c) = sum $ map length c
+        f _ = 0
+        al = traceShowId ((length t) + (sum $ map (f . _readerDoc . snd) ds))
+    return $ (length ds > 50)
+      || (al > 500000)
+
+  if limitReached
+    then return Nothing
+    else do
+      c <- lift $ makeReaderDocumentContent t
+      addEditNewDocumentCommon dId (MyDocument title c)
 
 addEditNewDocumentCommon
   :: Maybe ReaderDocumentId
