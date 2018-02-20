@@ -13,7 +13,7 @@ import Prelude hiding (FilePath)
 import Data.Monoid ((<>))
 default (T.Text)
 
-main = shelly $ do
+main = shelly $ verbosely $ escaping False $ do
   -- let
   --   beBuildCmd = "nix-build -o backend-result -A ghc.backend"
   --   feBuildCmd = "nix-build -o frontend-result -A ghcjs.frontend"
@@ -29,14 +29,13 @@ main = shelly $ do
   --     putStrLn bePath
   --     putStrLn fePath
 
-  makeStaticDirContents exampleBePath exampleFePath
-  doDeploy exampleBePath
+  withTmpDir $ \tmp -> do
+    makeStaticDirContents exampleBePath exampleFePath tmp
+    doDeploy exampleBePath tmp
 
   return ()
 
 destHost = "tenjinreader.com"
-deployDir = "deploy-outputs"
-indexHtml = deployDir </> "index.html"
 
 exampleBePath :: FilePath
 exampleBePath = "/nix/store/kwvhlj6a0bvapm3rhgkhd737j5jxmy60-server-0.1.0"
@@ -49,15 +48,15 @@ getHashFromPath bePath = beHash
     (Just beHash) = T.stripSuffix "-server-0.1.0"
       =<< T.stripPrefix "/nix/store/" (toTextArg bePath)
 
-makeStaticDirContents :: FilePath -> FilePath -> Sh ()
-makeStaticDirContents bePath fePath = do
+makeStaticDirContents :: FilePath -> FilePath -> FilePath -> Sh ()
+makeStaticDirContents bePath fePath deployDir = do
   let
     beHash = getHashFromPath bePath
 
     outJsFile = (beHash) <.> "js"
 
     makeFeCode (s,d) = do
-      let dest = appDir </> d
+      let dest = dirP </> d
           src = fePath </> s
           alljs = src </> "all.js"
           allextern = src </> "all.js.externs"
@@ -69,43 +68,30 @@ makeStaticDirContents bePath fePath = do
             , " --externs " <> toTextArg allextern
             , " --js " <> toTextArg alljs]
 
-      -- mkdir dest
-      trace $ "Creating : '" <> toTextArg outF <> "', from '" <> toTextArg src <> "'."
+      mkdir dest
+      run_ closureCompiler ccCmdArgs
+      cp indexHtml dest
 
-      trace $ mconcat ccCmdArgs
-      -- shell ccCmd empty
+    dirP = deployDir </> "static" </> "app"
+    indexHtml = (deployDir </> "index.html")
 
-      -- cp indexHtml dest
-
-    stDir = (deployDir  <> "/static")
-    appDir = stDir <> "/app"
-
+  mkdir_p dirP
   makeIndexHtml outJsFile indexHtml
-  -- mkdir deployDir
-  -- mkdir stDir
-  -- mkdir appDir
   mapM_ makeFeCode feDestPaths
 
-  let
-    lnCmd = "ln -s " <> toTextArg bePath <> " " <> toTextArg deployDir <> "/server"
-  trace lnCmd
-  -- shell lnCmd empty
+  run_ "ln" ["-s", toTextArg bePath, toTextArg (deployDir </> "server")]
 
-doDeploy :: FilePath -> Sh ()
-doDeploy bePath = do
+doDeploy :: FilePath -> FilePath -> Sh ()
+doDeploy bePath deployDir = do
   let
     beHash = getHashFromPath bePath
-    ccCmd = "nix-copy-closure --sign --include-outputs " <> toTextArg destHost <> " " <> toTextArg bePath
     targetDir = destHost <> ":~/" <> beHash
-    scpCmd = "scp -r " <> toTextArg deployDir <> " " <> toTextArg targetDir
-  trace ccCmd
-  -- shell ccCmd empty
 
-  trace scpCmd
-  -- shell scpCmd empty
+  run_ "nix-copy-closure" ["--sign", "--include-outputs", destHost, toTextArg bePath]
+  run_ "rsync" ["-az", toTextArg deployDir, targetDir]
 
-closureCompilerPath :: FilePath
-closureCompilerPath = "/nix/store/n7h36mmdgd9y5g59qasznjvsl3psg0g2-closure-compiler-20170218/bin/closure-compiler"
+closureCompiler :: FilePath
+closureCompiler = "/nix/store/n7h36mmdgd9y5g59qasznjvsl3psg0g2-closure-compiler-20170218/bin/closure-compiler"
 
 feDestPaths :: [(FilePath, FilePath)]
 feDestPaths =
@@ -121,7 +107,8 @@ feDestPaths =
    , "srsonly")]
 
 makeIndexHtml jsName outF = do
-  let sedCmd = "sed \"s@all_cc_js_name@" <>
-        (toTextArg jsName) <> "@\" index.html.template > " <> toTextArg outF
-  trace $ "Executing: " <> sedCmd
-  -- shell sedCmd empty
+  let
+    r = "s@all_cc_js_name@" <> (toTextArg jsName) <> "@"
+    inpFile = "index.html.template"
+  cp inpFile outF
+  run_ "sed" ["-i", r, toTextArg outF]
