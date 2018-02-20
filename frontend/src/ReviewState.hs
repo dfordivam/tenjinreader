@@ -47,6 +47,7 @@ class SrsReviewType rt where
   getField :: ReviewItem -> (ActualReviewType rt) -> (NonEmpty Text, Text)
   getInputFieldStyle :: ActualReviewType rt -> Text
   getInputFieldPlaceHolder :: ActualReviewType rt -> Text
+  getInputFieldId :: ActualReviewType rt -> Text
 
   -- Get the pending item based on the review state
   getRandomRT :: ReviewItem -> rt -> Bool -> ActualReviewType rt
@@ -64,6 +65,7 @@ instance SrsReviewType ProdReview where
     ("font-size: 2rem;")
   getInputFieldStyle _ = "background-color: antiquewhite;"
   getInputFieldPlaceHolder _ = "日本語で（かな）"
+  getInputFieldId _ = "JP-TextInput-IME-Input1"
   getRandomRT _ _ _ = ReadingProdReview
 
 hasKanaInField :: ReviewItem -> Bool
@@ -87,6 +89,8 @@ instance SrsReviewType RecogReview where
 
   getInputFieldPlaceHolder ReadingRecogReview = "かな"
   getInputFieldPlaceHolder MeaningRecogReview = "意味（英語で）"
+
+  getInputFieldId _ = "JP-TextInput-IME-Input2"
 
   getRandomRT ri rs b
     | hasKanaInField ri = MeaningRecogReview

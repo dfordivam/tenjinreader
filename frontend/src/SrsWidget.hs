@@ -496,7 +496,7 @@ inputFieldWidget
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
 inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
   let
-    tiId = "JP-TextInput-IME-Input"
+    tiId = getInputFieldId rt
     style = "text-align: center; width: 100%;" <> color
     color = getInputFieldStyle rt
     ph = getInputFieldPlaceHolder rt
@@ -818,8 +818,9 @@ initWanakaBindFn :: (MonadWidget t m) => m ()
 initWanakaBindFn =
 #if defined (ghcjs_HOST_OS)
   void $ liftJSM $ eval ("globalFunc = function () {"
-                <> "var input = document.getElementById('JP-TextInput-IME-Input');"
-                <> "wanakana.bind(input);}" :: Text)
+                <> "var input1 = document.getElementById('JP-TextInput-IME-Input1');"
+                <> "var input2 = document.getElementById('JP-TextInput-IME-Input2');"
+                <> "wanakana.bind(input1); wanakana.bind(input2);}" :: Text)
 #else
   return ()
 #endif
