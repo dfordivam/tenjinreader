@@ -17,14 +17,11 @@
   - kanjidb.bin
   - sentencedb.bin
   - booksdb.bin
-  - articlesdb.bin
+  - articlesdb.bin -- Not used right now
   
 - static/
-  - common/
-    - wanakana.min.js
-    - runmain.js
-  - websocket/
-    - manifest.webapp
+  - wanakana.min.js
+  - runmain.js
 
 
 ## Runtime artifacts
@@ -41,4 +38,5 @@
 ## Deploy Dependencies
 
 - closure-compiler - "/nix/store/n7h36mmdgd9y5g59qasznjvsl3psg0g2-closure-compiler-20170218"
-- index.html.template
+- deploy/
+  - index.html.template
