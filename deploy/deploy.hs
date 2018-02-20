@@ -76,6 +76,7 @@ makeStaticDirContents bePath fePath deployDir = do
   mapM_ makeFeCode feDestPaths
 
   run_ "ln" ["-s", toTextArg bePath, toTextArg (deployDir </> "server")]
+  run_ "git" ["archive", "-o", toTextArg (deployDir </> "source.tar.gz"), "HEAD"]
 
 doDeploy :: FilePath -> FilePath -> Sh ()
 doDeploy bePath deployDir = do
