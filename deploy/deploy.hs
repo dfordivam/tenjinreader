@@ -105,6 +105,6 @@ feDestPaths =
 makeIndexHtml jsName outF = do
   let
     r = "s@all_cc_js_name@" <> (toTextArg jsName) <> "@"
-    inpFile = "index.html.template"
+    inpFile = "deploy/index.html.template"
   cp inpFile outF
   run_ "sed" ["-i", r, toTextArg outF]
