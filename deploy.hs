@@ -57,8 +57,8 @@ makeStaticDirContents bePath fePath deployDir = do
           outF = dest </> outJsFile
           ccCmdArgs :: [Text]
           ccCmdArgs =
-            [ " --compilation_level ADVANCED "
-            , " --js_output_file " <> toTextArg outF
+            [ " --js_output_file " <> toTextArg outF
+            , " --compilation_level ADVANCED "
             , " --externs " <> toTextArg allextern
             , " --js " <> toTextArg alljs]
 
