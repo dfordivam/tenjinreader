@@ -9,4 +9,6 @@ import Import
 
 getHomeR :: Handler Html
 getHomeR = do
-    redirect WebSocketHandlerR
+    maybeUser <- maybeAuthPair
+    defaultLayout $ do
+        $(widgetFile "homepage")
