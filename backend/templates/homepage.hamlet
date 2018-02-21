@@ -1,5 +1,28 @@
 <div .container>
     <!-- Starting
         ================================================== -->
-    <div>
-        <a href="@{WebSocketHandlerR}">WebSocket</a>.
+    $maybe (_,user) <- muser
+      <h2>Welcome!
+      <h4>For Chrome use these (with speech recognition)
+      <div>
+        <a href="static/app/complete/index.html">Complete app</a>
+      <div>
+        <a href="static/app/srsonly/index.html">SRS only</a>
+      <h4>For other browsers please use these
+      <div>
+        <a href="static/app/complete-norecog/index.html">Complete app (without speech recognition)</a>
+      <div>
+        <a href="static/app/srsonly-norecog/index.html">SRS only (without speech recognition)</a>
+
+      <h4>For all browsers
+      <div>
+        <a href="static/app/readeronly/index.html">Reader only</a>
+    $nothing
+      <h2>Please Login!
+      <div>Using
+      <div>
+        <a href="auth/page/github/forward">Github</a>
+      <div>
+        <a href="auth/page/googleemail2/forward">Google</a>
+      <div>
+        <a href="auth/page/twitter/forward">Twitter</a>

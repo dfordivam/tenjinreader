@@ -9,6 +9,7 @@ import Import
 
 getHomeR :: Handler Html
 getHomeR = do
-    maybeUser <- maybeAuthPair
-    defaultLayout $ do
-        $(widgetFile "homepage")
+  muser <- maybeAuthPair
+  -- let muser = Just (undefined, undefined)
+  defaultLayout $ do
+    $(widgetFile "homepage")

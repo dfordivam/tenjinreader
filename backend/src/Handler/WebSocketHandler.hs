@@ -28,7 +28,7 @@ getWebSocketHandlerR = do
     uId <- requireAuthId
     -- let uId = toSqlKey 1 :: Key User
     webSockets $ handleWebSocketConn uId
-    redirect $ ("static/websocket/index.html" :: Text)
+    redirect $ ("static/app/complete/index.html" :: Text)
 
 handleWebSocketConn :: ToBackendKey SqlBackend record =>
                        Key record -> WebSocketsT Handler ()
