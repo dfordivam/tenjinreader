@@ -12,5 +12,9 @@
 <!-- Footer -->
 <footer .footer>
     <div .container>
-        <p .text-muted>
+      <p>
+        Hosted and sponsored by 
+        <a href="https://www.blueimpact.co.jp/en">Blue Impact</a>, 
+        <a href="static/privacy.html">Privacy</a>
+        <span .text-muted>
             #{appCopyright $ appSettings master}
