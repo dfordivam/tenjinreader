@@ -150,6 +150,11 @@ viewList :: (AppMonad t m)
   -> AppMonadT t m [(Event t ViewDocument
                     , (Event t ViewRawDocument
                     , Event t DeleteDocument))]
+viewList [] = do
+  el "p" $ text "Reading list empty..."
+  el "p" $ text "Please click 新作 to add your content, or checkout some books!"
+  return []
+
 viewList lss = do
   elClass "table" "table table-striped" $ do
     el "thead" $ do
