@@ -1,7 +1,7 @@
 <div .container>
   <div .row>
     <div .col-md-6>
-      <h2>てんじん Reader
+      \<img src="static/logo.png" alt="Tenjin Reader">
 
     <div .col-md-6>
       $maybe (_,user) <- muser
@@ -42,7 +42,7 @@
   <div .row .well>
     <h3>Reader
 
-    The reader has been designed from the ground up for immersive study of long Japanese texts like books.
+    <p>The reader has been designed for an immersive experience of studying long Japanese texts or books.
 
     <div .col-md-6>
       <ul>
