@@ -42,6 +42,8 @@
   <div .row .well>
     <h3>Reader
 
+    The reader has been designed from the ground up for immersive study of long Japanese texts like books.
+
     <div .col-md-6>
       <ul>
         <li>Add your own study material
