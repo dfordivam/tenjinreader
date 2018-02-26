@@ -20,23 +20,14 @@ import qualified GHCJS.DOM.DOMRectReadOnly as DOM
 import qualified GHCJS.DOM.Element as DOM
 import qualified GHCJS.DOM.Types as DOM
 import Control.Exception
-
--- checkOverFlow e heightDyn = do
---   v <- sample $ current heightDyn
---   let overFlowThreshold = fromIntegral v
---   rect <- DOM.getBoundingClientRect (_element_raw e)
---   trects <- DOM.getClientRects (_element_raw e)
---   y <- DOM.getY rect
---   h <- DOM.getHeight rect
---   -- text $ "Coords: " <> (tshow y) <> ", " <> (tshow h)
---   return (y + h > overFlowThreshold)
+import Data.Text.IO as T
 
 checkVerticalOverflow
-  :: (Num t, DOM.IsElement self1,
+  :: (DOM.IsElement self1,
        DOM.IsElement self2, DOM.IsElement self, DOM.MonadJSM m)
   => (self2, self1)
   -> self
-  -> ((t, Maybe TextAdjust) -> IO b)
+  -> ((Double, Maybe TextAdjust) -> IO b)
   -> m b
 checkVerticalOverflow (ie,oe) r action = do
   rx <- DOM.getX =<< DOM.getBoundingClientRect r
@@ -48,8 +39,8 @@ checkVerticalOverflow (ie,oe) r action = do
 #endif
   liftIO $ action $ if
     | (rx > ox && rx < ix) -> (0, Nothing) -- Outside
-    | ix < rx -> (0, Just ShrinkText)
-    | ox > rx -> (0, Just GrowText)
+    | ix < rx -> (rx - ix, Just ShrinkText)
+    | ox > rx -> (ox - rx, Just GrowText)
     | otherwise -> (0, Nothing) -- hidden
 
 -- setupInterObs :: (DOM.MonadDOM m, DOM.IsElement e)
@@ -158,9 +149,22 @@ newtype ParaPos = ParaPos { unParaPos :: Int }
   deriving (Show, Eq, Ord, Ix, Num)
 
 newtype ParaNum = ParaNum { unParaNum :: Int }
-  deriving (Show, Eq, Ord, Ix, Num)
+  deriving (Show, Eq, Ord, Ix, Num, Enum)
 
 type ParaData = Array ParaNum (Array ParaPos (Either Text (Vocab, [VocabId], Bool)))
+
+-- Start and end of each para being displayed
+-- This is isomorphic to start (paranum, parapos) and end (paranum, parapos)
+-- as it contains all the content in-between
+-- But this is useful in listViewWithKey interface
+type DisplayedPara = Map ParaNum (ParaPos, ParaPos)
+
+-- For doing text adjust
+newtype ParaOffset = ParaOffset { unParaOffset :: Int }
+  deriving (Show, Eq, Ord, Ix, Num)
+
+-- Maps the offset to (paranum, pos)
+type ParaOffsetArray = Array ParaOffset (ParaNum, ParaPos)
 
 verticalReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
@@ -194,10 +198,10 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
       <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
       <*> (_numOfLines <$> rs)
 
+    startParaData = makeParaData annText
     startPara = (\(p,v) -> (ParaNum p, ParaPos $ maybe 1 (max 1) v)) startParaMaybe
-    initState = (1, (ForwardGrow,
-                 (getCurrentViewContent (makeParaData annText) (Just startPara))))
-    dEv = snd <$> (evVisible)
+    initState = (ParaOffset 100
+                , makeParaOffsetArray startParaData (startPara, ForwardGrow))
 
   rec
     let doStop (Just GrowText) Nothing = Just 1
@@ -232,33 +236,39 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
       pageChangeEv = leftmost [BackwardGrow <$ prev, ForwardGrow <$ next]
 
       firstDisplayedPara :: Dynamic t (ParaNum, ParaPos)
-      firstDisplayedPara = ffor row1Dyn $ \(_,ps) ->
-        (fst $ A.bounds ps, fst $ A.bounds $ (ps A.! (fst $ A.bounds ps)))
+      firstDisplayedPara = fst . fst <$> row1Dyn
 
       lastDisplayedPara :: Dynamic t (ParaNum, ParaPos)
-      lastDisplayedPara = ffor row1Dyn $ \(_,ps) ->
-        (snd $ A.bounds ps, snd $ A.bounds $ (ps A.! (snd $ A.bounds ps)))
+      lastDisplayedPara = snd . fst <$> row1Dyn
 
-      row1Len :: Dynamic t Int
-      row1Len = ffor row1Dyn $ \(_,ps) ->
-        foldl (\len (l,u) -> len + (unParaPos (u - l))) 0 (map A.bounds $ A.elems ps)
+      row1Len :: Dynamic t ParaOffset
+      row1Len = snd <$> row1Dyn
 
-    let foldF (len, (d1, tc)) =
-          foldDyn f st ((\d -> (tc,d)) <$> dEv)
-          where f = case d1 of
-                  ForwardGrow -> textAdjustF
-                  BackwardGrow -> textAdjustRevF
-                st = getState tc len d1
-
-        newStateEv = attachPromptlyDyn row1Len $ attachWith af (current
-          ((,) <$> (getCurrentViewContent <$> textContent <*> nextParaMaybe)
-               <*> (getPrevViewContent <$> textContent <*> prevParaMaybe)))
-                     pageChangeEv
+    let
+        foldF :: (_)
+          => (ParaOffset, ParaOffsetArray)
+          -> AppMonadT t m (Dynamic t (((ParaNum, ParaPos), (ParaNum, ParaPos)), ParaOffset))
+        foldF (len, poArray) = do
+          stDyn <- foldDyn taF st ((\d -> (poArray,d)) <$> evVisible)
+          return $ f <$> stDyn
           where
-            af (c,_) ForwardGrow = (ForwardGrow,c)
-            af (_,c) BackwardGrow = (BackwardGrow,c)
+            taF a b =
+#if defined (DEBUG)
+              traceShow (snd a) $ traceShowId $
+#endif
+              (textAdjustF a b)
+            f (_,o) = ((min o1 o2, max o1 o2), o)
+              where o1 = poArray A.! (ParaOffset 1)
+                    o2 = poArray A.! o
 
-        row1Dyn :: Dynamic t ((ParaPos, ParaPos), ParaData)
+            st = ((ParaOffset 1, ui), size)
+            size = min (len) (snd $ A.bounds poArray)
+            ui = min (len * 2) (snd $ A.bounds poArray)
+
+        newStateEv = attach (current row1Len) $
+          attachPromptlyDynWith makeParaOffsetArray textContent pageChangeParaEv
+
+        row1Dyn :: Dynamic t (((ParaNum, ParaPos),(ParaNum, ParaPos)), ParaOffset)
         row1Dyn = join row1Dyn'
 
         pageChangeParaEv = fforMaybe
@@ -270,29 +280,17 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
     (row1Dyn') <- widgetHold (foldF initState) (foldF <$> newStateEv)
 
 #if defined (DEBUG)
-    display row1Len
-    text "row1Dyn fst :"
-    display $ (\(ParaPos l, ParaPos u) -> ("(" <> tshow l <> "," <> tshow u <> ")"))
-      . fst <$> row1Dyn
+    display row1Dyn
 #endif
 
-    textContent <- fetchMoreContentF docId (makeParaData annText) endParaNum
-      ((pageChangeParaEv))
+    textContent <- fetchMoreContentF docId startParaData endParaNum
+      pageChangeParaEv
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
         then ("style" =: "position: fixed; padding 1em; top: 0; bottom: 0; left: 0; right: 0;")
         else Map.empty
       divAttr = divAttr' <*> fullscreenDyn
-
-    -- text "firstDisplayedPara:"
-    -- display firstDisplayedPara
-    -- text " lastDisplayedPara:"
-    -- display lastDisplayedPara
-    -- text " nextParaMaybe:"
-    -- display nextParaMaybe
-    -- text " prevParaMaybe:"
-    -- display prevParaMaybe
 
     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
                                            , False <$ closeEv])
@@ -322,11 +320,18 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
           return (domEvent Click e)
 
         vIdEv1 <- el "div" $ do
-          let renderF = ffor (isNothing . snd <$> visDyn) $ \b -> if b
-                then renderDynParas
-                else renderDynParasLight
-          dyn ((\f -> f rs (snd <$> row1Dyn)) <$> renderF)
-            >>= switchPromptly never
+          let
+            f :: _ -> ((ParaNum, ParaPos), (ParaNum, ParaPos))
+              -> Map ParaNum (ParaPos, ParaPos)
+            f tc ((fn,fs),(ln,ls)) = Map.fromList $ map (\p -> (p, g p)) [fn..ln]
+              where g p | p == fn && p == ln = (fs,ls)
+                        | p == fn = (fs, snd $ A.bounds $ tc A.! p)
+                        | p == ln = (fst $ A.bounds $ tc A.! p, ls)
+                        | otherwise = A.bounds $ tc A.! p
+            dynMap = f <$> textContent <*> (fst <$> row1Dyn)
+
+          evMap <- listViewWithKey dynMap (renderDynParas rs textContent)
+          return $ fmapMaybe headMay $ Map.elems <$> evMap
 
         next1 <- do
           (e,_) <- elDynAttr' "button" (btnAttr <$> leftBtnVis) $ text "<"
@@ -366,7 +371,7 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
               (return never <$ stopTicks)
             tickW = do
               ev <- getPostBuild
-              de <- delay 0.5 $ leftmost [ev, () <$ evVisible]
+              de <- delay 1.5 $ leftmost [ev, () <$ evVisible]
               return $ de
         t <- widgetHold init
           (init <$ startTicksAgain)
@@ -440,60 +445,6 @@ moreContentAccF n o = A.array newBounds $ filter (f newBounds) $
       else assert ((newLast + (ParaNum 1)) >= curFirst)
         (newFirst, (min curLast (ParaNum $ 120 + (unParaNum newFirst))))
 
-getState
-  :: ParaData
-  -> Int
-  -> TextAdjustDirection
-  -> ((ParaPos, ParaPos), ParaData)
-getState tc len d = (A.bounds (snd lp), pd)
-  where
-    pd = A.array (minimum pns, maximum pns) ps
-    pns = map fst ps
-    ps = (lp:rp)
-    (lp:rp) = reverse $ case d of
-      ForwardGrow -> recF len tcL
-      BackwardGrow -> recF len tcU
-
-    recF :: Int -> ParaNum -> [(ParaNum, Array ParaPos (Either Text (Vocab, [VocabId], Bool)))]
-    recF l n = case d of
-      ForwardGrow
-        | nl > l -> [(n, A.ixmap (lb, lb + (ParaPos l)) identity nd)]
-        | n < tcU -> (n,nd) : recF (l - nl) (n + 1)
-        | otherwise -> [(n,nd)]
-      BackwardGrow
-        | nl > l -> [(n, A.ixmap (ub - (ParaPos l), ub) identity nd)]
-        | n > tcL -> (n,nd) : recF (l - nl) (n - 1)
-        | otherwise -> [(n,nd)]
-      where
-        nd = tc A.! n
-        nl = unParaPos $ ub - lb
-        (lb,ub) = (A.bounds nd)
-
-    (tcL, tcU) = A.bounds tc
-
-getCurrentViewContent
-  :: ParaData
-  -> Maybe (ParaNum, ParaPos)
-  -> ParaData
-getCurrentViewContent pd Nothing = pd
-getCurrentViewContent pd (Just (p,o)) = (A.ixmap newBounds identity pd) A.// [(p,newP)]
-  where
-    newBounds = A.bounds pd & _1 .~ p
-    op = pd A.! p
-    newP = A.ixmap (A.bounds op & _1 .~ o) identity op
-
--- Offsets are the Current start of page
-getPrevViewContent
-  :: ParaData
-  -> Maybe (ParaNum, ParaPos)
-  -> ParaData
-getPrevViewContent pd Nothing = pd
-getPrevViewContent pd (Just (p,o)) = (A.ixmap newBounds identity pd) A.// [(p,newP)]
-  where
-    newBounds = A.bounds pd & _2 .~ p
-    op = pd A.! p
-    newP = A.ixmap (A.bounds op & _2 .~ o) identity op
-
 -- Start of next page (one after end of current page)
 getNextParaMaybe
   :: (ParaNum, ParaPos)
@@ -524,10 +475,33 @@ getPrevParaMaybe (p, pos) textContent
 data TextAdjust = ShrinkText | GrowText
   deriving (Show, Eq)
 
+makeParaOffsetArray
+  :: ParaData
+  -> ((ParaNum, ParaPos), TextAdjustDirection)
+  -> ParaOffsetArray
+makeParaOffsetArray tc (start, d) =
+  A.listArray (ParaOffset 1, ParaOffset (length allPs)) allPs
+  where
+    allPs = poss start
+    (tcL, tcU) = A.bounds tc
+    poss (spara, spos) = case d of
+      ForwardGrow
+        | spara > tcU -> []
+        | otherwise -> (g $ A.range (spos, snd $ A.bounds (tc A.! spara)))
+          ++ (poss (spara + ParaNum 1, ParaPos 1))
+      BackwardGrow
+        | spara < tcL -> []
+        | spara == tcL -> this
+        | otherwise -> this
+          ++ (poss (spara - (ParaNum 1), nextLast))
+      where
+        this = g $ reverse $ A.range (fst $ A.bounds (tc A.! spara), spos)
+        nextLast = snd $ A.bounds (tc A.! (spara - (ParaNum 1)))
+        g = map (\x -> (spara, x))
 
-halfParaPos :: ParaPos -> ParaPos -> ParaPos
-halfParaPos (ParaPos u) (ParaPos l)
-  = ParaPos $ ceiling $ (fromIntegral (u - l) / 2)
+halfParaOffset :: ParaOffset -> ParaOffset -> ParaOffset
+halfParaOffset (ParaOffset u) (ParaOffset l)
+  = ParaOffset $ ceiling $ (fromIntegral (u - l) / 2)
 
 -- Converge on the text content size based on Events
 -- The Input events will toggle between shrink and grow
@@ -538,103 +512,40 @@ halfParaPos (ParaPos u) (ParaPos l)
 -- When a resize occurs (ie event goes Nothing -> Just)
 -- The bounds will have to be re-calculated
 
-textAdjustF, textAdjustRevF
-  :: (ParaData, Maybe TextAdjust)
-  -> ((ParaPos, ParaPos), ParaData)
-  -> ((ParaPos, ParaPos), ParaData)
+textAdjustF
+  :: (ParaOffsetArray, (Double, Maybe TextAdjust))
+  -> ((ParaOffset, ParaOffset), ParaOffset)
+  -> ((ParaOffset, ParaOffset), ParaOffset)
 
-textAdjustF (viewPD, (Just ShrinkText)) ((li,_), ps)
-  | lpU == lpL
-    -- drop the last Para
-    = assert (lpN > fpN)
-    ((A.bounds $ ps A.! (lpN - 1))
-      , A.ixmap (fpN, lpN - 1) identity ps)
-
+textAdjustF (_, (off, Just ShrinkText)) ((li,_), ps)
   -- During viewport size change li can become invalid
-  | li >= lpU
-    = textAdjustF (viewPD, Just ShrinkText) ((lpL, lpU), ps)
-  | otherwise
-    -- drop half
-    = ((li, lpU), ps A.// [(lpN, newLp)])
+  | li >= ps
+    = assert (li > ParaOffset 1)
+      ((halfPs, ps), halfPs)
+  | otherwise = ((li, ps), newV)
   where
-    (fpN,lpN) = A.bounds ps
-    lp = ps A.! lpN
-    (lpL,lpU) = A.bounds lp
-    halfL = lpU - halfParaPos lpU  li
-    newLp = A.ixmap (lpL, halfL) identity lp
+    newV = ps - (max offV (halfParaOffset ps li))
+    halfPs = if offV > 0
+      then halfParaOffset ps (ParaOffset 1)
+      else halfParaOffset ps (halfParaOffset ps (ParaOffset 1))
+    offV = ParaOffset $ floor $ off / 20
 
-
-textAdjustF (viewPD, (Just GrowText)) ((li,ui), ps)
-  | lpU < ui = assert (ui <= lpOTU)
-    ((lpU, ui), ps A.// [(lpN, A.ixmap (lpL, halfL1) identity lpOT)])
-  | lpU < lpOTU -- ui is invalid
-    = ((lpU, lpOTU), ps A.// [(lpN, A.ixmap (lpL, halfL2) identity lpOT)])
-  | nextPN <= (snd $ A.bounds viewPD) =
-    (A.bounds nextP, A.ixmap (fpN, nextPN) identity viewPD)
-  | otherwise = textAdjustF (viewPD, Nothing) ((li,ui), ps)
-  where
-    (fpN,lpN) = A.bounds ps
-    lp = ps A.! lpN
-    (lpL,lpU) = A.bounds lp
-    lpOT = viewPD A.! lpN
-    (_,lpOTU) = A.bounds lpOT
-    nextPN = (lpN + 1)
-    nextP = viewPD A.! nextPN
-
-    halfL1 = lpU + halfParaPos ui lpU
-    halfL2 = lpU + halfParaPos lpOTU lpU
-
-textAdjustF (viewPD, Nothing) (_, ps) = (A.bounds lp,ps)
-  where
-    lp = viewPD A.! (snd $ A.bounds ps)
-
--- lower bound is towards end, upper bound is towards start
--- Do binary search between these bounds
-textAdjustRevF (viewPD, (Just ShrinkText)) ((_,ui), ps)
-  | fpL == fpU
-    -- drop the first Para
-    = assert (lpN > fpN)
-    ((A.bounds $ ps A.! (fpN + 1))
-      , A.ixmap (fpN + 1, lpN) identity ps)
-
+textAdjustF (poArr, (off, Just GrowText)) ((_,ui), ps)
   -- During viewport size change ui can become invalid
-  | ui <= fpL
-    = textAdjustRevF (viewPD, Just ShrinkText) ((fpL, fpU), ps)
-  | otherwise
-    -- drop half
-    = ((fpL, ui), ps A.// [(fpN, newFp)])
+  | ui <= ps && (ps < lastC)
+    = ((ps, doublePs), doublePs)
+
+  | otherwise = ((ps, ui), min lastC newV)
   where
-    (fpN,lpN) = A.bounds ps
-    fp = ps A.! fpN
-    (fpL,fpU) = A.bounds fp
-    -- During viewport size change li can be invalid
-    halfL = fpL + halfParaPos ui fpL
-    newFp = A.ixmap (halfL, fpU) identity fp
+    -- Heuristic, add some offset based on pixel difference
+    newV = (ps + (max offV (halfParaOffset ui ps)))
+    lastC = snd $ A.bounds poArr
+    doublePs = min lastC $ if offV > 0
+      then (ParaOffset (2 * (unParaOffset ps)))
+      else (ps + (halfParaOffset ps (ParaOffset 1)))
+    offV = ParaOffset $ floor $ off / 20
 
-
-textAdjustRevF (viewPD, (Just GrowText)) ((li,ui), ps)
-  | fpL > li = assert (li >= fpOTL)
-    ((li, fpL), ps A.// [(fpN, A.ixmap (halfL1, fpU) identity fpOT)])
-  | fpL > fpOTL -- li is invalid
-    = ((fpOTL, ui), ps A.// [(fpN, A.ixmap (halfL2, fpU) identity fpOT)])
-  | prevPN >= (snd $ A.bounds viewPD) =
-    (A.bounds prevP, A.ixmap (prevPN, lpN) identity viewPD)
-  | otherwise = textAdjustRevF (viewPD, Nothing) ((li,ui), ps)
-  where
-    (fpN,lpN) = A.bounds ps
-    fp = ps A.! fpN
-    (fpL,fpU) = A.bounds fp
-    fpOT = viewPD A.! fpN
-    (fpOTL,_) = A.bounds fpOT
-    prevPN = (fpN - 1)
-    prevP = viewPD A.! prevPN
-
-    halfL1 = fpL - (halfParaPos fpL li)
-    halfL2 = fpL - (halfParaPos fpL fpOTL)
-
-textAdjustRevF (viewPD, Nothing) (_, ps) = (A.bounds fp,ps)
-  where
-    fp = viewPD A.! (fst $ A.bounds ps)
+textAdjustF (_, (_,Nothing)) v = v
 
 renderDynParas
   :: ((RawElement (DomBuilderSpace m) ~ e,
@@ -644,18 +555,18 @@ renderDynParas
         MonadFix m))
   => Dynamic t (ReaderSettings CurrentDb) -- Used for rubySize
   -> Dynamic t ParaData
+  -> ParaNum
+  -> Dynamic t (ParaPos, ParaPos)
   -> m (Event t ([VocabId], (Text, Maybe e)))
-renderDynParas rs dynParas = do
-  let dynMap = (Map.fromList . A.assocs) <$> dynParas
+renderDynParas rs textContent pn dynPos = do
+  let
       renderF vIdDyn = renderOnePara vIdDyn (_rubySize <$> rs)
-      renderEachPara vIdDyn dt = do
-        ev <- dyn ((\p -> renderF vIdDyn (A.elems p)) <$> dt)
-        switchPromptly never ev
+      pc = (\tc -> tc A.! pn) <$> textContent
+      dt = (\p pc -> A.ixmap p identity pc) <$> dynPos <*> pc
 
   rec
-    let
-      vIdEv = switchPromptlyDyn $ (fmap (leftmost . Map.elems)) v
-    v <- list dynMap (renderEachPara vIdDyn)
+    vIdEv <- switchPromptly never
+      =<< dyn ((\p -> renderF vIdDyn (A.elems p)) <$> dt)
     vIdDyn <- holdDyn [] (fmap fst vIdEv)
   return (vIdEv)
 
@@ -691,14 +602,19 @@ renderDynParasLight
        PostBuild t m,
        DomBuilder t m)
   => Dynamic t (ReaderSettings CurrentDb) -- Used for rubySize
-  -> Dynamic t ParaData
+  -> ParaData
+  -> ParaNum
+  -> Dynamic t (ParaPos, ParaPos)
   -> m (Event t ([VocabId], (Text, Maybe (DOM.Element))))
-renderDynParasLight rsDyn dynParas = do
+renderDynParasLight rsDyn tc pn dynPos = do
   let renderEachPara rs dt = do
         renderOneParaLight (_rubySize rs) dt
 
+      pc = tc A.! pn
+      dt = (\p -> A.ixmap p identity pc) <$> dynPos
+
   rsC <- sample $ current rsDyn
-  void $ dyn ((mapM (renderEachPara rsC)) <$> ((\a -> A.elems (fmap A.elems a)) <$> dynParas))
+  void $ dyn ((\p -> renderEachPara rsC (A.elems p)) <$> dt)
   return never
 
 ----------------------------------------------------------------------------------
