@@ -99,9 +99,9 @@ showStatsWidget (recog, prod) = do
     , ShowBrowseSrsItemsWindow <$ browseEv]
 
 srsLevels = Map.fromList
-  [ (LearningLvl, "Learning" :: Text)
-  , (IntermediateLvl , "Intermediate")
-  , (MatureLvl, "Mature")]
+  [ (LearningLvl, "Less than 4 Days" :: Text)
+  , (IntermediateLvl , "Between 4 to 60 Days")
+  , (MatureLvl, "More than 60 Days")]
 
 data BrowseSrsItemsOptions
   = BrowseSrsItemsDue
@@ -474,7 +474,7 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
       showNE (Just (ne, stl)) = elAttr "span" kanjiTextAttr $ do
           mapM_ text (NE.intersperse ", " ne)
         where kanjiTextAttr = ("style" =: stl)
-      showNE Nothing = text "No Reviews!"
+      showNE Nothing = text "No Reviews! (Please close and open again to refresh)"
     dyn $ showNE <$> (dyn2 & mapped . mapped %~ (uncurry getField))
 
   doRecog <- lift $ speechRecogSetup
@@ -558,7 +558,7 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
 #endif
 
       shirimasu <- divClass "col-sm-2" $
-        btn "btn-primary" "知ります"
+        btn "btn-primary" "知っている"
 
       (shimesu, shiranai) <- divClass "col-sm-2" $ do
         rec
@@ -675,16 +675,11 @@ btnText SpeechRecogStarted = "Ready"
 btnText WaitingForRecogResponse = "Listening"
 btnText WaitingForServerResponse = "Processing"
 btnText AnswerSuccessful = "Correct!"
-btnText AnswerWrong = "Not quite, Try Again?"
-btnText RecogError = "Error, Try Again?"
-btnText RecogStop = "Try Again?"
+btnText AnswerWrong = "Not Correct, Please try again"
+btnText RecogError = "Error, Please try again"
+btnText RecogStop = "Please try again"
 
 
--- Input
--- Outputs
--- 1. Event t Bool -> Show result
--- 2. Event t _ -> Do review
---
 --
 speechRecogWidget :: forall t m rt . (AppMonad t m, SrsReviewType rt)
   => (Event t () -> Event t () -> m (Event t Result, Event t (), Event t (), Event t ()))
@@ -732,7 +727,8 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i _ _ _),rt) = do
     retryEv <- switchPromptly never =<< (dyn $ ffor fullAsrActive $ \b -> if not b
       then return never
       else do
-        recogEndEvs <- batchOccurrences 3 $
+        -- This delay is required to avoid repetitive restarts
+        recogEndEvs <- batchOccurrences 4 $
           mergeList [ WaitingForServerResponse <$ resultEv
                    , AnswerSuccessful <$ resultCorrectEv
                    , AnswerWrong <$ resultWrongEv
@@ -820,7 +816,7 @@ getStChangeEv = fmap (\s -> minimum $ fold $ map NE.toList s)
 initWanakaBindFn :: (MonadWidget t m) => m ()
 initWanakaBindFn =
 #if defined (ghcjs_HOST_OS)
-  void $ liftJSM $ eval ("globalFunc = function () {"
+  void $ liftJSM $ eval ("globalFunc_wanakanaBind = function () {"
                 <> "var input1 = document.getElementById('JP-TextInput-IME-Input1');"
                 <> "var input2 = document.getElementById('JP-TextInput-IME-Input2');"
                 <> "wanakana.bind(input1); wanakana.bind(input2);}" :: Text)
@@ -832,7 +828,7 @@ bindWanaKana :: (MonadWidget t m) => m ()
 bindWanaKana =
 #if defined (ghcjs_HOST_OS)
         void $ liftJSM $
-          jsg0 ("globalFunc" :: Text)
+          jsg0 ("globalFunc_wanakanaBind" :: Text)
 #else
   return ()
 #endif
