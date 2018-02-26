@@ -79,6 +79,12 @@ myDocumentsListViewer refreshEv = do
   newDocEv <- btn "btn-info btn-block" "新作"
 
   rec
+    let
+      viewEv :: Event t ViewDocument
+      viewEv = switchPromptlyDyn (leftmost <$> ((map fst) <$> evDyn))
+      viewRawEv = switchPromptlyDyn (leftmost <$> ((map (fst . snd)) <$> evDyn))
+
+    showWSProcessing viewEv resp
     showWSProcessing deleteEv delDone
     evDyn <- lift $ widgetHold (return [])
       (viewList <$> (leftmost [listEv, delDone]))
@@ -86,14 +92,9 @@ myDocumentsListViewer refreshEv = do
       deleteEv :: Event t DeleteDocument
       deleteEv = switchPromptlyDyn (leftmost <$> ((map (snd . snd)) <$> evDyn))
     delDone <- lift $ getWebSocketResponse deleteEv
-
-  let
-    viewEv :: Event t ViewDocument
-    viewEv = switchPromptlyDyn (leftmost <$> ((map fst) <$> evDyn))
-    viewRawEv = switchPromptlyDyn (leftmost <$> ((map (fst . snd)) <$> evDyn))
+    resp <- lift $ getWebSocketResponse viewEv
 
   editEv <- lift $ getWebSocketResponse viewRawEv
-  resp <- lift $ getWebSocketResponse viewEv
 
   tellEvent ((\e -> [Left e]) <$> fmapMaybe identity resp)
   tellEvent ((\e -> [Right e]) <$> editEv)
