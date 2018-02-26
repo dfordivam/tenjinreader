@@ -15,6 +15,7 @@
       <p>
         Hosted and sponsored by 
         <a href="https://www.blueimpact.co.jp/en">Blue Impact</a>, 
-        <a href="static/privacy.html">Privacy</a>
+        <a href="static/privacy.html">Privacy</a>, 
+        <a href="https://github.com/blueimpact/tenjinreader">Source Code (Github) </a>
         <span .text-muted>
             #{appCopyright $ appSettings master}

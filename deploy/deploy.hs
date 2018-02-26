@@ -66,6 +66,8 @@ makeStaticDirContents bePath fePath deployDir = do
       run_ closureCompiler ccCmdArgs
       cp indexHtml dest
       cp wkjs dest
+      cp alljs dest -- Take copy of original
+      cp allextern dest -- Take copy of original
       cp runmainjs dest
 
     dirP = deployDir </> "static" </> "app"
