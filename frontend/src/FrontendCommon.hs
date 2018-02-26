@@ -331,7 +331,7 @@ sentenceWidgetView :: AppMonad t m
   -> ([VocabId], [((Bool, SentenceId), SentenceData)])
   -> AppMonadT t m (Event t ())
 sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
-  closeEvTop <- divClass "modal-header" $ do
+  (headElm, closeEvTop) <- elClass' "div" "modal-header" $ do
     text surface
     text " : "
     let m = mconcat $ intersperse ", " $ meanings
@@ -351,9 +351,12 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
       vIdMap <- listHoldWithKey (Map.fromList ss) addMoreEv $
         renderOneSentence vIds
 
-      loadMoreEv <- do
+      loadMoreEv <- divClass "col-sm-6" $ do
         showWSProcessing loadMoreEv addMoreEv
         btn "btn-block btn-primary" "Load More"
+      divClass "col-sm-6" $ do
+        topEv <- btn "btn-block btn-primary" "Go to top"
+        performEvent_ $ topEv $> DOM.scrollIntoView (_element_raw headElm) True
       addMoreEv <- fmap fg <$> getWebSocketResponse
         (LoadMoreSentences vIds <$> tagPromptlyDyn ((map snd) . Map.keys <$> vIdMap) loadMoreEv)
 
