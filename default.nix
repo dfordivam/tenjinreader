@@ -21,12 +21,13 @@
 
   overrides = self: super:
       let
-        r-all = import (pkgs.fetchFromGitHub {
-          owner = "dfordivam";
-          repo = "reflex-websocket-interface";
-          rev = "779b7b296fef89b2a686aa4342b93a294871d351";
-          sha256 = "0s6dd3ls9wniqwvpz62ia0iqnl48543l8h1fxqxn4x4pjhm709kn";
-        }) self;
+        r-all =
+          import (pkgs.fetchFromGitHub {
+            owner = "dfordivam";
+            repo = "reflex-websocket-interface";
+            rev = "dec48a637f2e2dba925af6f660b9d7bdbe21bcbb";
+            sha256 = "1zy9q15kg3pr79hghrkmzhz1l180ks3c2awy3v6vwyyywghnr07v";
+          }) self;
         beam-src = pkgs.fetchFromGitHub {
             owner = "tathougies";
             repo = "beam";

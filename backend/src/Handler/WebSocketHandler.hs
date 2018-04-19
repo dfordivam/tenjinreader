@@ -18,6 +18,8 @@ import Handler.WebSocketHandler.SrsReview
 
 import qualified Data.Map as Map
 
+import qualified Data.Text as T
+
 import Message
 import Reflex.Dom.WebSocket.Message
 import Reflex.Dom.WebSocket.Server hiding (Handler)
@@ -47,11 +49,16 @@ handleWebSocketConn uId = do
       return (Map.insert uId ((db,hnds), c + 1) m, db)
 
   let runF bs = do
-        liftIO $ putStrLn $ decodeUtf8 bs
         lift $ runReaderT
-          (handleRequest wsHandler bs) (userSessionData)
+          (handleRequest wsHandler showF bs) (userSessionData)
       userSessionData =
         WsHandlerEnv iref1 iref2 iref3 (fromSqlKey uId) db
+
+      showF :: (Show a, Show b) => a -> b -> WsHandlerM ()
+      showF a b = do
+        $(logInfo) ("User " <> (T.pack $ show $ fromSqlKey uId)
+                    <> ("\nRequest: " <> (T.pack $ take 60 $ show a)))
+                    -- <> ("\nResponse: " <> (T.pack $ show b)))
 
   sourceWS $$ ((Data.Conduit.List.mapM runF)
                   =$= sinkWSBinary)
@@ -60,12 +67,12 @@ handleWebSocketConn uId = do
     Nothing -> do
       $(logError) "DB Handle missing from Map"
       return m
-    (Just ((db,hnds),c)) -> case c of
+    (Just ((db2,hnds),c)) -> case c of
       1 -> do
         liftIO $ closeUserDB hnds
         return (Map.delete uId m)
-      c ->
-        return (Map.insert uId ((db,hnds), c - 1) m)
+      c2 ->
+        return (Map.insert uId ((db2,hnds), c2 - 1) m)
 
 
 wsHandler :: HandlerWrapper WsHandlerM Message.AppRequest
