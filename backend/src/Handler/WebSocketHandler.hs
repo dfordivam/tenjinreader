@@ -16,6 +16,8 @@ import SrsDB
 import Handler.WebSocketHandler.KanjiBrowser
 import Handler.WebSocketHandler.SrsReview
 
+import qualified Data.Map as Map
+
 import Message
 import Reflex.Dom.WebSocket.Message
 import Reflex.Dom.WebSocket.Server hiding (Handler)
@@ -30,13 +32,20 @@ getWebSocketHandlerR = do
     webSockets $ handleWebSocketConn uId
     redirect $ ("static/app/complete/index.html" :: Text)
 
-handleWebSocketConn :: ToBackendKey SqlBackend record =>
-                       Key record -> WebSocketsT Handler ()
+handleWebSocketConn :: UserId -> WebSocketsT Handler ()
 handleWebSocketConn uId = do
   iref1  <- liftIO $ newIORef ([],0)
   iref2  <- liftIO $ newIORef ([],0)
   iref3  <- liftIO $ newIORef ([],0)
-  (db,hnds) <- liftIO $ openUserDB ("userData/" ++ (show $ fromSqlKey uId))
+
+  dbLocksMVar <- lift $ asks appUserDbLocks
+  db <- modifyMVar dbLocksMVar $ \m -> case Map.lookup uId m of
+    Nothing -> do
+      (db,hnds) <- liftIO $ openUserDB ("userData/" ++ (show $ fromSqlKey uId))
+      return (Map.insert uId ((db,hnds), 1) m, db)
+    (Just ((db,hnds),c)) -> do
+      return (Map.insert uId ((db,hnds), c + 1) m, db)
+
   let runF bs = do
         liftIO $ putStrLn $ decodeUtf8 bs
         lift $ runReaderT
@@ -46,7 +55,18 @@ handleWebSocketConn uId = do
 
   sourceWS $$ ((Data.Conduit.List.mapM runF)
                   =$= sinkWSBinary)
-  liftIO $ closeUserDB hnds
+
+  modifyMVar_ dbLocksMVar $ \m -> case Map.lookup uId m of
+    Nothing -> do
+      $(logError) "DB Handle missing from Map"
+      return m
+    (Just ((db,hnds),c)) -> case c of
+      1 -> do
+        liftIO $ closeUserDB hnds
+        return (Map.delete uId m)
+      c ->
+        return (Map.insert uId ((db,hnds), c - 1) m)
+
 
 wsHandler :: HandlerWrapper WsHandlerM Message.AppRequest
 wsHandler = HandlerWrapper $

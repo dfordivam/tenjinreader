@@ -44,6 +44,7 @@ import Handler.Profile
 import Handler.WebSocketHandler
 import Mecab
 
+import qualified Data.Map as Map
 import Text.MeCab (new)
 
 -- This line actually creates our YesodDispatch instance. It is the second half
@@ -83,6 +84,9 @@ makeFoundation appSettings = do
       (parseAndSearch appVocabDb appVocabSearchEngNoGloss appMecabPtr)
     appArticlesDb <- getArticlesDb
       (parseAndSearch appVocabDb appVocabSearchEngNoGloss appMecabPtr)
+
+    appUserDbLocks <- newMVar (Map.empty)
+
     -- We need a log function to create a connection pool. We need a connection
     -- pool to create our foundation. And we need our foundation to get a
     -- logging function. To get out of this loop, we initially create a

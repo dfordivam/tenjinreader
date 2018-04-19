@@ -24,8 +24,11 @@ import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 
+import Database.Haskey.Alloc.Concurrent (Root, ConcurrentHandles)
+import Control.Monad.Haskey
+
 import KanjiDB
--- import SrsDB
+import SrsDB
 import Text.MeCab
 
 -- | The foundation datatype for your application. This can be a good place to
@@ -40,6 +43,7 @@ data App = App
     , appLogger      :: Logger
 
     -- HH app specific data
+    -- Read-only
     , appKanjiDb     :: KanjiDb
     , appVocabDb     :: VocabDb
     , appRadicalDb   :: RadicalDb
@@ -51,6 +55,8 @@ data App = App
     , appKanjiSearchEng :: KanjiSearchEngine
     , appVocabSearchEng :: VocabSearchEngine
     , appVocabSearchEngNoGloss :: VocabSearchEngineNoGloss
+    -- Read-Write
+    , appUserDbLocks :: MVar (Map UserId ((ConcurrentDb UserConcurrentDb, ConcurrentHandles), Int))
     }
 
 data MenuItem = MenuItem
