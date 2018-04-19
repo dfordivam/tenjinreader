@@ -196,7 +196,7 @@ syncResultWithServer rt refreshEv addEv widgetStateDyn = do
     let
       sendResultEv =
         fmapMaybeCheap sendResultEvFun $
-        attachPromptlyDyn widgetStateDyn $ updated sendResultDyn
+        attach (current widgetStateDyn) $ updated sendResultDyn
 
       sendResultEvFun (st, (DoSync r))
         = Just $ SyncReviewItems rt r

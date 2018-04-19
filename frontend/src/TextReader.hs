@@ -81,8 +81,8 @@ myDocumentsListViewer refreshEv = do
   rec
     let
       viewEv :: Event t ViewDocument
-      viewEv = switchPromptlyDyn (leftmost <$> ((map fst) <$> evDyn))
-      viewRawEv = switchPromptlyDyn (leftmost <$> ((map (fst . snd)) <$> evDyn))
+      viewEv = (switch . current) (leftmost <$> ((map fst) <$> evDyn))
+      viewRawEv = (switch . current) (leftmost <$> ((map (fst . snd)) <$> evDyn))
 
     showWSProcessing viewEv resp
     showWSProcessing deleteEv delDone
@@ -90,7 +90,7 @@ myDocumentsListViewer refreshEv = do
       (viewList <$> (leftmost [listEv, delDone]))
     let
       deleteEv :: Event t DeleteDocument
-      deleteEv = switchPromptlyDyn (leftmost <$> ((map (snd . snd)) <$> evDyn))
+      deleteEv = (switch . current) (leftmost <$> ((map (snd . snd)) <$> evDyn))
     delDone <- lift $ getWebSocketResponse deleteEv
     resp <- lift $ getWebSocketResponse viewEv
 
@@ -142,7 +142,7 @@ viewerCommon fetchF viewDocF = do
 
   let
     viewEv :: Event t ViewDocument
-    viewEv = switchPromptlyDyn (leftmost <$> evDyn)
+    viewEv = (switch . current) (leftmost <$> evDyn)
   resp <- lift $ getWebSocketResponse viewEv
   tellEvent ((\e -> [Left e]) <$> fmapMaybe identity resp)
 
@@ -208,7 +208,7 @@ documentEditor editEv = divClass "" $ do
         <*> (value ti)
         <*> (value ta)
   annTextEv <- getWebSocketResponse
-    $ tagPromptlyDyn evDyn saveEv
+    $ tag (current evDyn) saveEv
   showWSProcessing saveEv annTextEv
   return $ (fmapMaybe identity annTextEv
     , cancelEv)
@@ -246,7 +246,7 @@ quickAnalyzeTop = do
       widgetHold (return [])
         ((\r -> mapM renderF $ map snd r) <$> resp)
 
-  let vIdEv = switchPromptlyDyn $ leftmost <$> v
+  let vIdEv = (switch . current) $ leftmost <$> v
 
   showVocabDetailsWidget vIdEv
   return ()
@@ -269,7 +269,7 @@ randomSentenceTop = do
       widgetHold (return [])
         (uncurry (renderOneSentence []) <$> resp)
 
-  let vIdEv = switchPromptlyDyn $ leftmost <$> v
+  let vIdEv = (switch . current) $ leftmost <$> v
 
   showVocabDetailsWidget vIdEv
   return ()

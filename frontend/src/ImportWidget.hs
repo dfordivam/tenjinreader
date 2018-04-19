@@ -137,7 +137,7 @@ coloumnSelectionWidget vs = do
         return fDyn
 
   widgetHold (return ())
-    (previewDataWidget vs <$> tagPromptlyDyn fDyn checkEv)
+    (previewDataWidget vs <$> tag (current fDyn) checkEv)
   return ()
 
 previewDataWidget vs fs = do
@@ -237,7 +237,7 @@ importWaniKaniVocab = do
     files <- value <$> fileInput def
     ev <- btn "btn-default" "Read File"
     let
-      fEv = fmapMaybe headMay (tagPromptlyDyn files ev)
+      fEv = fmapMaybe headMay (tag (current files) ev)
     getTextFromFile fEv
 
   let
@@ -320,4 +320,4 @@ importSelectionWidget (alreadyInDb, newEs, notFound) = el "div" $ do
   addEv <- if null newEs
     then return never
     else btn "btn-primary" "Import"
-  getWebSocketResponse $ ImportData <$> tagPromptlyDyn newEsDyn addEv
+  getWebSocketResponse $ ImportData <$> tag (current newEsDyn) addEv

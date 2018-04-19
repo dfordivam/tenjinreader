@@ -133,8 +133,8 @@ openEditSrsItemWidget ev = do
       modalWidget (Just s) = do
         rec
           d <- widgetHold (editWidget s)
-            ((return (never,never)) <$ switchPromptlyDyn (fst <$> d))
-        return (switchPromptlyDyn $ snd <$> d)
+            ((return (never,never)) <$ (switch . current) (fst <$> d))
+        return ((switch . current) $ snd <$> d)
 
       modalWidget Nothing = do
         return never
@@ -145,11 +145,11 @@ openEditSrsItemWidget ev = do
       editWidget (sId, s) = do
         rec
           (sNew, saveEv, closeEv) <- editWidgetView s ev
-          let sEv = tagPromptlyDyn sNew saveEv
+          let sEv = tag (current sNew) saveEv
           ev <- getWebSocketResponse $ EditSrsItem sId <$> sEv
         return (closeEv, (,) sId <$> sEv)
 
-  switchPromptlyDyn
+  (switch . current)
     <$> widgetHold (return never) (modalWidget <$> srsItEv)
 
 modalDiv :: DomBuilder t m => m b -> m b
@@ -277,10 +277,10 @@ editNonEmptyList ne conT renderFun = do
   rec
     let
       remAddEv = Map.fromList . NE.toList <$> mergeList [addEv, remEv]
-      addEv = attachPromptlyDyn newKeyDyn (tagPromptlyDyn (Just . conT <$> value ti) enterPress)
-      remEv1 = switchPromptlyDyn $
+      addEv = attach (current newKeyDyn) (tag (current $ Just . conT <$> value ti) enterPress)
+      remEv1 = (switch . current) $
         (leftmost . (fmap snd) . Map.elems) <$> d
-      remEv = fmapMaybe g (attachPromptlyDyn d remEv1)
+      remEv = fmapMaybe g (attach (current d) remEv1)
       g (m,e) = if Map.size m > 1
         then Just e
         else Nothing
@@ -358,9 +358,9 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
         topEv <- btn "btn-block btn-primary" "Go to top"
         performEvent_ $ topEv $> DOM.scrollIntoView (_element_raw headElm) True
       addMoreEv <- fmap fg <$> getWebSocketResponse
-        (LoadMoreSentences vIds <$> tagPromptlyDyn ((map snd) . Map.keys <$> vIdMap) loadMoreEv)
+        (LoadMoreSentences vIds <$> tag (current $ (map snd) . Map.keys <$> vIdMap) loadMoreEv)
 
-    return $ switchPromptlyDyn ((leftmost . concat . Map.elems) <$> vIdMap)
+    return $ (switch . current) ((leftmost . concat . Map.elems) <$> vIdMap)
 
   showVocabDetailsWidget vIdEv
   return closeEvTop
@@ -521,11 +521,11 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
     <$> fmapMaybeCheap ((fmap NE.toList) . NE.nonEmpty)
         (fmap fst vIdEv)
   surfDyn <- holdDyn ("", Nothing) (fmap snd vIdEv)
-  let detailsEv = attachPromptlyDyn surfDyn detailsEv1
+  let detailsEv = attach (current surfDyn) detailsEv1
 
   rec
     let ev = leftmost [Just <$> detailsEv
-             , Nothing <$ (switchPromptlyDyn closeEv)]
+             , Nothing <$ ((switch . current) closeEv)]
     closeEv <- widgetHold (return never)
       (wd <$> ev)
 
@@ -657,13 +657,13 @@ widgetHoldWithRemoveAfterEvent wEv = do
   let
     f1 w = do
       rec
-        let ev = switchPromptlyDyn evDyn
+        let ev = (switch . current) evDyn
         evDyn <- widgetHold (w)
           (return never <$ ev)
       return ev
   evDyn <- widgetHold (return never)
     (f1 <$> wEv)
-  return $ switchPromptlyDyn evDyn
+  return $ (switch . current) evDyn
 
 -- | A widget to construct a tabbed view that shows only one of its child widgets at a time.
 --   Creates a header bar containing a <ul> with one <li> per child; clicking a <li> displays

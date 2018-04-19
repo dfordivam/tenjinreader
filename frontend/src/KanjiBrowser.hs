@@ -40,7 +40,7 @@ kanjiBrowseWidget = divClass "row" $ do
       f (KanjiFilter "" (AdditionalFilter "" _ "") []) _ = Map.keys radicalTable
       f _ r = r
 
-      validRadicals = attachPromptlyDynWith f filterDyn validRadicalsEv
+      validRadicals = attachWith f (current filterDyn) validRadicalsEv
 
     filterDyn <- holdDyn def filterEv
 
@@ -179,8 +179,8 @@ radicalMatrix evValid = do
 
         (e,_) <- elDynAttr' "button" attr $
           elAttr "span" spanAttr $ text r
-        let ev1 = attachPromptlyDynWithMaybe f
-                   (zipDyn valid disableAll)
+        let ev1 = attachWithMaybe f
+                   (current $ zipDyn valid disableAll)
                    (domEvent Click e)
             f (_,True) _ = Nothing
             f (True,_) _ = Just ()
@@ -222,7 +222,7 @@ kanjiListWidget listEv = do
   -- NW 1
   rec
     lmEv <- getWebSocketResponse $ LoadMoreKanjiResults <$ ev
-    dyn <- foldDyn fun [] (align listEv lmEv)
+    dynV <- foldDyn fun [] (align listEv lmEv)
     d <- elClass "table" "table table-striped" $ do
       el "thead" $ do
         el "tr" $ do
@@ -231,11 +231,11 @@ kanjiListWidget listEv = do
           el "th" $ text "Meanings"
       el "tbody" $  do
         -- NW 1.1
-        simpleList dyn liWrap
+        simpleList dynV liWrap
     ev <- do
       showWSProcessing ev lmEv
       btn "btn-block btn-primary" "Load More"
-  return $ switchPromptlyDyn $ leftmost <$> d
+  return $ switch . current $ leftmost <$> d
 
 kanjiDetailsWidget
   :: AppMonad t m

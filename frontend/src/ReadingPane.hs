@@ -72,7 +72,7 @@ readingPane docEv = do
   s <- getWebSocketResponse (GetReaderSettings <$ ev)
   v <- widgetHold (readingPaneInt docEv def)
     (readingPaneInt docEv <$> s)
-  return (switchPromptlyDyn v)
+  return (switch . current $ v)
 
 readerSettingsControls
   :: (MonadFix m, MonadHold t m,
@@ -266,13 +266,13 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
             ui = min (len * 2) (snd $ A.bounds poArray)
 
         newStateEv = attach (current row1Len) $
-          attachPromptlyDynWith makeParaOffsetArray textContent pageChangeParaEv
+          attachWith makeParaOffsetArray (current textContent) pageChangeParaEv
 
         row1Dyn :: Dynamic t (((ParaNum, ParaPos),(ParaNum, ParaPos)), ParaOffset)
         row1Dyn = join row1Dyn'
 
         pageChangeParaEv = fforMaybe
-          (attachPromptlyDyn ((,) <$> prevParaMaybe <*> nextParaMaybe) pageChangeEv)
+          (attach (current $ (,) <$> prevParaMaybe <*> nextParaMaybe) pageChangeEv)
           (\((p,n),d) -> case d of
               ForwardGrow -> (,) <$> n <*> pure d
               BackwardGrow -> (,) <$> p <*> pure d)
@@ -309,10 +309,10 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 
         let btnPress = leftmost [next,prev]
         leftBtnVis <- holdDyn (False) $
-          leftmost [tagPromptlyDyn (isJust <$> nextParaMaybe) stopTicks
+          leftmost [tag (current $ isJust <$> nextParaMaybe) stopTicks
                    , False <$ btnPress]
         rightBtnVis <- holdDyn (False) $
-          leftmost [tagPromptlyDyn (isJust <$> prevParaMaybe) stopTicks
+          leftmost [tag (current $ isJust <$> prevParaMaybe) stopTicks
                    , False <$ btnPress]
 
         prev1 <- do
@@ -375,7 +375,7 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
               return $ de
         t <- widgetHold init
           (init <$ startTicksAgain)
-        return (switchPromptlyDyn $ join t)
+        return (switch . current $ join t)
 
   tickEv <- ticksWidget
 
@@ -396,13 +396,13 @@ fetchMoreContentF docId annText endParaNum pageChangeEv = do
     -- Keep at most 120 paras in memory
     let
 
-        lastAvailablePara = (snd . A.bounds) <$> textContent
-        firstAvailablePara = (fst . A.bounds) <$> textContent
-        hitEndEv = fmapMaybe hitEndF (attachPromptlyDyn lastAvailablePara pageChangeEv)
+        lastAvailablePara = current $ (snd . A.bounds) <$> textContent
+        firstAvailablePara = current $ (fst . A.bounds) <$> textContent
+        hitEndEv = fmapMaybe hitEndF (attach lastAvailablePara pageChangeEv)
         hitEndF (ParaNum l,((ParaNum n,_), d))
           | l < endParaNum && d == ForwardGrow && (l - n < 30) = Just (l + 1)
           | otherwise = Nothing
-        hitStartEv = fmapMaybe hitStartF (attachPromptlyDyn firstAvailablePara pageChangeEv)
+        hitStartEv = fmapMaybe hitStartF (attach firstAvailablePara pageChangeEv)
         hitStartF (ParaNum f,((ParaNum n,_), d))
           | f > 0 && d == BackwardGrow && (n - f < 30) = Just (max 0 (f - 60))
           | otherwise = Nothing

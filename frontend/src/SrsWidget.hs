@@ -39,7 +39,7 @@ srsWidget = divClass "" $ do
   let widgetReDraw w redraw = do
         evDyn <- widgetHold (w)
           (w <$ redraw)
-        return $ switchPromptlyDyn evDyn
+        return $ switch (current evDyn)
   rec
     let
       visEv = leftmost [ev1,ev2,ev3,ev4, ShowStatsWindow <$ ev]
@@ -67,7 +67,7 @@ showStats refreshEv = do
   s <- getWebSocketResponse (GetSrsStats () <$ refreshEv)
   showWSProcessing refreshEv s
   retEvDyn <- widgetHold (return never) (showStatsWidget <$> s)
-  return $ switchPromptlyDyn $ retEvDyn
+  return $ switch (current retEvDyn)
 
 showStatsWidget
   :: (MonadWidget t m)
@@ -215,9 +215,9 @@ browseSrsItemsWidget = do
           value selectAllToggleCheckBox
 
         reqEv = leftmost
-          [updated browseSrsFilterDyn
-          , tagPromptlyDyn browseSrsFilterDyn editDone
-          , tagPromptlyDyn browseSrsFilterDyn evPB]
+          [ updated browseSrsFilterDyn
+          , tag (current browseSrsFilterDyn) editDone
+          , tag (current browseSrsFilterDyn) evPB]
       itemEv <- getWebSocketResponse reqEv
 
       -- List and selection checkBox
@@ -225,7 +225,6 @@ browseSrsItemsWidget = do
         showWSProcessing reqEv itemEv
         widgetHold (checkBoxList never [])
           (checkBoxList checkBoxSelAllEv <$> itemEv)
-
       -- Action buttons
       editDone <-
         bulkEditWidgetActionButtons filtOptsDyn revTypeDyn $ join selList
@@ -275,9 +274,9 @@ bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "panel-foo
           [DeleteSrsItems <$ deleteEv
           , MarkDueSrsItems <$ markDueEv
           , SuspendSrsItems <$ suspendEv
-          , ChangeSrsReviewData <$> tagPromptlyDyn dateDyn reviewDateChange]
+          , ChangeSrsReviewData <$> tag (current dateDyn) reviewDateChange]
     doUpdate <- getWebSocketResponse $
-      (attachPromptlyDynWith ($) (BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
+      (attachWith ($) (current $ BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
     showWSProcessing bEditOp doUpdate
     return $ fmapMaybe identity doUpdate
 
@@ -386,7 +385,7 @@ getRevItemDyn
   -> m (Dynamic t (Maybe (ReviewItem, ActualReviewType rt)))
 getRevItemDyn widgetStateDyn ev = do
   rec
-    v <- performEvent $ ffor (tagPromptlyDyn ((,) <$> riDyn <*> widgetStateDyn) ev) $
+    v <- performEvent $ ffor (tag (current $ (,) <$> riDyn <*> widgetStateDyn) ev) $
       \(last, st) -> do
         let
           allrs = (Map.toList (_reviewQueue st))
@@ -563,7 +562,7 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
       (shimesu, shiranai) <- divClass "col-sm-2" $ do
         rec
           let evChange = (leftmost [ev, () <$ fst recog])
-          ev <- switchPromptlyDyn <$> widgetHold (btn "btn-primary" "示す")
+          ev <- switch . current <$> widgetHold (btn "btn-primary" "示す")
             (return never <$ evChange)
         ev2 <- widgetHoldWithRemoveAfterEvent ((btn "btn-primary" "知らない") <$ evChange)
         return (ev,ev2)
@@ -597,7 +596,7 @@ reviewInputFieldHandler
  -> m (Event t (ReviewStateEvent rt), Event t Bool)
 reviewInputFieldHandler ti rt ri@(ReviewItem i _ _ _) = do
   let enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
-      correct = checkAnswer n <$> value ti
+      correct = current $ checkAnswer n <$> value ti
       n = getAnswer ri rt
       h _ ReviewStart = ShowAnswer
       h _ ShowAnswer = NextReview
@@ -606,9 +605,9 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i _ _ _) = do
   let
 
   -- the dr event will fire after the correctEv (on second enter press)
-    correctEv = tagPromptlyDyn correct enterPress
-    sendResult = ffilter (== NextReview) (tagPromptlyDyn d enterPress)
-    dr = (\b -> DoReviewEv (i, rt, b)) <$> tagPromptlyDyn correct sendResult
+    correctEv = tag correct enterPress
+    sendResult = ffilter (== NextReview) (tag (current d) enterPress)
+    dr = (\b -> DoReviewEv (i, rt, b)) <$> tag correct sendResult
   return (dr, correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
@@ -650,7 +649,7 @@ checkSpeechRecogResult (ri,rt) resEv = do
 
   evDyn <- widgetHold (return never)
     (checkF <$> resEv)
-  return $ switchPromptlyDyn evDyn
+  return $ switch . current $ evDyn
 
 
 data AnswerBoxState = ReviewStart | ShowAnswer | NextReview
@@ -772,7 +771,7 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i _ _ _),rt) = do
   let
     btnClickDoReview = never -- TODO
     showResEv  = leftmost [answerCorrectEv, False <$ shimesuEv]
-    doReviewEv = (\r -> DoReviewEv (i,rt,r)) <$> (tagPromptlyDyn answeredCorrect
+    doReviewEv = (\r -> DoReviewEv (i,rt,r)) <$> (tag (current answeredCorrect)
       $ leftmost [btnClickDoReview, autoNextEv, tsugiEv])
 
   return (showResEv, doReviewEv)
