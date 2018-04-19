@@ -279,20 +279,13 @@ addEditNewDocumentCommon dId docContent = do
 
   ret <- transactSrsDB $ runStateWithNothing $ upFun
 
-  transactReadOnlySrsDB $ \rd -> do
-    let
-      f :: (AllocReaderM m)
-        => (Vocab, [VocabId], Bool)
-        -> m (Vocab, [VocabId], Bool)
-      f v@(_,vIds,_) = do
-        sIds <- mapM (\vi -> Tree.lookupTree vi (rd ^. vocabSrsMap)) vIds
-        return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
-    ret & _Just . _5 . each . _2 . each . _Right %%~ f
+  ret & _Just . _5 . each . _2 %%~ fixFuriganaVisibility
 
 getQuickAnalyzeText :: QuickAnalyzeText
   -> WsHandlerM [(Int, AnnotatedPara)]
 getQuickAnalyzeText (QuickAnalyzeText t) = do
-  v <- lift $ makeReaderDocumentContent t
+  v <- mapM fixFuriganaVisibility
+    =<< (lift $ makeReaderDocumentContent t)
   return $ zip [1..] $ V.toList v
 
 getListDocuments :: ListDocuments
@@ -352,15 +345,7 @@ getViewDocument (ViewDocument i paraNum) = do
     ret :: Maybe ReaderDocumentData
     ret = flip (getReaderDocumentData booksDb articlesDb) paraNum <$> s
 
-  transactReadOnlySrsDB $ \rd -> do
-    let
-      f :: (AllocReaderM m)
-        => (Vocab, [VocabId], Bool)
-        -> m (Vocab, [VocabId], Bool)
-      f v@(_,vIds,_) = do
-        sIds <- mapM (\vi -> Tree.lookupTree vi (rd ^. vocabSrsMap)) vIds
-        return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
-    ret & _Just . _5 . each . _2 . each . _Right %%~ f
+  ret & _Just . _5 . each . _2 %%~ fixFuriganaVisibility
 
 getViewDocument req = do
   rs <- transactReadOnlySrsDB $ \rd ->
@@ -467,7 +452,7 @@ getRandomSentence req = do
     isFav = Set.member sId favSet
     g (i,b) = (,) <$> pure (not b, i) <*> arrayLookupMaybe sentenceDb i
     (Just val) = g (sId, isFav)
-  return val
+  val & _2 . sentenceContents . each %%~ fixFuriganaVisibility
 
 getVocabSentences :: GetVocabSentences
   -> WsHandlerM ([VocabId], [((Bool, SentenceId), SentenceData)])
@@ -500,7 +485,7 @@ getLoadMoreSentences (LoadMoreSentences (eId:_) alreadySent) = do
 
     g (sId,b) = (,) <$> pure (not b, sId) <*> arrayLookupMaybe sentenceDb sId
     sSetMB = Map.lookup eId vocabSentenceDb
-  return (ss)
+  ss & each . _2 . sentenceContents . each %%~ fixFuriganaVisibility
 
 getToggleSentenceFav :: ToggleSentenceFav
   -> WsHandlerM ()
@@ -511,3 +496,15 @@ getToggleSentenceFav (ToggleSentenceFav sId) =
              if Set.member sId s
                then Set.delete sId s
                else Set.insert sId s)
+
+fixFuriganaVisibility :: AnnotatedPara -> WsHandlerM AnnotatedPara
+fixFuriganaVisibility ap =
+  transactReadOnlySrsDB $ \rd -> do
+    let
+      f :: (AllocReaderM m)
+        => (Vocab, [VocabId], Bool)
+        -> m (Vocab, [VocabId], Bool)
+      f v@(_,vIds,_) = do
+        sIds <- mapM (\vi -> Tree.lookupTree vi (rd ^. vocabSrsMap)) vIds
+        return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
+    ap & each . _Right %%~ f
