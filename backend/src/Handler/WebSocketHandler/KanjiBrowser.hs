@@ -277,7 +277,17 @@ addEditNewDocumentCommon dId docContent = do
         readerDocuments %%~ Tree.insertTree docId nd
         >>= documentAccessOrder %%~ (\ol -> return $ newk : (List.delete newk ol))
 
-  transactSrsDB $ runStateWithNothing $ upFun
+  ret <- transactSrsDB $ runStateWithNothing $ upFun
+
+  transactReadOnlySrsDB $ \rd -> do
+    let
+      f :: (AllocReaderM m)
+        => (Vocab, [VocabId], Bool)
+        -> m (Vocab, [VocabId], Bool)
+      f v@(_,vIds,_) = do
+        sIds <- mapM (\vi -> Tree.lookupTree vi (rd ^. vocabSrsMap)) vIds
+        return $ (v & _3 .~ (null $ catMaybes sIds)) -- Show if not in srs map
+    ret & _Just . _5 . each . _2 . each . _Right %%~ f
 
 getQuickAnalyzeText :: QuickAnalyzeText
   -> WsHandlerM [(Int, AnnotatedPara)]
