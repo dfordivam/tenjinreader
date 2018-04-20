@@ -28,19 +28,25 @@ checkVerticalOverflow
   => (self2, self1)
   -> self
   -> ((Double, Maybe TextAdjust) -> IO b)
+  -> Bool
   -> m b
-checkVerticalOverflow (ie,oe) r action = do
-  rx <- DOM.getX =<< DOM.getBoundingClientRect r
-  ix <- DOM.getX =<< DOM.getBoundingClientRect ie
-  ox <- DOM.getX =<< DOM.getBoundingClientRect oe
+checkVerticalOverflow (ie,oe) r action isVertical = do
+  let g = if isVertical then DOM.getX else DOM.getY
+  rx1 <- g =<< DOM.getBoundingClientRect r
+  ix <- g =<< DOM.getBoundingClientRect ie
+  ox <- g =<< DOM.getBoundingClientRect oe
+  rxH <- DOM.getHeight =<< DOM.getBoundingClientRect r
 
+  let rx = if isVertical then rx1 else rxH + rx1
+      lt = if isVertical then (<) else (>)
+      gt = if isVertical then (>) else (<)
 #if defined (DEBUG)
-  liftIO $ putStrLn $ (show (rx,ix,ox) :: Text)
+  liftIO $ FrontendCommon.putStrLn $ (show (rx,ix,ox) :: Text)
 #endif
   liftIO $ action $ if
-    | (rx > ox && rx < ix) -> (0, Nothing) -- Outside
-    | ix < rx -> (rx - ix, Just ShrinkText)
-    | ox > rx -> (ox - rx, Just GrowText)
+    | (rx `gt` ox && rx `lt` ix) -> (0, Nothing) -- Outside
+    | ix `lt` rx -> (0, Just ShrinkText)
+    | ox `gt` rx -> (0, Just GrowText)
     | otherwise -> (0, Nothing) -- hidden
 
 -- setupInterObs :: (DOM.MonadDOM m, DOM.IsElement e)
@@ -81,6 +87,7 @@ readerSettingsControls
   -> m (Dynamic t (ReaderSettingsTree CurrentDb))
 readerSettingsControls rsDef = divClass "col-sm-12 well well-sm form-inline" $ divClass "" $ do
   let
+    ddConf :: _
     ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
     ddAttr = ("class" =: "form-control input-sm")
   fontSizeDD <- divClass "col-sm-3" $ do
@@ -95,11 +102,11 @@ readerSettingsControls rsDef = divClass "col-sm-12 well well-sm form-inline" $ d
   heightDD <- divClass "col-sm-3" $ do
     el "label" $ text "高さ："
     dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) ddConf
-  -- writingModeDD <- dropdown (rsDef ^. verticalMode) (constDyn writingModeOptions) ddConf
+  writingModeDD <- dropdown (rsDef ^. verticalMode)
+    (constDyn writingModeOptions) ddConf
   let rsDyn = ReaderSettings <$> (value fontSizeDD) <*> (value rubySizeDD)
-                <*> (value lineHeightDD) <*> (writingModeDD)
+                <*> (value lineHeightDD) <*> (value writingModeDD)
                 <*> (value heightDD)
-      writingModeDD = constDyn True
   return rsDyn
 
 divWrap :: (PostBuild t m, DomBuilder t m) =>
@@ -134,8 +141,6 @@ readingPaneInt docEv rsDef = do
   getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
 
   _ <- widgetHold ((text "waiting for document data"))
-    -- (readingPaneView <$> docEv)
-    -- (paginatedReader rsDyn fullScrEv <$> docEv)
     (verticalReader rsDyn fullScrEv <$> docEv)
   return (closeEv)
 
@@ -180,23 +185,17 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 #endif
 
   let
-    btnAttr vis = ("class" =: "btn")
-       <> ("style" =: ("writing-mode:lr; height: 80%; width: 1em;" <> visV))
-       where
-         visV = if vis then "" else "visibility: hidden;"
-
-    divAttr' = (\s l h fs -> ("style" =:
-      ("font-size: " <> tshow s <>"%;"
-        <> "line-height: " <> tshow l <> "%;"
-        <> "height: " <> (if fs then "100%;" else tshow h <> "px;")
-        <> "width: " <> (if fs then "100%;" else "80vw;")
-        <> "writing-mode: vertical-rl;"
+    divAttr' = (\rs1 fs -> ("class" =: "col-xs-10") <> ("style" =:
+      ("font-size: " <> tshow (_fontSize rs1) <>"%;"
+        <> "line-height: " <> tshow (_lineHeight rs1) <> "%;"
+        <> "height: " <> (if fs
+                          then "100%;"
+                          else tshow (_numOfLines rs1) <> "px;")
+        <> "writing-mode: " <> (if (_verticalMode rs1)
+                                then "vertical-rl;"
+                                else "lr")
         <> "word-wrap: break-word;"
-        -- <> (if fs then "position: fixed;" else "")
-        <> "display: block;" <> "padding: 40px;"))
-           <> ("class" =: (if fs then "modal modal-content" else "")))
-      <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
-      <*> (_numOfLines <$> rs)
+        <> "display: block;"))) <$> rs
 
     startParaData = makeParaData annText
     startPara = (\(p,v) -> (ParaNum p, ParaPos $ maybe 1 (max 1) v)) startParaMaybe
@@ -288,64 +287,90 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
-        then ("style" =: "position: fixed; padding 1em; top: 0; bottom: 0; left: 0; right: 0;")
+        then ("class" =: "modal-content") <>
+          ("style" =: "position: fixed; padding: 1em; top: 0; bottom: 0; left: 0; right: 0;")
         else Map.empty
       divAttr = divAttr' <*> fullscreenDyn
 
     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
                                            , False <$ closeEv])
 
+    let
+      btnPress = leftmost [next,prev]
+      prevNxtBtnWrapDivAttr = (\h fs -> ("class" =: "col-xs-1")
+        <> ("style" =: ("height: " <> (if fs then "100%;" else tshow h <> "px;"))))
+              <$> (_numOfLines <$> rs) <*> fullscreenDyn
+
+      btnAttr vis = ("class" =: "btn btn-default")
+        <> ("style" =: ("height: 80%; width: 1em;" <> visV))
+        where
+          visV = if vis then "" else "visibility: hidden;"
+
+      leftBtrAttr = join $ ffor (_verticalMode <$> rs) $ \v -> if v
+        then btnAttr <$> nextBtnVis
+        else btnAttr <$> prevBtnVis
+
+      rightBtrAttr = join $ ffor (_verticalMode <$> rs) $ \v -> if v
+        then btnAttr <$> prevBtnVis
+        else btnAttr <$> nextBtnVis
+
+    nextBtnVis <- holdDyn (False) $
+      leftmost [tag (current $ isJust <$> nextParaMaybe) stopTicks
+               , False <$ btnPress]
+    prevBtnVis <- holdDyn (False) $
+      leftmost [tag (current $ isJust <$> prevParaMaybe) stopTicks
+               , False <$ btnPress]
+
     --------------------------------
-    (resizeEv, (rowRoot, (inside, outside, vIdEv, closeEv, (next,prev)))) <- divClass "" $ resizeDetector $ do
-      let
-        dispFullScr m = do
-          dyn ((\fs -> if fs then m else return ()) <$> fullscreenDyn)
+    (resizeEv, ((rowRoot, (inside, outside, vIdEv)), (next,(prev,closeEv)))) <- divClass "" $ resizeDetector $ do
 
-      elDynAttr "div" wrapDynAttr $ elDynAttr' "div" divAttr $ do
-        cEv <- do
-          (e,_) <- elClass' "button" "close" $ do
-            dispFullScr (text "Close")
+      elDynAttr "div" wrapDynAttr $ do
+        -- The button on left is next in vertical and prev in horizontal
+        leftEv <- elDynAttr "div" prevNxtBtnWrapDivAttr $ do
+          elAttr "div" ("style" =: "height: 10%; visibility: hidden;") $ return ()
+          (e,_) <- elDynAttr' "button" leftBtrAttr $ text "<"
           return (domEvent Click e)
 
-        let btnPress = leftmost [next,prev]
-        leftBtnVis <- holdDyn (False) $
-          leftmost [tag (current $ isJust <$> nextParaMaybe) stopTicks
-                   , False <$ btnPress]
-        rightBtnVis <- holdDyn (False) $
-          leftmost [tag (current $ isJust <$> prevParaMaybe) stopTicks
-                   , False <$ btnPress]
+        v <- elDynAttr' "div" divAttr $ do
+          vIdEv1 <- el "div" $ do
+            let
+              f :: _ -> ((ParaNum, ParaPos), (ParaNum, ParaPos))
+                -> Map ParaNum (ParaPos, ParaPos)
+              f tc ((fn,fs),(ln,ls)) = Map.fromList $ map (\p -> (p, g p)) [fn..ln]
+                where g p | p == fn && p == ln = (fs,ls)
+                          | p == fn = (fs, snd $ A.bounds $ tc A.! p)
+                          | p == ln = (fst $ A.bounds $ tc A.! p, ls)
+                          | otherwise = A.bounds $ tc A.! p
+              dynMap = f <$> textContent <*> (fst <$> row1Dyn)
 
-        prev1 <- do
-          (e,_) <- elDynAttr' "button" (btnAttr <$> rightBtnVis) $ text ">"
-          return (domEvent Click e)
+            evMap <- listViewWithKey dynMap (renderDynParas rs textContent)
+            return $ fmapMaybe headMay $ Map.elems <$> evMap
 
-        vIdEv1 <- el "div" $ do
-          let
-            f :: _ -> ((ParaNum, ParaPos), (ParaNum, ParaPos))
-              -> Map ParaNum (ParaPos, ParaPos)
-            f tc ((fn,fs),(ln,ls)) = Map.fromList $ map (\p -> (p, g p)) [fn..ln]
-              where g p | p == fn && p == ln = (fs,ls)
-                        | p == fn = (fs, snd $ A.bounds $ tc A.! p)
-                        | p == ln = (fst $ A.bounds $ tc A.! p, ls)
-                        | otherwise = A.bounds $ tc A.! p
-            dynMap = f <$> textContent <*> (fst <$> row1Dyn)
+          (i, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
+            text ""
+          elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
+            text ""
+          (o, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
+            text ""
+            return ()
+          return (i, o, vIdEv1)
 
-          evMap <- listViewWithKey dynMap (renderDynParas rs textContent)
-          return $ fmapMaybe headMay $ Map.elems <$> evMap
+        (rightEv, cEv1) <- elDynAttr "div" prevNxtBtnWrapDivAttr $ do
+          let closeBtnAttr = ffor fullscreenDyn $ \fs -> if fs
+                then ("style" =: "height: 10%;")
+                else ("style" =: "height: 10%; visibility: hidden;")
+          cEv <- elDynAttr "div" closeBtnAttr $ do
+            btn "btn-default" "Close"
+          (e,_) <- elDynAttr' "button" rightBtrAttr $ text ">"
+          return (domEvent Click e, cEv)
 
-        next1 <- do
-          (e,_) <- elDynAttr' "button" (btnAttr <$> leftBtnVis) $ text "<"
-          return (domEvent Click e)
+        let
+          next1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
+            then leftEv else rightEv
+          prev1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
+            then rightEv else leftEv
 
-        (i, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
-          text ""
-        elAttr "div" ("style" =: "height: 1em; width: 2em;") $ do
-          text ""
-        (o, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
-          text ""
-          return ()
-        return (i, o, vIdEv1, cEv, (next1, prev1))
-
+        return (v, (next1, (prev1,cEv1)))
 
   showVocabDetailsWidget vIdEv
 
@@ -380,7 +405,8 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
   tickEv <- ticksWidget
 
   performEvent_ (checkVerticalOverflow (inEl, outEl)
-                (_element_raw rowRoot) action <$ tickEv)
+                (_element_raw rowRoot) action
+    <$> tag (current (_verticalMode <$> rs)) tickEv)
 
   return ()
 
@@ -414,11 +440,11 @@ fetchMoreContentF docId annText endParaNum pageChangeEv = do
                                     (fmapMaybe identity moreContentEv))
 
 #if defined (DEBUG)
-  text "("
-  display lastAvailablePara
-  text ", "
-  display firstAvailablePara
-  text ")"
+  -- text "("
+  -- display lastAvailablePara
+  -- text ", "
+  -- display firstAvailablePara
+  -- text ")"
 #endif
 
   return textContent
