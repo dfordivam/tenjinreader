@@ -378,7 +378,7 @@ renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "well wel
   (evs, visDyn, showPlainEv) <- elAttr "div" rowAttr $ do
     evs <- divClass "col-sm-11" $
       forM sg $ \s -> do
-        renderOnePara (constDyn vIds) (constDyn 100) s
+        renderOnePara (constDyn (vIds,[])) (constDyn 100) s
 
     rec
       (visDyn, showPlainEv) <- divClass "col-sm-1" $ do
@@ -418,7 +418,7 @@ showPlainForm = mapM_ $ \s -> do
     g (KanjiWithReading (Kanji k) r) = k <> "《" <> r <> "》"
 
 vocabRuby :: (_)
-  => Dynamic t Bool
+  => Dynamic t (Maybe Bool)
   -> Dynamic t Int
   -> Dynamic t Bool
   -> Vocab
@@ -426,7 +426,11 @@ vocabRuby :: (_)
          Event t2 (), Event t3 ())
 vocabRuby markDyn fontSizePctDyn visDyn (Vocab ks) = do
   let
-    attr = ffor markDyn $ \b -> if b then ("class" =: "highlight-word") else Map.empty
+    attr = ffor markDyn $ \b -> case b of
+      Nothing -> Map.empty
+      (Just True) -> ("class" =: "highlight-bright")
+      (Just False) -> ("class" =: "highlight-dark")
+
     rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
     g r True = r
     g _ _ = ""
@@ -447,7 +451,7 @@ renderOnePara
        MonadHold t m,
        PostBuild t m,
        DomBuilder t m)
-  => Dynamic t [VocabId] -- Used for mark
+  => Dynamic t ([VocabId], [VocabId]) -- Used for mark
   -> Dynamic t Int
   -> [Either Text (Vocab, [VocabId], Bool)]
   -> m (Event t ([VocabId], (Text, Maybe (RawElement (DomBuilderSpace m)))))
@@ -458,7 +462,13 @@ renderOnePara vIdDyn rSizeDyn annTextPara = do
         f (Right (v, vId, vis)) = do
           rec
             let evVis = leftmost [True <$ eme, vis <$ eml]
-                markDyn = (any (\eId -> (elem eId vId))) <$> vIdDyn
+                markDyn = ffor vIdDyn $ \(a,b) ->
+                  if any (\eId -> (elem eId vId)) a
+                    then Just True
+                    else if any (\eId -> (elem eId vId)) b
+                      then Just False
+                      else Nothing
+
             visDyn <- holdDyn vis evVis
             (e, ek, eme, eml) <-
               vocabRuby markDyn rSizeDyn visDyn v

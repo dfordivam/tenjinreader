@@ -332,11 +332,11 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
     (resizeEv, ((rowRoot, (inside, outside, vIdEv)), (next,(prev,closeEv)))) <- divClass "" $ resizeDetector $ do
 
       elDynAttr "div" wrapDynAttr $ do
-        -- The button on left is next in vertical and prev in horizontal
-        leftEv <- elDynAttr "div" prevNxtBtnWrapDivAttr $ do
-          elAttr "div" ("style" =: "height: 10%; visibility: hidden;") $ return ()
+        (leftEv, clearHighlight) <- elDynAttr "div" prevNxtBtnWrapDivAttr $ do
+          c1 <- elAttr "div" ("style" =: "height: 10%;") $
+            btn "btn-default" "X"
           (e,_) <- elDynAttr' "button" leftBtrAttr $ text "<"
-          return (domEvent Click e)
+          return (domEvent Click e, c1)
 
         v <- elDynAttr' "div" divAttr $ do
           vIdEv1 <- el "div" $ do
@@ -350,12 +350,19 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
                           | otherwise = A.bounds $ tc A.! p
               dynMap = f <$> textContent <*> (fst <$> row1Dyn)
 
-            evMap <- listViewWithKey dynMap (renderDynParas rs textContent)
-            return $ fmapMaybe headMay $ Map.elems <$> evMap
+            rec
+              evMap <- listViewWithKey dynMap
+                (renderDynParas rs highlightDyn textContent)
+              let vIdEv = fmapMaybe headMay $ Map.elems <$> evMap
+                  f Nothing _ = ([],[])
+                  f (Just v) (v1,v2) = (v,v1 ++ v2)
+              highlightDyn <- foldDyn f ([],[]) (leftmost [Just . fst <$> vIdEv
+                                                  , Nothing <$ clearHighlight])
+            return $ vIdEv
 
           (i, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
             text ""
-          elAttr "div" ("style" =: "height: 2em; width: 2em;") $ do
+          elAttr "div" ("style" =: "height: 1.5em; width: 1.5em;") $ do
             text ""
           (o, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1em;") $ do
             text ""
@@ -372,6 +379,7 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
           return (domEvent Click e, cEv)
 
         let
+          -- The button on left is next in vertical and prev in horizontal
           next1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
             then leftEv else rightEv
           prev1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
@@ -587,21 +595,19 @@ renderDynParas
         MonadHold t m,
         MonadFix m))
   => Dynamic t (ReaderSettings CurrentDb) -- Used for rubySize
+  -> Dynamic t ([VocabId], [VocabId])
   -> Dynamic t ParaData
   -> ParaNum
   -> Dynamic t (ParaPos, ParaPos)
   -> m (Event t ([VocabId], (Text, Maybe e)))
-renderDynParas rs textContent pn dynPos = do
+renderDynParas rs vIdDyn textContent pn dynPos = do
   let
-      renderF vIdDyn = renderOnePara vIdDyn (_rubySize <$> rs)
+      renderF highlightDyn = renderOnePara highlightDyn (_rubySize <$> rs)
       pc = (\tc -> tc A.! pn) <$> textContent
       dt = (\p pc -> A.ixmap p identity pc) <$> dynPos <*> pc
 
-  rec
-    vIdEv <- switchPromptly never
+  switchPromptly never
       =<< dyn ((\p -> renderF vIdDyn (A.elems p)) <$> dt)
-    vIdDyn <- holdDyn [] (fmap fst vIdEv)
-  return (vIdEv)
 
 vocabRubyLight :: (DomBuilder t m)
   => Int
