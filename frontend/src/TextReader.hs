@@ -239,7 +239,7 @@ quickAnalyzeTop = do
   resp <- getWebSocketResponse $ QuickAnalyzeText <$> (_textArea_input ta)
 
   v <- divClass "col-md-6" $ do
-    rsDyn <- readerSettingsControls def
+    rsDyn <- readerSettingsControls def False
     let renderF = renderOnePara (constDyn [])
           (_rubySize <$> rsDyn)
     divWrap rsDyn (constDyn False) $ do
@@ -264,7 +264,7 @@ randomSentenceTop = do
                                   , GetRandomFavSentence <$ ev2]
 
   v <- divClass "row" $ do
-    rsDyn <- readerSettingsControls def
+    rsDyn <- readerSettingsControls def False
     divWrap rsDyn (constDyn False) $ do
       widgetHold (return [])
         (uncurry (renderOneSentence []) <$> resp)

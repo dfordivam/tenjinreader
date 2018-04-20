@@ -84,8 +84,9 @@ readerSettingsControls
   :: (MonadFix m, MonadHold t m,
        PostBuild t m, DomBuilder t m)
   => ReaderSettingsTree CurrentDb
+  -> Bool
   -> m (Dynamic t (ReaderSettingsTree CurrentDb))
-readerSettingsControls rsDef = divClass "col-sm-12 well well-sm form-inline" $ divClass "" $ do
+readerSettingsControls rsDef full = divClass "col-sm-12 well well-sm form-inline" $ divClass "" $ do
   let
     ddConf :: _
     ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
@@ -99,14 +100,20 @@ readerSettingsControls rsDef = divClass "col-sm-12 well well-sm form-inline" $ d
   lineHeightDD <- divClass "col-sm-3" $ do
     el "label" $ text "間："
     dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) ddConf
-  heightDD <- divClass "col-sm-3" $ do
-    el "label" $ text "高さ："
-    dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) ddConf
-  writingModeDD <- dropdown (rsDef ^. verticalMode)
-    (constDyn writingModeOptions) ddConf
+
+  (h,v) <- if full
+    then do
+      heightDD <- divClass "col-sm-3" $ do
+        el "label" $ text "高さ："
+        dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) ddConf
+      writingModeDD <- dropdown (rsDef ^. verticalMode)
+        (constDyn writingModeOptions) ddConf
+      return (value heightDD, value writingModeDD)
+    else
+      return (constDyn 400, constDyn False)
+
   let rsDyn = ReaderSettings <$> (value fontSizeDD) <*> (value rubySizeDD)
-                <*> (value lineHeightDD) <*> (value writingModeDD)
-                <*> (value heightDD)
+                <*> (value lineHeightDD) <*> v <*> h
   return rsDyn
 
 divWrap :: (PostBuild t m, DomBuilder t m) =>
@@ -131,7 +138,7 @@ readingPaneInt :: AppMonad t m
   -> AppMonadT t m (Event t ())
 readingPaneInt docEv rsDef = do
   (closeEv,fullScrEv, rsDyn) <- divClass "row" $ do
-    rsDyn <- divClass "col-sm-9" $ readerSettingsControls rsDef
+    rsDyn <- divClass "col-sm-9" $ readerSettingsControls rsDef True
     (closeEv, fullScrEv) <- divClass "col-sm-3" $ do
       closeEv <- btn "btn-default btn-sm" "Close"
       fullScrEv <- btn "btn-default btn-sm" "Full Screen"
