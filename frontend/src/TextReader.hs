@@ -246,6 +246,7 @@ quickAnalyzeTop = do
       widgetHold (return [])
         ((\r -> mapM renderF $ map snd r) <$> resp)
 
+  elAttr "div" ("style" =: "height: 20vh;") $ return ()
   let vIdEv = (switch . current) $ leftmost <$> v
 
   showVocabDetailsWidget vIdEv
@@ -272,7 +273,7 @@ randomSentenceTop = do
                                     , GetRandomFavSentence <$ ev2]
       return resp
 
-    elAttr "div" ("style" =: "height: 10vh;") $ return ()
+  elAttr "div" ("style" =: "height: 20vh;") $ return ()
 
   let vIdEv = (switch . current) $ leftmost <$> v
 
