@@ -255,19 +255,24 @@ randomSentenceTop
   :: AppMonad t m
   => AppMonadT t m ()
 randomSentenceTop = do
-  (ev1, ev2) <- divClass "row" $ do
-    ev1 <- divClass "col-sm-4 well-sm" $ btn "btn-primary" "Random Sentence"
-    ev2 <- divClass "col-sm-4 well-sm" $ btn "btn-primary" "Random Fav Sentence"
-    return (ev1, ev2)
+  rec
+    v <- divClass "row" $ do
+      rsDyn <- readerSettingsControls def False
+      elAttr "div" ("style" =: "height: 10vh;") $ return ()
+      divWrap rsDyn (constDyn False) $ do
+        widgetHold (return [])
+          (uncurry (renderOneSentence []) <$> resp)
 
-  resp <- getWebSocketResponse $ leftmost [GetRandomSentence <$ ev1
-                                  , GetRandomFavSentence <$ ev2]
+    resp <- divClass "row" $ do
+      divClass "col-sm-2" $ return ()
+      ev1 <- divClass "col-sm-4 well-sm" $ btn "btn-primary" "Random Sentence"
+      ev2 <- divClass "col-sm-4 well-sm" $ btn "btn-primary" "Random Fav Sentence"
+      divClass "col-sm-2" $ return ()
+      resp <- getWebSocketResponse $ leftmost [GetRandomSentence <$ ev1
+                                    , GetRandomFavSentence <$ ev2]
+      return resp
 
-  v <- divClass "row" $ do
-    rsDyn <- readerSettingsControls def False
-    divWrap rsDyn (constDyn False) $ do
-      widgetHold (return [])
-        (uncurry (renderOneSentence []) <$> resp)
+    elAttr "div" ("style" =: "height: 10vh;") $ return ()
 
   let vIdEv = (switch . current) $ leftmost <$> v
 
