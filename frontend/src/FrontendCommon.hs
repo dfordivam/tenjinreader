@@ -346,7 +346,7 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
 
       fg ls = Map.fromList $ ls & each . _2 %~ Just
 
-  vIdEv <- elAttr "div" bodyAttr $ do
+  (cl2, vIdEv) <- elAttr "div" bodyAttr $ do
     rec
       vIdMap <- listHoldWithKey (Map.fromList ss) addMoreEv $
         renderOneSentence vIds
@@ -354,16 +354,19 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
       loadMoreEv <- divClass "col-sm-6" $ do
         showWSProcessing loadMoreEv addMoreEv
         btn "btn-block btn-primary" "Load More"
-      divClass "col-sm-6" $ do
-        topEv <- btn "btn-block btn-primary" "Go to top"
+      divClass "col-sm-3" $ do
+        topEv <- btn "btn-block btn-primary" "Top"
         performEvent_ $ topEv $> DOM.scrollIntoView (_element_raw headElm) True
+      closeBot <- divClass "col-sm-3" $ do
+        btn "btn-block btn-primary" "Close"
       addMoreEv <- fmap fg <$> getWebSocketResponse
         (LoadMoreSentences vIds <$> tag (current $ (map snd) . Map.keys <$> vIdMap) loadMoreEv)
 
-    return $ (switch . current) ((leftmost . concat . Map.elems) <$> vIdMap)
+    return $ (closeBot
+      , (switch . current) ((leftmost . concat . Map.elems) <$> vIdMap))
 
   showVocabDetailsWidget vIdEv
-  return closeEvTop
+  return (leftmost [closeEvTop, cl2])
 
 -- The notFav in key puts the favourite sentences first
 renderOneSentence
