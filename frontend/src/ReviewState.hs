@@ -127,8 +127,12 @@ type Result = (SrsEntryId,Bool)
 -- Select random reviewId then select review type
 -- After doing a review whether success or failure fetch a new review
 -- if reviewQ empty then do this whenever reviewQ becomes non empty
+
+-- On incorrect answer the item will be delayed from review
+-- By adding it in incorrectItems queue
 data SrsWidgetState rt = SrsWidgetState
   { _reviewQueue :: Map SrsEntryId (ReviewItem, rt)
+  , _incorrectItems :: Map SrsEntryId UTCTime
   , _resultQueue :: Maybe Result
   , _reviewStats :: SrsReviewStats
   }
@@ -136,7 +140,7 @@ data SrsWidgetState rt = SrsWidgetState
 makeLenses ''SrsWidgetState
 
 data ReviewStateEvent rt
-  = DoReviewEv (SrsEntryId, ActualReviewType rt, Bool)
+  = DoReviewEv (SrsEntryId, ActualReviewType rt, Bool) UTCTime
   | AddItemsEv [ReviewItem] (Maybe Int)
   | UndoReview
 
@@ -151,8 +155,9 @@ widgetStateFun st (AddItemsEv ri pendCount) = st
     (Just p) -> reviewStats . srsReviewStats_pendingCount .~ p
     Nothing -> identity
 
-widgetStateFun st (DoReviewEv (i,res,b)) = st
+widgetStateFun st (DoReviewEv (i,res,b) t) = st
   & reviewQueue %~ (Map.update upF i)
+  & incorrectItems %~ (Map.alter upF2 i)
   & resultQueue .~ ((,) <$> pure i <*> done)
   & reviewStats %~ statsUpF
   where
@@ -168,6 +173,9 @@ widgetStateFun st (DoReviewEv (i,res,b)) = st
         & srsReviewStats_pendingCount -~ 1
         & srsReviewStats_incorrectCount +~ 1
       _ -> s
+    upF2 _ = if not b
+      then Just t
+      else Nothing
 
 widgetStateFun st (UndoReview) = st
 

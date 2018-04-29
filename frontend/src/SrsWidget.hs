@@ -352,7 +352,7 @@ reviewWidget p refreshEv = do
     -- 2. Fetch new reviews
     -- 3. Send the result back
     widgetStateDyn <- foldDyn (flip (foldl widgetStateFun))
-      (SrsWidgetState Map.empty Nothing def)
+      (SrsWidgetState Map.empty Map.empty Nothing def)
       (mergeList [addItemEv, reviewResultEv])
 
     let
@@ -385,16 +385,31 @@ getRevItemDyn
   -> m (Dynamic t (Maybe (ReviewItem, ActualReviewType rt)))
 getRevItemDyn widgetStateDyn ev = do
   rec
-    v <- performEvent $ ffor (tag (current $ (,) <$> riDyn <*> widgetStateDyn) ev) $
+    v <- performEvent $ ffor (tagPromptlyDyn ((,) <$> riDyn <*> widgetStateDyn) ev) $
       \(last, st) -> do
+        t <- liftIO $ getCurrentTime
         let
           allrs = (Map.toList (_reviewQueue st))
           rs | length allrs > 1 = maybe allrs
                (\(l,_) -> filter (\r -> (_reviewItemId l) /= (fst r)) allrs) last
              | otherwise = allrs
-        rss <- liftIO $ getRandomItems rs 1
+
+        let
+          loop = do
+            rss <- liftIO $ getRandomItems rs 1
+            let
+              riMb = headMay rss
+            case (join $ (\(i,_) -> Map.lookup i (_incorrectItems st)) <$> riMb) of
+              Nothing -> return riMb
+              (Just t1) -> if (diffUTCTime t t1 > 60)
+                then return riMb
+                else if (length allrs > 1) && (length rs > (Map.size (_incorrectItems st)))
+                       then loop
+                       else return riMb
+
+        rIdMb <- loop
         toss <- liftIO $ randomIO
-        return $ (\(_,(ri,rt)) -> (ri, getRandomRT ri rt toss)) <$> (headMay rss)
+        return $ (\(_,(ri,rt)) -> (ri, getRandomRT ri rt toss)) <$> rIdMb
 
     riDyn <- holdDyn Nothing v
   return riDyn
@@ -577,17 +592,23 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
         newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
         return $ (,) ev ((\s -> AddItemsEv [getReviewItem s] Nothing) <$> newSrsEntryEv)
 
-      let shiruRes = (\b -> DoReviewEv (i, rt, b)) <$>
-            leftmost [True <$ shirimasu, False <$ shiranai]
+      shiruRes <- tagWithTime $ (\b -> (i, rt, b)) <$>
+        leftmost [True <$ shirimasu, False <$ shiranai]
       return (shiruRes , aeEv, recog, False <$ shimesu
              , leftmost [recogStop2, recogStop1, shirimasu, closeEv])
 
   return $ leftmost [ shiruResEv , recogResEv
                     , dr, addEditEv]
 
+tagWithTime ev = performEvent $ ffor ev $ \e@(i,_,b) -> do
+  t <- liftIO $ getCurrentTime
+  return $ DoReviewEv e t
+
 reviewInputFieldHandler
  :: (MonadFix m,
      MonadHold t m,
+     PerformEvent t m,
+     MonadIO (Performable m),
      Reflex t,
      SrsReviewType rt)
  => TextInput t
@@ -607,7 +628,7 @@ reviewInputFieldHandler ti rt ri@(ReviewItem i _ _ _) = do
   -- the dr event will fire after the correctEv (on second enter press)
     correctEv = tag correct enterPress
     sendResult = ffilter (== NextReview) (tag (current d) enterPress)
-    dr = (\b -> DoReviewEv (i, rt, b)) <$> tag correct sendResult
+  dr <- tagWithTime $ (\b -> (i, rt, b)) <$> tag correct sendResult
   return (dr, correctEv)
 
 -- TODO For meaning reviews allow minor mistakes
@@ -771,7 +792,7 @@ speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i _ _ _),rt) = do
   let
     btnClickDoReview = never -- TODO
     showResEv  = leftmost [answerCorrectEv, False <$ shimesuEv]
-    doReviewEv = (\r -> DoReviewEv (i,rt,r)) <$> (tag (current answeredCorrect)
+  doReviewEv <- tagWithTime $ (\r -> (i,rt,r)) <$> (tag (current answeredCorrect)
       $ leftmost [btnClickDoReview, autoNextEv, tsugiEv])
 
   return (showResEv, doReviewEv)
