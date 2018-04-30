@@ -131,12 +131,12 @@
       <a href="https://github.com/neologd/mecab-ipadic-neologd">Neologism dictionary for MeCab</a>, 
       <a href="https://taku910.github.io/mecab/">Mecab</a>
 
-<hr>
-  <div .row>
-    <div>This application is still in beta. So please take backup of your uploaded documents.
-
-    <div>
-       <p>The information provided by Tenjin reader (“we”, “us” or “our”) on tenjinreader.com (the “site” and all affiliated sites and applications) is for general informational purposes only.  All information on the site is provided in good faith, however we make no representation or warranty of any kind, express or implied, regarding the accuracy, adequacy, validity, reliability, availability or completeness of any information on the Site or App.  
-       <p>Under no circumstances shall we have any liability for loss or damage of any kind incurred as a result of the use of the site or reliance on any information provided on the site.  Use of the site and reliance on any information on the site is solely at users own risk.
-
-<hr>
+  <hr>
+    <div .row>
+      <div>This application is still in beta. So please take backup of your uploaded documents.
+  
+      <div>
+         <p>The information provided by Tenjin reader (“we”, “us” or “our”) on tenjinreader.com (the “site” and all affiliated sites and applications) is for general informational purposes only.  All information on the site is provided in good faith, however we make no representation or warranty of any kind, express or implied, regarding the accuracy, adequacy, validity, reliability, availability or completeness of any information on the Site or App.  
+         <p>Under no circumstances shall we have any liability for loss or damage of any kind incurred as a result of the use of the site or reliance on any information provided on the site.  Use of the site and reliance on any information on the site is solely at users own risk.
+  
+  <hr>
