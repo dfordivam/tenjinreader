@@ -121,8 +121,6 @@ instance SrsReviewType RecogReview where
       result = mergeTheseWith correct correct (&&) newThs
       correct = (== AnsweredWithoutMistake)
 
-type Result = (SrsEntryId,Bool)
-
 -- How to fetch reviews from reviewQ and send to review widget
 -- Select random reviewId then select review type
 -- After doing a review whether success or failure fetch a new review
@@ -133,7 +131,7 @@ type Result = (SrsEntryId,Bool)
 data SrsWidgetState rt = SrsWidgetState
   { _reviewQueue :: Map SrsEntryId (ReviewItem, rt)
   , _incorrectItems :: Map SrsEntryId UTCTime
-  , _resultQueue :: Maybe Result
+  , _resultQueue :: Maybe SrsAction
   , _reviewStats :: SrsReviewStats
   }
 
@@ -142,6 +140,8 @@ makeLenses ''SrsWidgetState
 data ReviewStateEvent rt
   = DoReviewEv (SrsEntryId, ActualReviewType rt, Bool) UTCTime
   | AddItemsEv [ReviewItem] (Maybe Int)
+  | SuspendEv SrsEntryId
+  | BuryEv SrsEntryId
   | UndoReview
 
 
@@ -158,7 +158,7 @@ widgetStateFun st (AddItemsEv ri pendCount) = st
 widgetStateFun st (DoReviewEv (i,res,b) t) = st
   & reviewQueue %~ (Map.update upF i)
   & incorrectItems %~ (Map.alter upF2 i)
-  & resultQueue .~ ((,) <$> pure i <*> done)
+  & resultQueue .~ (DoSrsReview <$> pure i <*> done)
   & reviewStats %~ statsUpF
   where
     stOld = snd <$> Map.lookup i (_reviewQueue st)
@@ -179,15 +179,27 @@ widgetStateFun st (DoReviewEv (i,res,b) t) = st
 
 widgetStateFun st (UndoReview) = st
 
+widgetStateFun st (SuspendEv i) = st
+  & reviewQueue %~ (Map.delete i)
+  & incorrectItems %~ (Map.delete i)
+  & resultQueue .~ (Just $ SuspendItem i)
+  & reviewStats %~ (srsReviewStats_pendingCount -~ 1)
+
+widgetStateFun st (BuryEv i) = st
+  & reviewQueue %~ (Map.delete i)
+  & incorrectItems %~ (Map.delete i)
+  & resultQueue .~ (Just $ BuryItem i)
+  & reviewStats %~ (srsReviewStats_pendingCount -~ 1)
+
 -- Result Synchronise with server
 -- TODO implement feature to re-send result if no response recieved
 data ResultsSyncState
   = ReadyToSync
-  | WaitingForResp [Result] [Result]
-  | DoSync [Result]
+  | WaitingForResp [SrsAction] [SrsAction]
+  | DoSync [SrsAction]
 
 data ResultSyncEvent
-  = AddResult Result
+  = AddResult SrsAction
   | FetchPendingReviews
   | SendingResult
   | RespRecieved
@@ -196,7 +208,7 @@ data ResultSyncEvent
 syncResultWithServer :: (AppMonad t m)
   => ReviewType
   -> Event t ()
-  -> Event t Result
+  -> Event t SrsAction
   -> Dynamic t (SrsWidgetState rt)
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
 syncResultWithServer rt refreshEv addEv widgetStateDyn = do

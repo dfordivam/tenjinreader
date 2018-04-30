@@ -185,11 +185,27 @@ getSyncReviewItems (SyncReviewItems rt results mAp) = do
   today <- liftIO $ utctDay <$> getCurrentTime
 
   let
+    setL = case rt of
+      ReviewTypeRecogReview -> here
+      ReviewTypeProdReview -> there
+
+    f1 (NextReviewDate _ i) = Suspended i
+    f1 a = a
+
+    f2 (NextReviewDate d i) = NextReviewDate (addDays 1 d) i
+    f2 a = a
+
     doUp :: (AllocM m) => Tree.Tree SrsEntryId SrsEntry
-      -> (SrsEntryId, Bool)
+      -> SrsAction
       -> m (Tree.Tree SrsEntryId SrsEntry)
-    doUp t (rId,b) = updateTreeM rId
+    doUp t (DoSrsReview rId b) = updateTreeM rId
         (\r -> return $ updateSrsEntry b today rt r) t
+
+    doUp t (SuspendItem rId) = updateTreeM rId
+      (\r -> return $ r & reviewState . setL . _1 %~ f1) t
+
+    doUp t (BuryItem rId) = updateTreeM rId
+      (\r -> return $ r & reviewState . setL . _1 %~ f2) t
 
   transactSrsDB_ $
     (reviews %%~ (\rt -> foldlM doUp rt results))

@@ -563,7 +563,8 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
       widgetHold (return ()) (showResult <$> (leftmost [resEv, shimesuEv, recogCorrectEv]))
 
     -- Footer
-    (shiruResEv , addEditEv, (recogCorrectEv, recogResEv), shimesuEv, recogStop) <- divClass "row" $ do
+    (shiruResEv, addEditEv, (recogCorrectEv, recogResEv)
+      , shimesuEv, recogStop, susBuryEv) <- divClass "row" $ do
 #if defined (ENABLE_SPEECH_RECOG)
       recog <- divClass "col-sm-2" $
         speechRecogWidget doRecog recogStop fullASR (ri, rt)
@@ -592,13 +593,20 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
         newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
         return $ (,) ev ((\s -> AddItemsEv [getReviewItem s] Nothing) <$> newSrsEntryEv)
 
+      sbEv <- divClass "col-sm-2" $ do
+        ev1 <- btn "btn-primary" "Bury"
+        ev2 <- btn "btn-primary" "Suspend"
+        return (leftmost [SuspendEv i <$ ev2, BuryEv i <$ ev1])
+
       shiruRes <- tagWithTime $ (\b -> (i, rt, b)) <$>
         leftmost [True <$ shirimasu, False <$ shiranai]
+
       return (shiruRes , aeEv, recog, False <$ shimesu
-             , leftmost [recogStop2, recogStop1, shirimasu, closeEv])
+             , leftmost [recogStop2, recogStop1, shirimasu, closeEv]
+             , sbEv)
 
   return $ leftmost [ shiruResEv , recogResEv
-                    , dr, addEditEv]
+                    , dr, addEditEv, susBuryEv]
 
 tagWithTime ev = performEvent $ ffor ev $ \e@(i,_,b) -> do
   t <- liftIO $ getCurrentTime

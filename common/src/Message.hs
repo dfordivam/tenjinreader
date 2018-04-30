@@ -227,7 +227,13 @@ getReviewItem (i,s) =
     r = (s ^. readings)
     rn = (s ^. readingNotes)
 
-data SyncReviewItems = SyncReviewItems ReviewType [(SrsEntryId, Bool)]
+data SrsAction
+  = DoSrsReview SrsEntryId Bool
+  | SuspendItem SrsEntryId
+  | BuryItem SrsEntryId
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+data SyncReviewItems = SyncReviewItems ReviewType [SrsAction]
   (Maybe [SrsEntryId])
   deriving (Generic, Show, ToJSON, FromJSON)
 
