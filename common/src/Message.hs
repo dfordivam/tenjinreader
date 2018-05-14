@@ -7,7 +7,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE StandaloneDeriving #-}
 module Message
   where
@@ -17,7 +16,6 @@ import Data.Aeson (ToJSON, FromJSON)
 import Data.Default
 import Data.Time.Calendar
 import Data.List.NonEmpty (NonEmpty)
-import Control.Lens.TH
 import Control.Lens
 import Reflex.Dom.WebSocket.Message
 
@@ -449,4 +447,39 @@ instance WebSocketMessage AppRequest ImportData where
   type ResponseT AppRequest ImportData = ()
 
 ----------------------------------------------------------------
-makeLenses ''ReviewItem
+-- makeLenses ''ReviewItem
+reviewItemField :: Lens' ReviewItem SrsEntryField
+reviewItemField
+  f_a23S8
+  (ReviewItem x1_a23S9 x2_a23Sa x3_a23Sb x4_a23Sc)
+  = fmap
+      (\ y1_a23Sd -> ReviewItem x1_a23S9 y1_a23Sd x3_a23Sb x4_a23Sc)
+      (f_a23S8 x2_a23Sa)
+{-# INLINE reviewItemField #-}
+reviewItemId :: Lens' ReviewItem SrsEntryId
+reviewItemId
+  f_a23Se
+  (ReviewItem x1_a23Sf x2_a23Sg x3_a23Sh x4_a23Si)
+  = fmap
+      (\ y1_a23Sj -> ReviewItem y1_a23Sj x2_a23Sg x3_a23Sh x4_a23Si)
+      (f_a23Se x1_a23Sf)
+{-# INLINE reviewItemId #-}
+reviewItemMeaning ::
+  Lens' ReviewItem (NonEmpty Meaning, Maybe MeaningNotes)
+reviewItemMeaning
+  f_a23Sk
+  (ReviewItem x1_a23Sl x2_a23Sm x3_a23Sn x4_a23So)
+  = fmap
+      (\ y1_a23Sp -> ReviewItem x1_a23Sl x2_a23Sm y1_a23Sp x4_a23So)
+      (f_a23Sk x3_a23Sn)
+{-# INLINE reviewItemMeaning #-}
+reviewItemReading ::
+  Lens' ReviewItem (NonEmpty Reading, Maybe ReadingNotes)
+reviewItemReading
+  f_a23Sq
+  (ReviewItem x1_a23Sr x2_a23Ss x3_a23St x4_a23Su)
+  = fmap
+      (\ y1_a23Sv -> ReviewItem x1_a23Sr x2_a23Ss x3_a23St y1_a23Sv)
+      (f_a23Sq x4_a23Su)
+{-# INLINE reviewItemReading #-}
+

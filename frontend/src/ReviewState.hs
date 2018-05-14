@@ -5,7 +5,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE TemplateHaskell #-}
 module ReviewState
   (SrsReviewType(..)
   , syncResultWithServer
@@ -135,7 +134,47 @@ data SrsWidgetState rt = SrsWidgetState
   , _reviewStats :: SrsReviewStats
   }
 
-makeLenses ''SrsWidgetState
+-- makeLenses ''SrsWidgetState
+incorrectItems ::
+  forall rt_a4OoV.
+  Lens' (SrsWidgetState rt_a4OoV) (Map SrsEntryId UTCTime)
+incorrectItems
+  f_a4OPe
+  (SrsWidgetState x1_a4OPf x2_a4OPg x3_a4OPh x4_a4OPi)
+  = fmap
+      (\ y1_a4OPj -> SrsWidgetState x1_a4OPf y1_a4OPj x3_a4OPh x4_a4OPi)
+      (f_a4OPe x2_a4OPg)
+{-# INLINE incorrectItems #-}
+resultQueue ::
+  forall rt_a4OoV. Lens' (SrsWidgetState rt_a4OoV) (Maybe SrsAction)
+resultQueue
+  f_a4OPk
+  (SrsWidgetState x1_a4OPl x2_a4OPm x3_a4OPn x4_a4OPo)
+  = fmap
+      (\ y1_a4OPp -> SrsWidgetState x1_a4OPl x2_a4OPm y1_a4OPp x4_a4OPo)
+      (f_a4OPk x3_a4OPn)
+{-# INLINE resultQueue #-}
+reviewQueue ::
+  forall rt_a4OoV rt_a4OPd.
+  Lens (SrsWidgetState rt_a4OoV) (SrsWidgetState rt_a4OPd) (Map SrsEntryId (ReviewItem,
+                                                                            rt_a4OoV)) (Map SrsEntryId (ReviewItem,
+                                                                                                        rt_a4OPd))
+reviewQueue
+  f_a4OPq
+  (SrsWidgetState x1_a4OPr x2_a4OPs x3_a4OPt x4_a4OPu)
+  = fmap
+      (\ y1_a4OPv -> SrsWidgetState y1_a4OPv x2_a4OPs x3_a4OPt x4_a4OPu)
+      (f_a4OPq x1_a4OPr)
+{-# INLINE reviewQueue #-}
+reviewStats ::
+  forall rt_a4OoV. Lens' (SrsWidgetState rt_a4OoV) SrsReviewStats
+reviewStats
+  f_a4OPw
+  (SrsWidgetState x1_a4OPx x2_a4OPy x3_a4OPz x4_a4OPA)
+  = fmap
+      (\ y1_a4OPB -> SrsWidgetState x1_a4OPx x2_a4OPy x3_a4OPz y1_a4OPB)
+      (f_a4OPw x4_a4OPA)
+{-# INLINE reviewStats #-}
 
 data ReviewStateEvent rt
   = DoReviewEv (SrsEntryId, ActualReviewType rt, Bool) UTCTime
