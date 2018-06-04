@@ -75,12 +75,18 @@ displayVocabT (Vocab ks) = do
           el "rt" $ text r
   mapM_ f ks
 
-btn :: (DomBuilder t m, _)
+icon t = do
+  (e,_) <- elClass' "button" "button" $
+    elAttr "span" (("class" =: "icon")) $
+      elClass "i" ("fa " <> t) $ return ()
+  return $ domEvent Click e
+
+btn :: (DomBuilder t m)
   => Text
   -> Text
   -> m (Event t ())
 btn cl t = do
-  (e,_) <- elClass' "button" ("btn " <> cl) $ text t
+  (e,_) <- elClass' "button" ("button " <> cl) $ text t
   return $ domEvent Click e
 
 -- Controls to add/edit related srs items
@@ -375,24 +381,24 @@ renderOneSentence
   -> (Bool, SentenceId)
   -> SentenceData
   -> AppMonadT t m [Event t ([VocabId], (Text, Maybe (RawElement (DomBuilderSpace m))))]
-renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "well well-sm" $ do
+renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "card card-content" $ do
   let hasEng = not $ null njps
-      rowAttr = ("class" =: "row") <> ("style" =: "width: 100%;")
+      rowAttr = ("class" =: "columns") <> ("style" =: "width: 100%;")
   (evs, visDyn, showPlainEv) <- elAttr "div" rowAttr $ do
-    evs <- divClass "col-sm-11" $
+    evs <- divClass "column" $
       forM sg $ \s -> do
         renderOnePara (constDyn (vIds,[])) (constDyn 100) s
 
     rec
-      (visDyn, showPlainEv) <- divClass "col-sm-1" $ do
+      (visDyn, showPlainEv) <- divClass "column" $ do
         rec
           isFav <- toggle (not notFav) tEv
           tEv <- switchPromptly never
-            =<< (dyn ((\f -> btn "btn-xs btn-primary"
-                        (if f then "unFav" else "Fav")) <$> isFav))
+            =<< (dyn ((\f -> icon
+                        (if f then "fa-ban" else "fa-bookmark")) <$> isFav))
           _ <- getWebSocketResponse $ ToggleSentenceFav sId <$ tEv
 
-        bEv <- btn "btn-xs btn-primary" "《》"
+        bEv <- icon "fa-clipboard"
 
         d <- if hasEng
           then toggle False
@@ -681,7 +687,11 @@ widgetHoldWithRemoveAfterEvent wEv = do
 -- | A widget to construct a tabbed view that shows only one of its child widgets at a time.
 --   Creates a header bar containing a <ul> with one <li> per child; clicking a <li> displays
 --   the corresponding child and hides all others.
-tabDisplayUI :: forall m k t . (MonadFix m, DomBuilder t m, MonadHold t m, PostBuild t m, Ord k)
+tabDisplayUI :: forall m k t . (MonadFix m
+                               , DomBuilder t m
+                               , MonadHold t m
+                               , PostBuild t m
+                               , Ord k)
   => (forall a . m a -> m a)       -- ^ Wrapper around the nav list
   -> Text               -- ^ Class applied to top <div> element
   -> Text               -- ^ Class applied to currently active <div> element

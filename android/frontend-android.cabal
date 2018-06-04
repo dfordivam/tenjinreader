@@ -32,7 +32,8 @@ library
                        ReadingPane
                        ImportWidget
                        TopWidget
-                       BulmaMinCss
+                       -- BulmaMinCss
+                       -- FontAwesomCss
 
   build-depends:       base >=4.9 && <4.11
                      , common

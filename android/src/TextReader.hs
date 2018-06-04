@@ -216,11 +216,13 @@ documentEditor editEv = divClass "" $ do
 sentenceWidget
   :: AppMonad t m
   => AppMonadT t m ()
-sentenceWidget = do
-  tabDisplayUI identity "nav nav-tabs" "active" "" $
+sentenceWidget = divClass "coloumns" $ do
+  tabDisplayUI wrapperSW "" "is-active" "" $
     Map.fromList
       [ (1, ("Analyze", quickAnalyzeTop))
       , (2, ("Random", randomSentenceTop))]
+
+wrapperSW m = divClass "tabs is-centered" $ m
 
 quickAnalyzeTop
   :: AppMonad t m

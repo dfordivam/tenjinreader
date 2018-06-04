@@ -10,8 +10,7 @@
 
 module TopWidget
   (topWidget
-  , readable_bootstrap_css
-  , custom_css)
+  , headWidget)
   where
 
 import FrontendCommon
@@ -38,6 +37,17 @@ import GHCJS.DOM
 import GHCJS.DOM.Document
 import GHCJS.DOM.Element
 import qualified Language.Javascript.JSaddle.Types as X
+
+headWidget :: MonadWidget t m => m ()
+headWidget = do
+  elAttr "link"
+    (("rel" =: "stylesheet")
+      <> ("href" =: "https://bulma.io/css/bulma-docs.min.css?v=201806022344"))
+    $ return ()
+  elAttr "link"
+    (("rel" =: "stylesheet")
+      <> ("href" =: "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"))
+    $ return ()
 
 topWidget :: MonadWidget t m => m ()
 topWidget = do
@@ -72,7 +82,7 @@ topWidget = do
 widget :: AppMonad t m => AppMonadT t m ()
 widget = divClass "container" $ do
   -- navigation with visibility control
-  tabDisplayUI wrapper "nav navbar-nav" "active" "" $
+  tabDisplayUI wrapper "navbar-start" "navbar-item" "navbar-item" $
     Map.fromList [
 #if !defined (ONLY_READER) && !defined (ONLY_SRS)
         (2, ("Sentence", sentenceWidget))
@@ -92,16 +102,30 @@ widget = divClass "container" $ do
 #endif
       ]
 
-wrapper m = elClass "nav" "navbar navbar-default" $
-  divClass "container-fluid" $ do
-    divClass "navbar-header" $
-      elClass "a" "navbar-brand" $ text "てんじん"
+wrapper m = elClass "nav" "navbar" $ do
+  clickEv <- divClass "navbar-brand" $ do
+    elAttr "a" (("class" =: "navbar-item")) $ text "てんじん"
+    (e,_) <- elAttr' "a" (("class" =: "navbar-burger")
+                <> ("aria-label" =: "menu")
+                <> ("role" =: "button")
+                <> ("aria-expanded" =: "false")) $ do
+      elAttr "span" (("aria-hidden" =: "true")) $ return ()
+      elAttr "span" (("aria-hidden" =: "true")) $ return ()
+      elAttr "span" (("aria-hidden" =: "true")) $ return ()
+    return $ domEvent Click e
+
+  openDyn <- toggle False clickEv
+  let cl = ffor openDyn (\b -> "navbar-menu " <> if b
+                          then "is-active" else "")
+  elDynClass "div" cl $ do
     a <- m
-    elClass "ul" "nav navbar-nav navbar-right" $ do
-      el "li" $ elAttr "a" ("href" =: "https://tenjinreader.com/auth/logout")
-        $ text "Logout"
-      ev <- el "li" $ btn "navbar-btn btn-default" "Theme"
-      toggleTheme ev
+    divClass "navbar-end" $ do
+      divClass "navbar-item" $ do
+        elAttr "a" (("class" =: "navbar-item")
+          <> ("href" =: "https://tenjinreader.com/auth/logout"))
+          $ text "Logout"
+        btn "" "Theme"
+          >>= toggleTheme
     return a
 
 -- readable_bootstrap_css = $(embedFile "src/readable_bootstrap.min.css")
