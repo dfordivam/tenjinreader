@@ -25,8 +25,8 @@
           import (pkgs.fetchFromGitHub {
             owner = "dfordivam";
             repo = "reflex-websocket-interface";
-            rev = "dec48a637f2e2dba925af6f660b9d7bdbe21bcbb";
-            sha256 = "1zy9q15kg3pr79hghrkmzhz1l180ks3c2awy3v6vwyyywghnr07v";
+            rev = "160c2da048b63f5b38343b8a06fc0d426796f66e";
+            sha256 = "1gf7rjqgkzvs28gjmg4ssp9149kyyq9rsx9f2z0qwpsjkg35pqgz";
           }) self;
         beam-src = pkgs.fetchFromGitHub {
             owner = "tathougies";
@@ -88,8 +88,8 @@
           (pkgs.fetchFromGitHub {
             owner = "dfordivam";
             repo = "jmdict-ast";
-            rev = "3cbcf5e780d1dd9ba5040a9cc9eb1f2f149cb5e7";
-            sha256 = "1fdagcf1gjs0asq7p0nbyv2ar6js9z86crkxrhd28r7mdg33v2kq";
+            rev = "60af06562040f014b38fbbd180f87243ebacdfd1";
+            sha256 = "18gb7knjh7var5l418mzb8bd66mh5ji6bxlbczcghz0k4jh61zhh";
           }) {};
 
         jmdict-xml-parser = self.callCabal2nix "jmdict-xml-parser"
