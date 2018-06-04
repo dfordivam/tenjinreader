@@ -3,3 +3,4 @@ packages:
   backend/
   backend/kanjiDbReader
   frontend/
+  android/
