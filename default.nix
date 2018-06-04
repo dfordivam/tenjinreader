@@ -6,16 +6,17 @@
     backend = ./backend;
     kanjidbreader = ./backend/kanjiDbReader;
     frontend = ./frontend;
+    frontend-android = ./android;
   };
 
-  #android.frontend = {
-  #  executableName = "frontend";
-  #  applicationId = "org.example.frontend";
-  #  displayName = "Example Android App";
-  #};
+  android.frontend-android = {
+    executableName = "frontend-android";
+    applicationId = "org.example.frontend";
+    displayName = "Example Android App";
+  };
 
   shells = {
-    ghc = ["common" "backend" "frontend" "kanjidbreader"];
+    ghc = ["common" "backend" "frontend" "frontend-android" "kanjidbreader"];
     ghcjs = ["common" "frontend"];
   };
 
