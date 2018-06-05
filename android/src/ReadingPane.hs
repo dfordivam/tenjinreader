@@ -125,7 +125,7 @@ divWrap rs fullscreenDyn w = do
         <> "line-height: " <> tshow l <> "%;"
         -- <> "height: " <> tshow h <> "px;"
         <> (if fs then "position: fixed;" else "")
-        <> "display: block;" <> "padding: 40px;"))
+        <> "display: block;" <> "padding: 2vw;"))
            <> ("class" =: (if fs then "modal modal-content" else "")))
       <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
       <*> (_numOfLines <$> rs) <*> (fullscreenDyn)

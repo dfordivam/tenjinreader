@@ -160,12 +160,16 @@ openEditSrsItemWidget ev = do
 
 modalDiv :: DomBuilder t m => m b -> m b
 modalDiv m = do
-  divClass "modal-backdrop fade in" $ return ()
-  elAttr "div" attr $ elAttr "div" attr2 m
+  elAttr "div" attr $ do
+    divClass "modal-background" $ return ()
+    elAttr "div" attr2 $ divClass "modal-card" m
   where attr = ("class" =: "modal")
           <> ("style" =: "display: block;")
+  -- unset max-height to reverse bulma css
         attr2 = ("style" =: "width: 90vw; height: 96vh;\
                             \ max-width: 40em;\
+                            \ max-height: unset;\
+                            \ overflow-y: auto;\
                             \ overflow-y: auto;\
                             \ margin: 2vh auto;")
                 <> ("class" =: "modal-content")
@@ -177,12 +181,14 @@ editWidgetView
   -> m (Dynamic t SrsEntry
        , Event t (), Event t ())
 editWidgetView s savedEv = modalDiv $ do
-  closeEvTop <- divClass "modal-header" $ el "h4" $ do
-    (e,_) <- elClass' "button" "close" $ text "Close"
-    text $ "Edit " <> (s ^. field . to (NE.head))
+  closeEvTop <- elClass "header" "modal-card-head" $ do
+    (e,_) <- elClass' "button" "delete" $ return ()
+    divClass "column is-1" $ return ()
+    elClass "p" "modal-card-title" $
+      text $ "Edit " <> (s ^. field . to (NE.head))
     return (domEvent Click e)
 
-  let bodyAttr = ("class" =: "modal-body")
+  let bodyAttr = ("class" =: "modal-card-body")
           <> ("style" =: "")
       formAttr = ("class" =: "form-horizontal")
         <> ("onsubmit" =: "return false;")
@@ -254,10 +260,10 @@ editWidgetView s savedEv = modalDiv $ do
               <*> (g MeaningNotes mn)
               <*> f
 
-  divClass "modal-footer" $ do
+  divClass "modal-card-foot" $ do
     let savedIcon = elClass "i" "" $ return ()
-    saveEv <- btn "btn-primary" "Save"
-    closeEv <- btn "btn-default" "Close"
+    saveEv <- btn "is-success" "Save"
+    closeEv <- btn "" "Close"
     showWSProcessing saveEv savedEv
     _ <- widgetHold (return ()) (savedIcon <$ savedEv)
     return (ret, saveEv, leftmost[closeEv, closeEvTop])
@@ -337,17 +343,19 @@ sentenceWidgetView :: AppMonad t m
   -> ([VocabId], [((Bool, SentenceId), SentenceData)])
   -> AppMonadT t m (Event t ())
 sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
-  (headElm, closeEvTop) <- elClass' "div" "modal-header" $ do
-    text surface
-    text " : "
-    let m = mconcat $ intersperse ", " $ meanings
-    text $ if T.length m > 40
-      then (T.take 40 m) <> "..."
-      else m
-    (e,_) <- elClass' "button" "close" $ text "Close"
+  (headElm, closeEvTop) <- elClass' "header" "modal-card-head" $ do
+    (e,_) <- elClass' "button" "delete" $ return ()
+    divClass "column is-1" $ return ()
+    elClass "p" "modal-card-title" $ do
+      text surface
+      text " : "
+      let m = mconcat $ intersperse ", " $ meanings
+      text $ if T.length m > 40
+        then (T.take 40 m) <> "..."
+        else m
     return (domEvent Click e)
 
-  let bodyAttr = ("class" =: "modal-body")
+  let bodyAttr = ("class" =: "modal-card-body")
           <> ("style" =: "")
 
       fg ls = Map.fromList $ ls & each . _2 %~ Just
@@ -357,16 +365,18 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
       vIdMap <- listHoldWithKey (Map.fromList ss) addMoreEv $
         renderOneSentence vIds
 
-      loadMoreEv <- divClass "col-sm-6" $ do
-        showWSProcessing loadMoreEv addMoreEv
-        btn "btn-block btn-primary" "Load More"
-      divClass "col-sm-3" $ do
-        topEv <- btn "btn-block btn-primary" "Top"
-        performEvent_ $ topEv $> DOM.scrollIntoView (_element_raw headElm) True
-      closeBot <- divClass "col-sm-3" $ do
-        btn "btn-block btn-primary" "Close"
-      addMoreEv <- fmap fg <$> getWebSocketResponse
-        (LoadMoreSentences vIds <$> tag (current $ (map snd) . Map.keys <$> vIdMap) loadMoreEv)
+      (addMoreEv, closeBot) <- divClass "columns" $ do
+        loadMoreEv <- divClass "column" $ do
+          btn "btn-block btn-primary" "Load More"
+        divClass "column" $ do
+          topEv <- btn "btn-block btn-primary" "Top"
+          performEvent_ $ topEv $> DOM.scrollIntoView (_element_raw headElm) True
+        closeBot1 <- divClass "column" $ do
+          btn "btn-block btn-primary" "Close"
+        addMoreEv1 <- fmap fg <$> getWebSocketResponse
+          (LoadMoreSentences vIds <$> tag (current $ (map snd) . Map.keys <$> vIdMap) loadMoreEv)
+        showWSProcessing loadMoreEv addMoreEv1
+        return (addMoreEv1, closeBot1)
 
     return $ (closeBot
       , (switch . current) ((leftmost . concat . Map.elems) <$> vIdMap))
@@ -390,7 +400,7 @@ renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "box" $ d
         renderOnePara (constDyn (vIds,[])) (constDyn 100) s
 
     rec
-      (visDyn, showPlainEv) <- divClass "column" $ do
+      (visDyn, showPlainEv) <- divClass "column is-narrow" $ do
         rec
           isFav <- toggle (not notFav) tEv
           tEv <- switchPromptly never
@@ -499,8 +509,7 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
       | y > 300 = f "is-fixed-top"
       | otherwise = f "is-fixed-bottom"
       where f p = ("class" =: ("navbar " <> p))
-              <> ("style" =: "z-index: 1060;\
-                         \padding: 10px;")
+              <> ("style" =: "z-index: 1060; padding: 2vw;")
 
     wrapper :: (DOM.IsElement e)
       => Maybe e
@@ -518,10 +527,10 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
       elAttr "div" (attrFront y h) $
         divClass "" $
           elAttr "div" (("class" =: "notification")
-            <> ("style" =: "max-height: 200px;\
+            <> ("style" =: "max-height: 30vh;\
                            \overflow-y: auto;\
                            \overflow-x: hidden;\
-                           \padding: 15px;")) $ do
+                           \padding: 2vw;")) $ do
             (e2,_) <- elClass' "button" "delete" $ return ()
             _ <- m
             return $ leftmost
@@ -559,19 +568,20 @@ showEntry surfaceMB (e, sId) = divClass "box" $ do
              . readingPhrase . to (unReadingPhrase))
       identity surfaceMB
 
-  divClass "columns" $ do
-    divClass "column" $ do
+  divClass "columns" $ divClass "column" $ do
+    divClass "columns" $ do
       entryKanjiAndReading surface e
-
     divClass "column" $ do
+      mapM_ (\s -> elClass "p" "columns" $
+              text $ showSense s) $ take 3 $ e ^.. entrySenses . traverse
+
+    divClass "column is-narrow" $ do
       addEditSrsEntryWidget (Right $ e ^. entryUniqueId) surfaceMB sId
       openEv <- btn "btn-xs btn-primary" "Sentences"
       openSentenceWidget (surface, e ^.. entrySenses . traverse .
                            senseGlosses . traverse . glossDefinition)
         ((Left $ e ^. entryUniqueId) <$ openEv)
 
-  divClass "content" $ do
-    mapM_ (\s -> divClass "" $ text $ showSense s) $ take 3 $ e ^.. entrySenses . traverse
 
 entryKanjiAndReading :: (DomBuilder t m) => Text -> Entry -> m ()
 entryKanjiAndReading surface e = do
