@@ -381,7 +381,7 @@ renderOneSentence
   -> (Bool, SentenceId)
   -> SentenceData
   -> AppMonadT t m [Event t ([VocabId], (Text, Maybe (RawElement (DomBuilderSpace m))))]
-renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "card card-content" $ do
+renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "box" $ do
   let hasEng = not $ null njps
       rowAttr = ("class" =: "columns") <> ("style" =: "width: 100%;")
   (evs, visDyn, showPlainEv) <- elAttr "div" rowAttr $ do
@@ -495,10 +495,10 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
           <> ("style" =: "display: block;\
               \opacity: 0%; z-index: 1050;")
     attrFront y h
-      | h > 300 && y < 300 = f "navbar-fixed-top" -- Should be middle?
-      | y > 300 = f "navbar-fixed-top"
-      | otherwise = f "navbar-fixed-bottom"
-      where f p = ("class" =: ("nav " <> p))
+      | h > 300 && y < 300 = f "is-fixed-top" -- Should be middle?
+      | y > 300 = f "is-fixed-top"
+      | otherwise = f "is-fixed-bottom"
+      where f p = ("class" =: ("navbar " <> p))
               <> ("style" =: "z-index: 1060;\
                          \padding: 10px;")
 
@@ -516,14 +516,13 @@ showVocabDetailsWidget vIdEv = divClass "" $ do
           return (y,h)
       (e1,_) <- elAttr' "div" attrBack $ return ()
       elAttr "div" (attrFront y h) $
-        divClass "container-fluid" $
-          elAttr "div" (("class" =: "panel panel-default")
+        divClass "" $
+          elAttr "div" (("class" =: "notification")
             <> ("style" =: "max-height: 200px;\
                            \overflow-y: auto;\
                            \overflow-x: hidden;\
                            \padding: 15px;")) $ do
-            (e2,_) <- elClass' "button" "close" $ text "Close"
-            -- text $ ("(" <> tshow y <> "," <> tshow h <> ")")
+            (e2,_) <- elClass' "button" "delete" $ return ()
             _ <- m
             return $ leftmost
               [domEvent Click e2
@@ -554,22 +553,24 @@ showEntry :: AppMonad t m
   => Maybe Text
   -> (Entry, VocabSrsState)
   -> AppMonadT t m ()
-showEntry surfaceMB (e, sId) = divClass "well-sm" $ do
+showEntry surfaceMB (e, sId) = divClass "box" $ do
   let
     surface = maybe (e ^. entryReadingElements . to (NE.head)
              . readingPhrase . to (unReadingPhrase))
       identity surfaceMB
 
-  divClass "" $ do
-    elClass "span" "well-sm" $ do
+  divClass "columns" $ do
+    divClass "column" $ do
       entryKanjiAndReading surface e
-    addEditSrsEntryWidget (Right $ e ^. entryUniqueId) surfaceMB sId
-    openEv <- btn "btn-xs btn-primary" "Sentences"
-    openSentenceWidget (surface, e ^.. entrySenses . traverse .
-                         senseGlosses . traverse . glossDefinition)
-      ((Left $ e ^. entryUniqueId) <$ openEv)
 
-  divClass "" $ do
+    divClass "column" $ do
+      addEditSrsEntryWidget (Right $ e ^. entryUniqueId) surfaceMB sId
+      openEv <- btn "btn-xs btn-primary" "Sentences"
+      openSentenceWidget (surface, e ^.. entrySenses . traverse .
+                           senseGlosses . traverse . glossDefinition)
+        ((Left $ e ^. entryUniqueId) <$ openEv)
+
+  divClass "content" $ do
     mapM_ (\s -> divClass "" $ text $ showSense s) $ take 3 $ e ^.. entrySenses . traverse
 
 entryKanjiAndReading :: (DomBuilder t m) => Text -> Entry -> m ()
