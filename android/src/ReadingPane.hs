@@ -86,34 +86,56 @@ readerSettingsControls
   => ReaderSettingsTree CurrentDb
   -> Bool
   -> m (Dynamic t (ReaderSettingsTree CurrentDb))
-readerSettingsControls rsDef full = divClass "col-sm-12 well well-sm form-inline" $ divClass "" $ do
+readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ o
   let
     ddConf :: _
     ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
     ddAttr = ("class" =: "form-control input-sm")
-  fontSizeDD <- divClass "col-sm-3" $ do
-    el "label" $ text "ぁあ："
-    dropdown (rsDef ^. fontSize) (constDyn fontSizeOptions) ddConf
-  rubySizeDD <- divClass "col-sm-3" $ do
-    el "label" $ text "漢字："
-    dropdown (rsDef ^. rubySize) (constDyn fontSizeOptions) ddConf
-  lineHeightDD <- divClass "col-sm-3" $ do
-    el "label" $ text "間："
-    dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) ddConf
+  fontSizeDD <- divClass "field" $ divClass "control has-icons-left" $ do
+    divClass "select" $ do
+      d <- dropdown (rsDef ^. fontSize)
+        (constDyn fontSizeOptions) ddConf
+      divClass "icon is-small is-left" $
+        text "ぁあ"
+      return d
 
-  (h,v) <- if full
+  lineHeightDD <-  divClass "field" $ divClass "control has-icons-left" $ do
+    divClass "select" $ do
+      d <- dropdown (rsDef ^. lineHeight)
+        (constDyn lineHeightOptions) ddConf
+      divClass "icon is-small is-left" $
+        text "間"
+      return d
+
+  (r,h,v) <- if full
     then do
-      heightDD <- divClass "col-sm-3" $ do
-        el "label" $ text "高さ："
-        dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) ddConf
-      writingModeDD <- dropdown (rsDef ^. verticalMode)
-        (constDyn writingModeOptions) ddConf
-      return (value heightDD, value writingModeDD)
-    else
-      return (constDyn 400, constDyn False)
+      rubySizeDD <-  divClass "field" $ divClass "control has-icons-left" $ do
+        divClass "select" $ do
+          d <- dropdown (rsDef ^. rubySize)
+            (constDyn fontSizeOptions) ddConf
+          divClass "icon is-small is-left" $
+            text "漢字"
+          return d
 
-  let rsDyn = ReaderSettings <$> (value fontSizeDD) <*> (value rubySizeDD)
-                <*> (value lineHeightDD) <*> v <*> h
+      heightDD <-  divClass "field" $ divClass "control has-icons-left" $ do
+        divClass "select" $ do
+          d <- dropdown (rsDef ^. numOfLines)
+            (constDyn numOfLinesOptions) ddConf
+          divClass "icon is-small is-left" $
+            text "高さ"
+          return d
+      writingModeDD <-  divClass "field" $ divClass "control" $ do
+        divClass "select" $ do
+          d <- dropdown (rsDef ^. verticalMode)
+            (constDyn writingModeOptions) ddConf
+          return d
+      return (value rubySizeDD,
+              value heightDD, value writingModeDD)
+    else
+      return (constDyn 100, constDyn 400, constDyn False)
+
+  let rsDyn = ReaderSettings <$> (value fontSizeDD)
+        <*> r <*> (value lineHeightDD) <*> v <*> h
   return rsDyn
 
 divWrap :: (PostBuild t m, DomBuilder t m) =>

@@ -259,18 +259,18 @@ randomSentenceTop
   => AppMonadT t m ()
 randomSentenceTop = do
   rec
-    v <- divClass "row" $ do
+    v <- divClass "" $ do
       rsDyn <- readerSettingsControls def False
       elAttr "div" ("style" =: "height: 10vh;") $ return ()
       divWrap rsDyn (constDyn False) $ do
         widgetHold (return [])
           (uncurry (renderOneSentence []) <$> resp)
 
-    resp <- divClass "row" $ do
-      divClass "col-sm-2" $ return ()
-      ev1 <- divClass "col-sm-4 well-sm" $ btn "btn-primary" "Random Sentence"
-      ev2 <- divClass "col-sm-4 well-sm" $ btn "btn-primary" "Random Fav Sentence"
-      divClass "col-sm-2" $ return ()
+    resp <- divClass "columns is-centered" $ do
+      ev1 <- divClass "column is-narrow" $
+        btn "btn-primary" "Random Sentence"
+      ev2 <- divClass "column is-narrow" $
+        btn "btn-primary" "Random Fav Sentence"
       resp <- getWebSocketResponse $ leftmost [GetRandomSentence <$ ev1
                                     , GetRandomFavSentence <$ ev2]
       return resp
