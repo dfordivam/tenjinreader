@@ -86,7 +86,7 @@ readerSettingsControls
   => ReaderSettingsTree CurrentDb
   -> Bool
   -> m (Dynamic t (ReaderSettingsTree CurrentDb))
-readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ o
+readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ do
   let
     ddConf :: _
     ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
@@ -214,16 +214,18 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 #endif
 
   let
-    divAttr' = (\rs1 fs -> ("class" =: "col-xs-10") <> ("style" =:
+    divAttr' = (\rs1 fs -> ("class" =: "") <> ("style" =:
       ("font-size: " <> tshow (_fontSize rs1) <>"%;"
         <> "line-height: " <> tshow (_lineHeight rs1) <> "%;"
         <> "height: " <> (if fs
-                          then "100%;"
+                          then "90vh;"
                           else tshow (_numOfLines rs1) <> "px;")
         <> "writing-mode: " <> (if (_verticalMode rs1)
                                 then "vertical-rl;"
-                                else "lr")
+                                else "lr;")
         <> "word-wrap: break-word;"
+        <> "max-width: 100vw;"
+        <> "padding: 2vw;"
         <> "display: block;"))) <$> rs
 
     startParaData = makeParaData annText
@@ -316,9 +318,11 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 
     let
       wrapDynAttr = ffor fullscreenDyn $ \b -> if b
-        then ("class" =: "modal-content") <>
-          ("style" =: "position: fixed; padding: 1em; top: 0; bottom: 0; left: 0; right: 0;")
-        else Map.empty
+        then ("class" =: "modal modal-card-body") <>
+          ("style" =: ("position: fixed; padding: 1em;"
+                     <> "top: 0; bottom: 0; left: 0; right: 0;"
+                     <> "display: block;"))
+        else ("class" =: "")
       divAttr = divAttr' <*> fullscreenDyn
 
     fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
@@ -326,7 +330,7 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
 
     let
       btnPress = leftmost [next,prev]
-      prevNxtBtnWrapDivAttr = (\h fs -> ("class" =: "col-xs-1")
+      prevNxtBtnWrapDivAttr = (\h fs -> ("class" =: "column is-narrow")
         <> ("style" =: ("height: " <> (if fs then "100%;" else tshow h <> "px;"))))
               <$> (_numOfLines <$> rs) <*> fullscreenDyn
 
@@ -351,16 +355,16 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
                , False <$ btnPress]
 
     --------------------------------
-    (resizeEv, ((rowRoot, (inside, outside, vIdEv)), (next,(prev,closeEv)))) <- divClass "" $ resizeDetector $ do
+    (resizeEv, ((rowRoot, (inside, outside, vIdEv)), (next, prev), closeEv)) <- divClass "" $ resizeDetector $ do
 
       elDynAttr "div" wrapDynAttr $ do
-        (leftEv, clearHighlight) <- elDynAttr "div" prevNxtBtnWrapDivAttr $ do
-          c1 <- elAttr "div" ("style" =: "height: 10%;") $
-            btn "btn-default" "X"
-          (e,_) <- elDynAttr' "button" leftBtrAttr $ text "<"
-          return (domEvent Click e, c1)
+        (clearHighlight, c) <- divClass "columns is-mobile is-centered" $ do
+          x <- icon "fa-eraser"
+          c <- icon "fa-times"
+          return (x,c)
 
         v <- elDynAttr' "div" divAttr $ do
+
           vIdEv1 <- el "div" $ do
             let
               f :: _ -> ((ParaNum, ParaPos), (ParaNum, ParaPos))
@@ -391,23 +395,18 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
             return ()
           return (i, o, vIdEv1)
 
-        (rightEv, cEv1) <- elDynAttr "div" prevNxtBtnWrapDivAttr $ do
-          let closeBtnAttr = ffor fullscreenDyn $ \fs -> if fs
-                then ("style" =: "height: 10%;")
-                else ("style" =: "height: 10%; visibility: hidden;")
-          cEv <- elDynAttr "div" closeBtnAttr $ do
-            btn "btn-default" "Close"
-          (e,_) <- elDynAttr' "button" rightBtrAttr $ text ">"
-          return (domEvent Click e, cEv)
+        np <- divClass "columns is-mobile is-centered" $ do
+          leftEv  <- icon "fa-caret-left"
+          rightEv <- icon "fa-caret-right"
+          let
+            -- The button on left is next in vertical and prev in horizontal
+            next1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
+              then leftEv else rightEv
+            prev1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
+              then rightEv else leftEv
+          return (next1, prev1)
+        return (v, np, c)
 
-        let
-          -- The button on left is next in vertical and prev in horizontal
-          next1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
-            then leftEv else rightEv
-          prev1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
-            then rightEv else leftEv
-
-        return (v, (next1, (prev1,cEv1)))
 
   showVocabDetailsWidget vIdEv
 

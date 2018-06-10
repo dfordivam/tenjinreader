@@ -447,8 +447,8 @@ vocabRuby markDyn fontSizePctDyn visDyn (Vocab ks) = do
   let
     attr = ffor markDyn $ \b -> case b of
       Nothing -> Map.empty
-      (Just True) -> ("class" =: "highlight-bright")
-      (Just False) -> ("class" =: "highlight-dark")
+      (Just True) -> ("class" =: "has-background-warning")
+      (Just False) -> ("class" =: "has-background-grey-lighter")
 
     rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
     g r True = r
