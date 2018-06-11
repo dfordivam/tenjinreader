@@ -1,6 +1,7 @@
 User
     ident Text
     service Text
+    secretKey Text Maybe
     UniqueUser ident service
     deriving Typeable
 

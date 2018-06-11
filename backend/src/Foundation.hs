@@ -26,6 +26,9 @@ import qualified Data.Text.Encoding as TE
 
 import Database.Haskey.Alloc.Concurrent (Root, ConcurrentHandles)
 import Control.Monad.Haskey
+import Data.ByteString.Base64 as B64
+import Data.ByteString as BS
+import System.Random
 
 import KanjiDB
 import SrsDB
@@ -245,9 +248,12 @@ instance YesodAuth App where
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
             Nothing -> do
+              v <- liftIO $ replicateM 30 randomIO
+              let s = TE.decodeUtf8 $ B64.encode $ BS.pack v
               uid <- insert User
                 { userIdent = userId
                 , userService = (credsPlugin creds)
+                , userSecretKey = Just s
                 }
               return $ Authenticated uid
 
@@ -291,3 +297,14 @@ unsafeHandler = Unsafe.fakeHandlerGetLogger appLogger
 -- https://github.com/yesodweb/yesod/wiki/Sending-email
 -- https://github.com/yesodweb/yesod/wiki/Serve-static-files-from-a-separate-domain
 -- https://github.com/yesodweb/yesod/wiki/i18n-messages-in-the-scaffolding
+
+fixDb :: Handler ()
+fixDb = runDB $ do
+  users <- selectList ([] :: [Filter User]) []
+  forM_ users $ \(Entity k u) -> do
+    case (userSecretKey u) of
+      Nothing -> do
+              v <- liftIO $ replicateM 30 randomIO
+              let s = TE.decodeUtf8 $ B64.encode $ BS.pack v
+              update k [UserSecretKey =. Just s]
+      _ -> return ()
