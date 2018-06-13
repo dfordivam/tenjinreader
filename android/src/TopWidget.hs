@@ -74,7 +74,7 @@ afterLoginWidget secret = do
     widget
 
   ev <- btn "" "logout"
-  return (Nothing <$ ev)
+  performEvent $ ffor ev $ \_ -> logout >> return Nothing
 
 widget :: AppMonad t m => AppMonadT t m ()
 widget = divClass "" $ do
