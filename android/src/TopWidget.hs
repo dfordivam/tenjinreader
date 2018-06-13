@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -18,6 +19,7 @@ import SrsWidget
 import KanjiBrowser
 import TextReader
 import ImportWidget
+import LoginWidget
 
 -- from package common
 import Common
@@ -54,37 +56,28 @@ headWidget = do
     $ return ()
 
 topWidget :: MonadWidget t m => m ()
-topWidget = do
-  -- urlPath <- getLocationPath
-  -- urlHost <- getLocationHost
-  -- proto <- getLocationProtocol
-  -- let
-  --   url = ws <> host <> path
-  --   path = (fst $ T.breakOn "static" urlPath) <> "websocket"
-  --   host = if T.isPrefixOf "localhost" urlHost
-  --     then "localhost:3000"
-  --     else urlHost
+topWidget = mdo
+  dEv <- widgetHold loginWidget $ ffor (switch (current dEv))
+    (\case
+        Nothing -> loginWidget
+        (Just s) -> afterLoginWidget s)
+  return ()
 
 
-  --   ws = case proto of
-  --     "http:" -> "ws://"
-  --     _ -> "wss://"
-  let url = "ws://192.168.0.31:3000/websocket"
+afterLoginWidget :: MonadWidget t m => Text -> m (Event t (Maybe Text))
+afterLoginWidget secret = do
+  let url = "ws://192.168.0.31:3000/websocket/app/" <> secret
   (_,wsConn) <- withWSConnection
     url
     never -- close event
     True -- reconnect
     widget
 
-#if defined (DEBUG)
-  let resp = traceEvent ("Response") (_webSocket_recv wsConn)
-  d <- holdDyn "" resp
-  dynText ((tshow . BS.length) <$> d)
-#endif
-  return ()
+  ev <- btn "" "logout"
+  return (Nothing <$ ev)
 
 widget :: AppMonad t m => AppMonadT t m ()
-widget = divClass "container" $ do
+widget = divClass "" $ do
   -- navigation with visibility control
   tabDisplayUI wrapper "navbar-start" "navbar-item" "navbar-item" $
     Map.fromList [

@@ -38,6 +38,9 @@
         <div .col-md-6>
           For all browsers 
           <a href="static/app/readeronly/index.html">Reader only</a>
+      <div .row>
+        <div .col-md-6>
+          Your secret key <strong>#{maybe "" id $ userSecretKey user}</strong>
 
   <div .row .well>
     <h3>Reader

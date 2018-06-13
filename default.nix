@@ -17,7 +17,7 @@
 
   shells = {
     ghc = ["common" "backend" "frontend" "frontend-android" "kanjidbreader"];
-    ghcjs = ["common" "frontend"];
+    ghcjs = ["common" "frontend" "frontend-android"];
   };
 
   overrides = self: super:

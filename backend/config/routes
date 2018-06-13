@@ -9,3 +9,4 @@
 /profile ProfileR GET
 
 /websocket WebSocketHandlerR GET
+/websocket/app/#Text AppWebSocketHandlerR GET

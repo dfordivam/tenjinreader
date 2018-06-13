@@ -26,7 +26,7 @@ import qualified Data.Text.Encoding as TE
 
 import Database.Haskey.Alloc.Concurrent (Root, ConcurrentHandles)
 import Control.Monad.Haskey
-import Data.ByteString.Base64 as B64
+import Data.ByteString.Base64.URL as B64
 import Data.ByteString as BS
 import System.Random
 
@@ -179,6 +179,7 @@ instance Yesod App where
     isAuthorized RobotsR _ = return Authorized
     isAuthorized (StaticR _) _ = return Authorized
 
+    isAuthorized (AppWebSocketHandlerR _) _ = return Authorized
     isAuthorized ProfileR _ = isAuthenticated
     isAuthorized WebSocketHandlerR _ =
       -- return Authorized

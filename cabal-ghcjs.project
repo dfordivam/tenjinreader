@@ -2,3 +2,4 @@ compiler: ghcjs
 packages:
   common/
   frontend/
+  android/

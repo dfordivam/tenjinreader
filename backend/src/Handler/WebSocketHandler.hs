@@ -5,7 +5,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Handler.WebSocketHandler
-  (getWebSocketHandlerR)
+  (getWebSocketHandlerR
+  , getAppWebSocketHandlerR)
   where
 
 import Import
@@ -32,6 +33,18 @@ getWebSocketHandlerR = do
     uId <- requireAuthId
     -- let uId = toSqlKey 1 :: Key User
     webSockets $ handleWebSocketConn uId
+    redirect $ ("static/app/complete/index.html" :: Text)
+
+getAppWebSocketHandlerR :: Text -> Handler Html
+getAppWebSocketHandlerR secret = do
+    liftIO $ putStrLn secret
+    muser <- runDB $ selectFirst [UserSecretKey ==. Just secret] []
+    -- uId <- requireAuthId
+    case muser of
+      Just (Entity uId _) -> webSockets $ handleWebSocketConn uId
+      Nothing -> do
+        liftIO $ putStrLn "no user"
+        return ()
     redirect $ ("static/app/complete/index.html" :: Text)
 
 handleWebSocketConn :: UserId -> WebSocketsT Handler ()
