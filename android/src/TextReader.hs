@@ -52,7 +52,7 @@ documentListViewer
                    , Event t (Maybe (ReaderDocumentId, Text, Text)))
 documentListViewer refreshEv = do
   (_, evAll) <- runEventWriterT $
-    tabDisplayUI identity "nav nav-tabs" "active" "" $
+    tabDisplayUI wrapperSW "" "is-active" "" $
     Map.fromList
       [ (1, ("Reading List", myDocumentsListViewer refreshEv))
       , (2, ("Books", booksListViewer))
@@ -76,7 +76,7 @@ myDocumentsListViewer refreshEv = do
   ev <- getPostBuild
   listEv <- getWebSocketResponse
     (ListDocuments Nothing <$ (leftmost [ev,refreshEv]))
-  newDocEv <- btn "btn-info btn-block" "新作"
+  newDocEv <- divClass "columns" $ divClass "column" $ btn "is-medium" "新作"
 
   rec
     let
@@ -84,8 +84,6 @@ myDocumentsListViewer refreshEv = do
       viewEv = (switch . current) (leftmost <$> ((map fst) <$> evDyn))
       viewRawEv = (switch . current) (leftmost <$> ((map (fst . snd)) <$> evDyn))
 
-    showWSProcessing viewEv resp
-    showWSProcessing deleteEv delDone
     evDyn <- lift $ widgetHold (return [])
       (viewList <$> (leftmost [listEv, delDone]))
     let
@@ -125,18 +123,14 @@ viewerCommon fetchF viewDocF = do
 
   let
     viewF lss = do
-      elClass "table" "table table-striped" $ do
-        el "thead" $ do
-          el "tr" $ do
-            elClass "th" "col-sm-3" $ text "題名"
-            elClass "th" "col-sm-7" $ text "内容"
+      elClass "table" "table is-striped is-narrow" $ do
         el "tbody" $  do
           forM lss $ \(i, t, c) -> do
             el "tr" $ do
-              (e1,_) <- el' "td" $ text t
-              (e2,_) <- el' "td" $ text c
-              return (viewDocF i
-                        <$ (leftmost [domEvent Click e1, domEvent Click e2]))
+              ev <- el "td" $ tileBoxLoading $ do
+                elClass "p" "title" $ text t
+                el "p" $ text c
+              return (viewDocF i <$ ev)
   evDyn <- widgetHold (return [])
                 (viewF <$> listEv)
 
@@ -157,24 +151,27 @@ viewList [] = do
   return []
 
 viewList lss = do
-  elClass "table" "table table-striped" $ do
-    el "thead" $ do
-      el "tr" $ do
-        elClass "th" "col-sm-3" $ text "題名"
-        elClass "th" "col-sm-7" $ text "内容"
-        elClass "th" "col-sm-2" $ text ""
+  elClass "table" "table is-striped is-narrow" $ do
     el "tbody" $  do
       forM lss $ \(i, t, c) -> do
         el "tr" $ do
-          (e1,_) <- el' "td" $ text t
-          (e2,_) <- el' "td" $ text c
+          ev1 <- el "td" $ tileBoxLoading $ do
+            elClass "p" "title" $ text t
+            el "p" $ text c
           el "td" $ do
-            ed <- btn "btn-xs btn-primary" "Edit"
-            d <- btn "btn-xs btn-warning" "Delete"
-            return (ViewDocument i Nothing
-                    <$ (leftmost [domEvent Click e1, domEvent Click e2])
+            ed <- btnLoading "btn-xs btn-primary" "Edit" never
+            d <- btnLoading "btn-xs btn-warning" "Delete" never
+            return (ViewDocument i Nothing <$ ev1
                , (ViewRawDocument i <$ ed
                , DeleteDocument i <$ d))
+
+tileBoxLoading m = do
+  let cl1 = "tile box control is-large"
+  rec
+    let ev = domEvent Click e
+    clDyn <- holdDyn cl1 ((cl1 <> " is-loading") <$ ev)
+    (e,_) <- elDynClass' "div" clDyn m
+  return ev
 
 documentEditor
   :: AppMonad t m
@@ -183,9 +180,11 @@ documentEditor
 documentEditor editEv = divClass "" $ do
   let
     tiAttr = constDyn $ (("style" =: "width: 100%;")
+                        <> ("class" =: "input")
                         <> ("placeholder" =: "Title"))
     taAttr = constDyn $ (("style" =: "width: 100%;")
                         <> ("rows" =: "10")
+                        <> ("class" =: "textarea")
                         <> ("placeholder" =: "Contents"))
 
     titleSetEv = editEv & mapped %~ (maybe "" (view _2))
@@ -200,8 +199,8 @@ documentEditor editEv = divClass "" $ do
     & textAreaConfig_attributes .~ taAttr
     & textAreaConfig_setValue .~ contentSetEv
 
-  saveEv <- button "Save"
-  cancelEv <- button "Cancel"
+  saveEv <- btnLoading "is-success" "Save" never
+  cancelEv <- btn "is-danger" "Cancel"
 
   let evDyn = AddOrEditDocument
         <$> (rdDyn & mapped %~ preview (_Just . _1))
@@ -209,7 +208,6 @@ documentEditor editEv = divClass "" $ do
         <*> (value ta)
   annTextEv <- getWebSocketResponse
     $ tag (current evDyn) saveEv
-  showWSProcessing saveEv annTextEv
   return $ (fmapMaybe identity annTextEv
     , cancelEv)
 

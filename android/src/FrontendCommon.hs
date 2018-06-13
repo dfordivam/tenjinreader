@@ -89,6 +89,21 @@ btn cl t = do
   (e,_) <- elClass' "button" ("button " <> cl) $ text t
   return $ domEvent Click e
 
+btnLoading :: (_)
+  => Text
+  -> Text
+  -> Event t a
+  -> m (Event t ())
+btnLoading cl t doneEv = do
+  let cl1 = cl <> " button"
+  rec
+    clDyn <- holdDyn cl1 (leftmost [cl1 <$ doneEv
+                                  , (cl1 <> " is-loading") <$ ev])
+    ev <- do
+      (e,_) <- elDynClass' "button" clDyn $ text t
+      return $ domEvent Click e
+  return ev
+
 -- Controls to add/edit related srs items
 addEditSrsEntryWidget :: AppMonad t m
   => (Either KanjiId VocabId)
@@ -99,23 +114,22 @@ addEditSrsEntryWidget i t s = do
   let
     widget = \case
       (InSrs sId) -> do
-        ev <- btn "btn-xs btn-primary" "Edit SRS"
+        ev <- btn "" "Edit SRS"
         _ <- openEditSrsItemWidget (sId <$ ev)
         return never
 
       (IsWakaru) -> do
-        ev <- btn "btn-xs btn-primary" "わからない"
-        resp <- getWebSocketResponse $ QuickToggleWakaru i <$ ev
-        showWSProcessing ev resp
+        rec
+          ev <- btnLoading "" "わからない" resp
+          resp <- getWebSocketResponse $ QuickToggleWakaru i <$ ev
         return resp
 
       (NotInSrs) -> do
-        ev <- btn "btn-xs btn-primary" "Add to SRS"
-        resp <- getWebSocketResponse $ QuickAddSrsItem i t <$ ev
-        showWSProcessing ev resp
-        ev2 <- btn "btn-xs btn-primary" "わかる"
-        resp2 <- getWebSocketResponse $ QuickToggleWakaru i <$ ev2
-        showWSProcessing ev2 resp2
+        rec
+          ev <- btnLoading "" "Add to SRS" resp
+          resp <- getWebSocketResponse $ QuickAddSrsItem i t <$ ev
+          ev2 <- btnLoading "" "わかる" resp2
+          resp2 <- getWebSocketResponse $ QuickToggleWakaru i <$ ev2
         return $ leftmost [resp,resp2]
   rec
     sDyn <- holdDyn s resp
@@ -261,10 +275,10 @@ editWidgetView s savedEv = modalDiv $ do
               <*> f
 
   divClass "modal-card-foot" $ do
-    let savedIcon = elClass "i" "" $ return ()
-    saveEv <- btn "is-success" "Save"
+    let savedIcon = elClass "span" "icon" $
+          elClass "i" "fa fa-check-circle" $ return ()
+    saveEv <- btnLoading "is-success" "Save" savedEv
     closeEv <- btn "" "Close"
-    showWSProcessing saveEv savedEv
     _ <- widgetHold (return ()) (savedIcon <$ savedEv)
     return (ret, saveEv, leftmost[closeEv, closeEvTop])
 
@@ -316,10 +330,10 @@ showWSProcessing :: (MonadHold t m, DomBuilder t m)
   -> m ()
 showWSProcessing evStart evFinish = do
   let
-    showSpinner = divClass "spinner" $ do
-      divClass "bounce1" $ return ()
-      divClass "bounce2" $ return ()
-      divClass "bounce3" $ return ()
+    showSpinner = elClass "a" "button is-loading" $ return ()
+      -- divClass "bounce1" $ return ()
+      -- divClass "bounce2" $ return ()
+      -- divClass "bounce3" $ return ()
 
   let waitForStart = do
         void $ widgetHold (showSpinner)
@@ -365,17 +379,17 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
       vIdMap <- listHoldWithKey (Map.fromList ss) addMoreEv $
         renderOneSentence vIds
 
-      (addMoreEv, closeBot) <- divClass "columns" $ do
-        loadMoreEv <- divClass "column" $ do
-          btn "btn-block btn-primary" "Load More"
+      (addMoreEv, closeBot) <- divClass "columns is-mobile" $ do
+        rec
+          loadMoreEv <- divClass "column" $ do
+            btnLoading "" "Load More" addMoreEv1
+          addMoreEv1 <- fmap fg <$> getWebSocketResponse
+            (LoadMoreSentences vIds <$> tag (current $ (map snd) . Map.keys <$> vIdMap) loadMoreEv)
         divClass "column" $ do
           topEv <- btn "btn-block btn-primary" "Top"
           performEvent_ $ topEv $> DOM.scrollIntoView (_element_raw headElm) True
         closeBot1 <- divClass "column" $ do
           btn "btn-block btn-primary" "Close"
-        addMoreEv1 <- fmap fg <$> getWebSocketResponse
-          (LoadMoreSentences vIds <$> tag (current $ (map snd) . Map.keys <$> vIdMap) loadMoreEv)
-        showWSProcessing loadMoreEv addMoreEv1
         return (addMoreEv1, closeBot1)
 
     return $ (closeBot
