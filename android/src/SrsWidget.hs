@@ -74,34 +74,37 @@ showStatsWidget
   => (SrsStats, SrsStats) -> m (Event t SrsWidgetView)
 showStatsWidget (recog, prod) = do
   let
-    w lbl rs = divClass "panel panel-default" $ do
-      ev <- divClass "panel-heading" $ divClass "row" $ do
-        elClass "h4" "col-sm-3" $ text lbl
-        divClass "col-sm-4" $
-          btn "btn-lg btn-success" "Start Review"
+    w lbl rs = divClass "panel" $ do
+      ev <- divClass "panel-heading" $ divClass "level is-mobile" $ do
+        divClass "level-left" $ text lbl
+        divClass "level-item" $
+          btn "" "Start Review"
 
-      divClass "panel-body" $ divClass "row" $ do
-        divClass "col-sm-1" $ text "Pending:"
-        divClass "col-sm-2" $ text $ tshow (reviewsToday rs)
-        divClass "col-sm-1" $ text "Total Reviews:"
-        divClass "col-sm-2" $ text $ tshow (totalReviews rs)
-        divClass "col-sm-1" $ text "Average Success"
-        divClass "col-sm-2" $ text $ tshow (averageSuccess rs) <> "%"
+      divClass "panel-block" $ divClass "container" $ divClass "level is-mobile" $ do
+        divClass "level-item has-text-centered" $ divClass "" $ do
+          elClass "p" "heading" $ text "Pending"
+          elClass "p" "title" $ text $ tshow (reviewsToday rs)
+        divClass "level-item has-text-centered" $ divClass "" $ do
+          elClass "p" "heading" $ text "Total"
+          elClass "p" "title" $ text $ tshow (totalReviews rs)
+        divClass "level-item has-text-centered" $ divClass "" $ do
+          elClass "p" "heading" $ text "Correct"
+          elClass "p" "title" $ text $ (tshow (averageSuccess rs) <> "%")
 
       return ev
 
   ev1 <- w "Recognition Review" recog
   ev2 <- w "Production Review" prod
-  browseEv <- btn "btn-primary" "Browse Srs Items"
+  browseEv <- btn "" "Browse Srs Items"
   return $ leftmost
     [ShowReviewWindow ReviewTypeRecogReview <$ ev1
     , ShowReviewWindow ReviewTypeProdReview <$ ev2
     , ShowBrowseSrsItemsWindow <$ browseEv]
 
 srsLevels = Map.fromList
-  [ (LearningLvl, "Less than 4 Days" :: Text)
-  , (IntermediateLvl , "Between 4 to 60 Days")
-  , (MatureLvl, "More than 60 Days")]
+  [ (LearningLvl, "< 4 Days" :: Text)
+  , (IntermediateLvl , "4 - 60")
+  , (MatureLvl, "> 60 Days")]
 
 data BrowseSrsItemsOptions
   = BrowseSrsItemsDue
@@ -113,12 +116,12 @@ data BrowseSrsItemsOptions
 browseOptions = Map.fromList
   [ (BrowseSrsItemsDue, "Due" :: Text)
   ,  (BrowseSrsItemsNew, "New")
-  ,  (BrowseSrsItemsSusp, "Suspended")
+  ,  (BrowseSrsItemsSusp, "Susp")
   ,  (BrowseSrsItemsOther, "Others")]
 
 revTypeSel = Map.fromList
-  [ (ReviewTypeRecogReview, "Recognition" :: Text)
-  , (ReviewTypeProdReview, "Production")]
+  [ (ReviewTypeRecogReview, "Recog" :: Text)
+  , (ReviewTypeProdReview, "Prod")]
 
 getBrowseSrsItemsEv ::
      (MonadFix m, MonadHold t m, Reflex t)
@@ -155,58 +158,55 @@ browseSrsItemsWidget
 browseSrsItemsWidget = do
   -- Widget declarations
   let
-    ddConf :: _
-    ddConf = def & dropdownConfig_attributes .~ (constDyn ddAttr)
-    ddAttr = ("class" =: "form-control input-sm")
-
-    filterOptionsWidget =
-      divClass "panel-heading" $ divClass "form-inline" $ divClass "form-group" $ do
+    panelHead = divClass "panel-heading notification" $ do
+      fo <- divClass "field is-grouped" $ divClass "" $ do
         -- Selection buttons
-        selectAllToggleCheckBox <- divClass "col-sm-1" $ do
-
+        selectAllToggleCheckBox <- do
           checkbox False def -- & setValue .~ allSelected
 
-        filt <- dropdown (BrowseSrsItemsDue) (constDyn browseOptions) ddConf
-        levels <- dropdown (LearningLvl) (constDyn srsLevels) ddConf
-        revType <- dropdown (ReviewTypeRecogReview) (constDyn revTypeSel) ddConf
+        filt <- elClass "span" "select is-small" $
+          dropdown (BrowseSrsItemsDue) (constDyn browseOptions) def
+        levels <-  elClass "span" "select is-small" $
+          dropdown (LearningLvl) (constDyn srsLevels) def
+        revType <-  elClass "span" "select is-small" $
+          dropdown (ReviewTypeRecogReview) (constDyn revTypeSel) def
 
         brwDyn <- getBrowseSrsItemsEv filt levels
         let filtOptsDyn = BrowseSrsItems <$> value revType <*> brwDyn
         return (filtOptsDyn, selectAllToggleCheckBox, value filt, value revType)
+      clEv <- do
+        (e,_) <- elClass' "button" "delete is-medium" $ text "close"
+        return (domEvent Click e)
+      return (clEv, fo)
 
-    checkBoxList selAllEv es =
-      divClass "" $ do
-        -- el "label" $ text "Select Items to do bulk edit"
-        dyns <- elAttr "div" (("class" =: "")
-                <> ("style" =: "height: 400px; overflow-y: auto")) $
-          elClass "table" "table table-striped" $ el "tbody" $
-            forM es $ checkBoxListEl selAllEv
+    itemList selAllEv es = do
+      dyns <- elAttr "div" (("class" =: "")
+              <> ("style" =: "height: 60vh; overflow-y: auto")) $
+        forM es $ checkBoxListEl selAllEv
 
-        let f (v, True) = Just v
-            f (_, False) = Nothing
-            ds = distributeListOverDynPure dyns
+      let f (v, True) = Just v
+          f (_, False) = Nothing
+          ds = distributeListOverDynPure dyns
 
-        return $ (catMaybes . (map f)) <$> ds
+      return $ (catMaybes . (map f)) <$> ds
 
     checkBoxListEl :: Event t Bool -> SrsItem
       -> AppMonadT t m (Dynamic t (SrsEntryId , Bool))
-    checkBoxListEl selAllEv (SrsItem i t) = el "tr" $ do
-      c1 <- elClass "td" "col-sm-1" $
-        checkbox False $ def & setValue .~ selAllEv
-      elClass "td" "el-sm-4" $
-        text $ fold $ NE.intersperse ", " $ t
-      ev <- elClass "td" "el-sm-2" $
-        btn "btn-sm btn-primary" "edit"
-      _ <- openEditSrsItemWidget $ i <$ ev
+    checkBoxListEl selAllEv (SrsItem i t) = divClass "panel-block" $ divClass "control" $ divClass "level is-mobile" $ do
+      c1 <- divClass "level-left" $ do
+        c <- divClass "level-item" $ checkbox False $ def & setValue .~ selAllEv
+        divClass "level-item" $ elClass "p" "" $
+          text $ fold $ NE.intersperse ", " $ t
+        return c
+      divClass "level-right" $ divClass "level-item" $
+        editSrsItemWidget i
       return $ (,) i <$> (value c1)
 
   -- UI
-  (closeEv, editDone) <- divClass "panel panel-default" $ do
-    (e,_) <- elClass' "button" "close" $ text "Close"
-
+  (closeEv, editDone) <- divClass "panel" $ do
     -- Filter Options
-    (browseSrsFilterDyn, selectAllToggleCheckBox, filtOptsDyn, revTypeDyn) <-
-      filterOptionsWidget
+    (clEv,(browseSrsFilterDyn, selectAllToggleCheckBox, filtOptsDyn, revTypeDyn)) <-
+      panelHead
 
     evPB <- getPostBuild
     rec
@@ -223,12 +223,12 @@ browseSrsItemsWidget = do
       -- List and selection checkBox
       selList <- divClass "panel-body" $ do
         showWSProcessing reqEv itemEv
-        widgetHold (checkBoxList never [])
-          (checkBoxList checkBoxSelAllEv <$> itemEv)
+        widgetHold (itemList never [])
+          (itemList checkBoxSelAllEv <$> itemEv)
       -- Action buttons
       editDone <-
         bulkEditWidgetActionButtons filtOptsDyn revTypeDyn $ join selList
-    return (domEvent Click e, editDone)
+    return (clEv, editDone)
 
   return $ (ShowStatsWindow <$ closeEv, editDone)
 
@@ -237,9 +237,8 @@ btnWithDisable :: (_)
   -> Dynamic t1 Bool
   -> m (Event t ())
 btnWithDisable t active = do
-  let attr True = ("type" =: "button") <> ("class" =: "btn btn-primary active")
-      attr False = ("type" =: "button") <> ("class" =: "btn btn-primary disabled")
-  (e, _) <- elDynAttr' "button" (attr <$> active) $ text t
+  let attr b = ("class" =: "button") <> (if b then (Map.empty) else ("disabled" =: ""))
+  (e, _) <- elDynAttr' "a" (attr <$> active) $ text t
   return $ domEvent Click e
 
 bulkEditWidgetActionButtons
@@ -248,37 +247,38 @@ bulkEditWidgetActionButtons
   -> Dynamic t ReviewType
   -> Dynamic t [SrsEntryId]
   -> AppMonadT t m (Event t ())
-bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "panel-footer" $ do
+bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ do
   today <- liftIO $ utctDay <$> getCurrentTime
 
   let
       felem = flip elem
 
-  el "table" $ el "tbody" $ do
-    suspendEv <-
-      el "td" $
-      btnWithDisable "Suspend" $ (felem [BrowseSrsItemsDue, BrowseSrsItemsOther]) <$> filtOptsDyn
+  suspendEv <- elClass "p" "control" $
+    btnWithDisable "Suspend" $
+      (felem [BrowseSrsItemsDue, BrowseSrsItemsOther]) <$> filtOptsDyn
 
-    markDueEv <- el "td" $
-      btnWithDisable "Mark Due" $ (felem [BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
+  markDueEv <-  elClass "p" "control" $
+    btnWithDisable "Mark Due" $ (felem [BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
 
-    deleteEv <- el "td" $
-      btnWithDisable "Delete" (constDyn True)
+  deleteEv <-  elClass "p" "control" $
+    btnWithDisable "Delete" (constDyn True)
 
-    reviewDateChange <- el "td" $
-      btnWithDisable "Change Review Date" $ (felem [BrowseSrsItemsDue,
-         BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
+  reviewDateChange <- elClass "p" "control" $
+    btnWithDisable "Change Review Date" $ (felem [BrowseSrsItemsDue,
+       BrowseSrsItemsSusp, BrowseSrsItemsOther]) <$> filtOptsDyn
 
-    dateDyn <- el "td" $ datePicker today
-    let bEditOp = leftmost
-          [DeleteSrsItems <$ deleteEv
-          , MarkDueSrsItems <$ markDueEv
-          , SuspendSrsItems <$ suspendEv
-          , ChangeSrsReviewData <$> tag (current dateDyn) reviewDateChange]
-    doUpdate <- getWebSocketResponse $
-      (attachWith ($) (current $ BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
-    showWSProcessing bEditOp doUpdate
-    return $ fmapMaybe identity doUpdate
+  dateDyn <- elClass "p" "control" $
+    datePicker today
+
+  let bEditOp = leftmost
+        [DeleteSrsItems <$ deleteEv
+        , MarkDueSrsItems <$ markDueEv
+        , SuspendSrsItems <$ suspendEv
+        , ChangeSrsReviewData <$> tag (current dateDyn) reviewDateChange]
+  doUpdate <- getWebSocketResponse $
+    (attachWith ($) (current $ BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
+  showWSProcessing bEditOp doUpdate
+  return $ fmapMaybe identity doUpdate
 
 datePicker
   :: (MonadWidget t m)
@@ -290,7 +290,7 @@ datePicker today = divClass "" $ do
       makeList x1 = constDyn $ Map.fromList $ (\x -> (x, tshow x)) <$> x1
       (currentYear, currentMonth, currentDay)
         = toGregorian today
-      mycol = divClass ""
+      mycol = elClass "span" "select"
         --elAttr "div" (("class" =: "column") <> ("style" =: "min-width: 2em;"))
   day <- mycol $ dropdown currentDay dayList $ def
   month <- mycol $ dropdown currentMonth monthList $ def
@@ -588,10 +588,9 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
         openSentenceWidget (NE.head k, map (unMeaning) $ NE.toList (fst m)) (Right i <$ openEv)
         return openEv
 
-      (recogStop2, aeEv) <- divClass "col-sm-2" $ do
-        ev <- btn "btn-primary" "Show/Edit details"
-        newSrsEntryEv <- openEditSrsItemWidget (i <$ ev)
-        return $ (,) ev ((\s -> AddItemsEv [getReviewItem s] Nothing) <$> newSrsEntryEv)
+      aeEv <- divClass "col-sm-2" $ do
+        newSrsEntryEv <- editSrsItemWidget i
+        return $ ((\s -> AddItemsEv [getReviewItem s] Nothing) <$> newSrsEntryEv)
 
       sbEv <- divClass "col-sm-2" $ do
         ev1 <- btn "btn-primary" "Bury"
@@ -602,7 +601,7 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
         leftmost [True <$ shirimasu, False <$ shiranai]
 
       return (shiruRes , aeEv, recog, False <$ shimesu
-             , leftmost [recogStop2, recogStop1, shirimasu, closeEv]
+             , leftmost [recogStop1, shirimasu, closeEv]
              , sbEv)
 
   return $ leftmost [ shiruResEv , recogResEv

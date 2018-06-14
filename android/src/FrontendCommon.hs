@@ -114,8 +114,7 @@ addEditSrsEntryWidget i t s = do
   let
     widget = \case
       (InSrs sId) -> do
-        ev <- btn "" "Edit SRS"
-        _ <- openEditSrsItemWidget (sId <$ ev)
+        editSrsItemWidget sId
         return never
 
       (IsWakaru) -> do
@@ -138,13 +137,14 @@ addEditSrsEntryWidget i t s = do
 
   return ()
 
-openEditSrsItemWidget
+editSrsItemWidget
   :: (AppMonad t m)
-  => Event t (SrsEntryId)
+  => SrsEntryId
   -> AppMonadT t m (Event t (SrsEntryId, SrsEntry))
-openEditSrsItemWidget ev = do
-  srsItEv <- getWebSocketResponse $ GetSrsItem <$> ev
-  showWSProcessing ev srsItEv
+editSrsItemWidget i = do
+  rec
+    ev <- btnLoading "" "Edit" srsItEv
+    srsItEv <- getWebSocketResponse $ GetSrsItem i <$ ev
 
   let
       modalWidget :: (AppMonad t m)
