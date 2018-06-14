@@ -54,7 +54,7 @@ documentListViewer refreshEv = do
   (_, evAll) <- runEventWriterT $
     tabDisplayUI wrapperSW "" "is-active" "" $
     Map.fromList
-      [ (1, ("Reading List", myDocumentsListViewer refreshEv))
+      [ (1, ("My Reading List", myDocumentsListViewer refreshEv))
       , (2, ("Books", booksListViewer))
       -- , (3, ("Articles", articlesListViewer))
       ]
@@ -239,7 +239,7 @@ quickAnalyzeTop = do
   resp <- getWebSocketResponse $ QuickAnalyzeText <$> (_textArea_input ta)
 
   v <- divClass "col-md-6" $ do
-    rsDyn <- readerSettingsControls def False
+    (_, rsDyn) <- readerSettingsControls def False
     let renderF = renderOnePara (constDyn ([],[]))
           (_rubySize <$> rsDyn)
     divWrap rsDyn (constDyn False) $ do
@@ -258,7 +258,7 @@ randomSentenceTop
 randomSentenceTop = do
   rec
     v <- divClass "" $ do
-      rsDyn <- readerSettingsControls def False
+      (_, rsDyn) <- readerSettingsControls def False
       elAttr "div" ("style" =: "height: 10vh;") $ return ()
       divWrap rsDyn (constDyn False) $ do
         widgetHold (return [])

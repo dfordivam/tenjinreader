@@ -85,7 +85,7 @@ readerSettingsControls
        PostBuild t m, DomBuilder t m)
   => ReaderSettingsTree CurrentDb
   -> Bool
-  -> m (Dynamic t (ReaderSettingsTree CurrentDb))
+  -> m (Event t (), Dynamic t (ReaderSettingsTree CurrentDb))
 readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ do
   let
     ddConf :: _
@@ -107,7 +107,7 @@ readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-center
         text "間"
       return d
 
-  (r,h,v) <- if full
+  (r,h,v, closeEv) <- if full
     then do
       rubySizeDD <-  divClass "field" $ divClass "control has-icons-left" $ do
         divClass "select" $ do
@@ -129,14 +129,15 @@ readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-center
           d <- dropdown (rsDef ^. verticalMode)
             (constDyn writingModeOptions) ddConf
           return d
+      c <- icon "fa-times"
       return (value rubySizeDD,
-              value heightDD, value writingModeDD)
+              value heightDD, value writingModeDD, c)
     else
-      return (constDyn 100, constDyn 400, constDyn False)
+      return (constDyn 100, constDyn 400, constDyn False, never)
 
   let rsDyn = ReaderSettings <$> (value fontSizeDD)
         <*> r <*> (value lineHeightDD) <*> v <*> h
-  return rsDyn
+  return (closeEv, rsDyn)
 
 divWrap :: (PostBuild t m, DomBuilder t m) =>
            Dynamic t (ReaderSettingsTree CurrentDb) -> Dynamic t Bool -> m a -> m a
@@ -159,18 +160,12 @@ readingPaneInt :: AppMonad t m
   -> ReaderSettings CurrentDb
   -> AppMonadT t m (Event t ())
 readingPaneInt docEv rsDef = do
-  (closeEv,fullScrEv, rsDyn) <- divClass "row" $ do
-    rsDyn <- divClass "col-sm-9" $ readerSettingsControls rsDef True
-    (closeEv, fullScrEv) <- divClass "col-sm-3" $ do
-      closeEv <- btn "btn-default btn-sm" "Close"
-      fullScrEv <- btn "btn-default btn-sm" "Full Screen"
-      return (closeEv, fullScrEv)
-    return (closeEv,fullScrEv, rsDyn)
+  (closeEv, rsDyn) <- readerSettingsControls rsDef True
 
   getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
 
   _ <- widgetHold ((text "waiting for document data"))
-    (verticalReader rsDyn fullScrEv <$> docEv)
+    (verticalReader rsDyn <$> docEv)
   return (closeEv)
 
 ----------------------------------------------------------------------------------
@@ -202,10 +197,9 @@ type ParaOffsetArray = Array ParaOffset (ParaNum, ParaPos)
 
 verticalReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
-  -> Event t ()
   -> (ReaderDocumentData)
   -> AppMonadT t m ()
-verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
+verticalReader rs (docId, _, startParaMaybe, endParaNum, annText) = do
   (evVisible, action) <- newTriggerEvent
 
   visDyn <- holdDyn (0,Nothing) evVisible
@@ -325,25 +319,20 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
         else ("class" =: "")
       divAttr = divAttr' <*> fullscreenDyn
 
-    fullscreenDyn <- holdDyn False (leftmost [ True <$ fullScrEv
-                                           , False <$ closeEv])
+    fullscreenDyn <- toggle False toggleFSEv
 
     let
       btnPress = leftmost [next,prev]
-      prevNxtBtnWrapDivAttr = (\h fs -> ("class" =: "column is-narrow")
-        <> ("style" =: ("height: " <> (if fs then "100%;" else tshow h <> "px;"))))
-              <$> (_numOfLines <$> rs) <*> fullscreenDyn
-
-      btnAttr vis = ("class" =: "btn btn-default")
-        <> ("style" =: ("height: 80%; width: 1em;" <> visV))
+      btnAttr vis = ("class" =: "button column")
+        <> ("style" =: ("" <> visV))
         where
           visV = if vis then "" else "visibility: hidden;"
 
-      leftBtrAttr = join $ ffor (_verticalMode <$> rs) $ \v -> if v
+      leftBtnAttr = join $ ffor (_verticalMode <$> rs) $ \v -> if v
         then btnAttr <$> nextBtnVis
         else btnAttr <$> prevBtnVis
 
-      rightBtrAttr = join $ ffor (_verticalMode <$> rs) $ \v -> if v
+      rightBtnAttr = join $ ffor (_verticalMode <$> rs) $ \v -> if v
         then btnAttr <$> prevBtnVis
         else btnAttr <$> nextBtnVis
 
@@ -355,14 +344,9 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
                , False <$ btnPress]
 
     --------------------------------
-    (resizeEv, ((rowRoot, (inside, outside, vIdEv)), (next, prev), closeEv)) <- divClass "" $ resizeDetector $ do
+    (resizeEv, ((rowRoot, (inside, outside, vIdEv)), (next, prev, clearHighlight, toggleFSEv)) ) <- divClass "" $ resizeDetector $ do
 
       elDynAttr "div" wrapDynAttr $ do
-        (clearHighlight, c) <- divClass "columns is-mobile is-centered" $ do
-          x <- icon "fa-eraser"
-          c <- icon "fa-times"
-          return (x,c)
-
         v <- elDynAttr' "div" divAttr $ do
 
           vIdEv1 <- el "div" $ do
@@ -395,17 +379,25 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
             return ()
           return (i, o, vIdEv1)
 
-        np <- divClass "columns is-mobile is-centered" $ do
-          leftEv  <- icon "fa-caret-left"
-          rightEv <- icon "fa-caret-right"
+        lowerBtns <- divClass "columns is-mobile is-centered" $ do
+          leftEv  <- do
+            (e,_) <- elDynAttr' "button" leftBtnAttr $
+              elClass "i" "fa fa-caret-left" $ return ()
+            return (domEvent Click e)
+          x <- icon "fa-eraser"
+          c <- icon "fa-expand"
+          rightEv <- do
+            (e,_) <- elDynAttr' "button" rightBtnAttr $
+              elClass "i" "fa fa-caret-right" $ return ()
+            return (domEvent Click e)
           let
             -- The button on left is next in vertical and prev in horizontal
             next1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
               then leftEv else rightEv
             prev1 = switch . current $ ffor (_verticalMode <$> rs) $ \v -> if v
               then rightEv else leftEv
-          return (next1, prev1)
-        return (v, np, c)
+          return (next1, prev1, x, c)
+        return (v, lowerBtns)
 
 
   showVocabDetailsWidget vIdEv
@@ -425,7 +417,7 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
     -- TODO Stop if we hit end of text, close the document
       startTicksAgain = leftmost [() <$ updated rs
                                  , resizeEv
-                                 , closeEv, fullScrEv
+                                 , toggleFSEv
                                  , () <$ pageChangeEv]
       ticksWidget = do
         let init = widgetHold (tickW)
