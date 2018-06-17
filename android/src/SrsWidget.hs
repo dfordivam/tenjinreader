@@ -443,28 +443,22 @@ reviewWidgetView
   -> AppMonadT t m (Event t (), Event t (ReviewStateEvent rt))
 reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
   let
-    statsTextAttr = ("style" =: "font-size: large;")
-      <> ("class" =: "center-block text-center")
-
     showStatsW = do
       let colour c = ("style" =: ("color: " <> c <>";" ))
           labelText t = elClass "span" "small text-muted" $ text t
-      labelText "Pending "
       el "span" $
         dynText $ (tshow . _srsReviewStats_pendingCount) <$> statsDyn
       text "\t|\t"
-      labelText " Correct "
       elAttr "span" (colour "green") $
         dynText $ (tshow . _srsReviewStats_correctCount) <$> statsDyn
       text "\t|\t"
-      labelText " Incorrect "
       elAttr "span" (colour "red") $
         dynText $ (tshow . _srsReviewStats_incorrectCount) <$> statsDyn
 
-  (fullASR, closeEv) <- divClass "panel-heading" $ do
-    (e,_) <- elClass' "button" "close" $ text "Close"
-
-    let cEv = domEvent Click e
+  (fullASR, closeEv) <- divClass "panel-heading notification" $ do
+    cEv <- do
+      (e,_) <- elClass' "button" "delete is-medium" $ text "close"
+      return (domEvent Click e)
 #if defined (ENABLE_SPEECH_RECOG)
     fullASR <- do
       cb <- checkbox False $ def & checkboxConfig_setValue .~ (False <$ cEv)
@@ -474,12 +468,12 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
     let fullASR = constDyn False
 #endif
 
-    divClass "" $ do
-      elAttr "span" statsTextAttr $
+    divClass "has-text-centered" $ do
+      elClass "span" "" $
         showStatsW
     return $ (fullASR, cEv)
 
-  let kanjiRowAttr = ("class" =: "center-block")
+  let kanjiRowAttr = ("class" =: "container")
          <> ("style" =: "height: 15em; display: table;")
       kanjiCellAttr = ("style" =: "vertical-align: middle; max-width: 25em; display: table-cell;")
 
@@ -519,7 +513,7 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
             & textInputConfig_attributes
             .~ constDyn (("style" =: style)
                         <> ("id" =: tiId)
-                        <> ("class" =: "form-control")
+                        <> ("class" =: "input")
                         <> ("placeholder" =: ph)
                         <> ("autocapitalize" =: "none")
                         <> ("autocorrect" =: "none")
@@ -560,52 +554,41 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
           <> ("style" =: "height: 6em; overflow-y: auto")
   rec
     _ <- elAttr "div" resultDisAttr $
-      widgetHold (return ()) (showResult <$> (leftmost [resEv, shimesuEv, recogCorrectEv]))
+      widgetHold (return ()) (showResult <$> (leftmost [resEv, shimesuEv]))
 
     -- Footer
-    (shiruResEv, addEditEv, (recogCorrectEv, recogResEv)
-      , shimesuEv, recogStop, susBuryEv) <- divClass "row" $ do
-#if defined (ENABLE_SPEECH_RECOG)
-      recog <- divClass "col-sm-2" $
-        speechRecogWidget doRecog recogStop fullASR (ri, rt)
-#else
-      let recog = (never,never)
-#endif
-
-      shirimasu <- divClass "col-sm-2" $
-        btn "btn-primary" "知っている"
-
-      (shimesu, shiranai) <- divClass "col-sm-2" $ do
-        rec
-          let evChange = (leftmost [ev, () <$ fst recog])
-          ev <- switch . current <$> widgetHold (btn "btn-primary" "示す")
-            (return never <$ evChange)
-        ev2 <- widgetHoldWithRemoveAfterEvent ((btn "btn-primary" "知らない") <$ evChange)
-        return (ev,ev2)
-
-      recogStop1 <- divClass "col-sm-2" $ do
+    (addEditEv, susBuryEv) <- divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ do
+      divClass "" $ do
         openEv <- btn "btn-primary" "Sentences"
         openSentenceWidget (NE.head k, map (unMeaning) $ NE.toList (fst m)) (Right i <$ openEv)
-        return openEv
 
-      aeEv <- divClass "col-sm-2" $ do
+      aeEv <- divClass "" $ do
         newSrsEntryEv <- editSrsItemWidget i
         return $ ((\s -> AddItemsEv [getReviewItem s] Nothing) <$> newSrsEntryEv)
 
-      sbEv <- divClass "col-sm-2" $ do
-        ev1 <- btn "btn-primary" "Bury"
-        ev2 <- btn "btn-primary" "Suspend"
+      sbEv <- divClass "" $ do
+        ev1 <- btn "" "Bury"
+        ev2 <- btn "" "Suspend"
         return (leftmost [SuspendEv i <$ ev2, BuryEv i <$ ev1])
 
+      return (aeEv, sbEv)
+
+    (shiruResEv, shimesuEv) <- divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ do
+      shirimasu <- divClass "" $
+        btn "is-medium" "知っている"
+
+      (shimesu, shiranai) <- divClass "" $ do
+        rec
+          ev <- switch . current <$> widgetHold (btn "is-medium" "示す")
+            (return never <$ ev)
+        ev2 <- widgetHoldWithRemoveAfterEvent ((btn "is-medium" "知らない") <$ ev)
+        return (ev,ev2)
       shiruRes <- tagWithTime $ (\b -> (i, rt, b)) <$>
         leftmost [True <$ shirimasu, False <$ shiranai]
 
-      return (shiruRes , aeEv, recog, False <$ shimesu
-             , leftmost [recogStop1, shirimasu, closeEv]
-             , sbEv)
+      return (shiruRes , False <$ shimesu)
 
-  return $ leftmost [ shiruResEv , recogResEv
-                    , dr, addEditEv, susBuryEv]
+  return $ leftmost [shiruResEv, dr, addEditEv, susBuryEv]
 
 tagWithTime ev = performEvent $ ffor ev $ \e@(i,_,b) -> do
   t <- liftIO $ getCurrentTime
