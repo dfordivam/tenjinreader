@@ -2,6 +2,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -13,7 +14,6 @@ module LoginWidget
   where
 
 import FrontendCommon
-
 import qualified GHCJS.DOM.Types as DOM
 import qualified GHCJS.DOM.Storage as DOM
 import qualified GHCJS.DOM.Window as DOM
@@ -49,32 +49,53 @@ loginWidget = do
       pb <- getPostBuild
       return $ (Just s) <$ pb
     Nothing -> do
-      el "h3" $ text "Please login at tenjinreader.com"
-      lEv <- el "div" $ do
-        text "Enter your secret key"
-        ti <- textInput def
-        ev <- btn "" "Login"
-        return (tagDyn (value ti) ev)
-
-      sEv <- checkLogin lEv
+      rec
+        lEv <- showLogin incorrectEv
+        (incorrectEv, sEv) <- checkLogin lEv
       performEvent $ ffor sEv $ \(Just s) -> do
         saveValue s
         return $ Just s
 
+showLogin :: MonadWidget t m
+  => Event t ()
+  -> m (Event t Text)
+showLogin incorrectEv = elClass "section" "hero is-light is-fullheight" $ do
+  divClass "hero-head" $
+    elClass "header" "navbar" $
+      divClass "container" $
+        divClass "navbar-brand" $
+          elClass "a" "navbar-item" $
+            elAttr "img" ("src" =: "https://tenjinreader.com/static/logo.png") $ return ()
+
+  ev <- divClass "hero-body" $
+    divClass "container has-text-centered" $ do
+      elClass "h1" "title" $
+        text "Enter your secret key"
+      el "div" $ do
+        ti <- textInput $ def
+          & textInputConfig_attributes .~ (constDyn ("class" =: "input"))
+        ev <- btnLoading "is-large" "Login" incorrectEv
+        widgetHold (return ())
+          (ffor incorrectEv $ \_ -> do
+              divClass "message is-warning" $
+                divClass "message-body" $
+                  text "Incorrect key, please try again"
+          )
+        return (tagDyn (value ti) ev)
+
+  divClass "hero-foot" $
+    divClass "container has-text-centered" $ do
+      text "Please login at tenjinreader.com to obtain your secret key"
+  return ev
+
 checkLogin lEv = do
-  let url s = "http://localhost:3000/websocket/app/" <> s
-      req s = XhrRequest "GET" (url s) $ def
-        & xhrRequestConfig_responseType .~ Just XhrResponseType_Default
-  resp <- performRequestAsync (req <$> lEv)
-  let r = (\s -> g <$> (view xhrResponse_response s)) <$> resp
-      h = (\s ->(view xhrResponse_headers s)) <$> resp
-      g (XhrResponseBody_Default t) = "def" <> t
-      g (XhrResponseBody_Text t) = "text" <> t
-      g (XhrResponseBody_Blob t) = "blob"
-      g (XhrResponseBody_ArrayBuffer t) = "bytestring"
-  d <- holdDyn Nothing (r)
-  d2 <- holdDyn Nothing (Just <$> h)
-  display d
-  display d2
+  let url s = "http://192.168.0.31:3000/websocket/app/" <> s
+  r <- getAndDecode (url <$> lEv)
+  let incorrectEv = fforMaybe r (\case
+             (Just True) -> Nothing
+             _ -> Just ())
   sDyn <- holdDyn Nothing (Just <$> lEv)
-  return $ tagDyn sDyn resp
+  return $ (,) incorrectEv $
+    tagDyn sDyn $ fforMaybe r $ \case
+      (Just True) -> Just ()
+      _ -> Nothing

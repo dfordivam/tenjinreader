@@ -35,17 +35,17 @@ getWebSocketHandlerR = do
     webSockets $ handleWebSocketConn uId
     redirect $ ("static/app/complete/index.html" :: Text)
 
-getAppWebSocketHandlerR :: Text -> Handler Html
+getAppWebSocketHandlerR :: Text -> Handler Value
 getAppWebSocketHandlerR secret = do
     liftIO $ putStrLn secret
     muser <- runDB $ selectFirst [UserSecretKey ==. Just secret] []
-    -- uId <- requireAuthId
+    addHeader "Access-Control-Allow-Origin" "*"
     case muser of
-      Just (Entity uId _) -> webSockets $ handleWebSocketConn uId
+      Just (Entity uId _) -> do
+        webSockets $ handleWebSocketConn uId
+        returnJson True
       Nothing -> do
-        liftIO $ putStrLn "no user"
-        return ()
-    redirect $ ("static/app/complete/index.html" :: Text)
+        returnJson False
 
 handleWebSocketConn :: UserId -> WebSocketsT Handler ()
 handleWebSocketConn uId = do
