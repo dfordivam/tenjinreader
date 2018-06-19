@@ -296,32 +296,35 @@ vocabListWindow req listEv = do
 vocabSearchWidget
   :: AppMonad t m
   => AppMonadT t m ()
-vocabSearchWidget = divClass "" $ divClass "panel panel-default" $ do
+vocabSearchWidget = divClass "" $ divClass "" $ do
 
-  (vocabResEv,searchEv) <- divClass "panel-heading clearfix" $ divClass "" $ do
+  vocabResEv <- divClass "" $ divClass "field has-addons" $ do
     let
       tiAttr = constDyn $ (("style" =: "")
-                          <> ("class" =: "col-sm-10")
+                          <> ("class" =: "input")
                           <> ("placeholder" =: "Search by meaning or reading"))
-    ti <- textInput $ def
+    ti <- elClass "p" "control" $ textInput $ def
       & textInputConfig_attributes .~ tiAttr
 
-    filt <- divClass "col-sm-2" $ do
+    rec
+      searchEv <- elClass "p" "control" $
+        btnLoading "" "Search" res
 
-      dropdown Nothing
-        (constDyn ((Nothing =: "All")
-        <> ((Just PosNoun) =: "Noun Only")
-        <> ((Just (PosVerb (Regular Ichidan) NotSpecified))
-            =: "Verb Only")
-        <> ((Just (PosAdjective NaAdjective)) =: "Adj or Adv only")))
-        $ def
-          & dropdownConfig_attributes .~ (constDyn ("class" =: "form-control input-sm"))
+      filt <- elClass "p" "control" $ elClass "span" "select" $ do
 
-    let vsDyn = VocabSearch <$> (value ti)
-                  <*> (value filt)
-    searchEv <- debounce 1 (updated vsDyn)
-    res <- getWebSocketResponse searchEv
-    return (res,searchEv)
+        dropdown Nothing
+          (constDyn ((Nothing =: "All")
+          <> ((Just PosNoun) =: "Noun Only")
+          <> ((Just (PosVerb (Regular Ichidan) NotSpecified))
+              =: "Verb Only")
+          <> ((Just (PosAdjective NaAdjective)) =: "Adj or Adv only")))
+          $ def
+            & dropdownConfig_attributes .~ (constDyn ("class" =: ""))
+
+      let vsDyn = VocabSearch <$> (value ti)
+                    <*> (value filt)
+      res <- getWebSocketResponse (tagDyn vsDyn searchEv)
+    return res
 
   divClass "panel-body" $ do
     vocabListWindow LoadMoreVocabSearchResult vocabResEv
