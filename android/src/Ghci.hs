@@ -4,7 +4,7 @@ module Main where
 
 import Language.Javascript.JSaddle.Warp
 import Reflex.Dom.Core (mainWidget
-                       , mainWidgetWithHead
+                       , mainWidgetWithHead'
                        , mainWidgetWithCss)
 -- import Reflex.Dom hiding (mainWidget, run)
 -- import Reflex.Dom
@@ -20,7 +20,7 @@ main :: IO ()
 main =
   -- mainWidget $ topWidget
   run 3911 $
-    mainWidgetWithHead headWidget
-    -- mainWidgetWithCss (bulmaCssBS <> "\n" <> fontAwesomeCssBs)
-      topWidget
+    mainWidgetWithHead'
+      (headWidget
+      , (\_ -> topWidget))
 

@@ -40,21 +40,23 @@ getValue = DOM.liftJSM $ do
 logout :: _ => m ()
 logout = saveValue "undefined"
 
-loginWidget :: MonadWidget t m => m (Event t (Maybe Text))
+loginWidget :: MonadWidget t m
+  => m (Event t (Maybe Text), Event t ())
 loginWidget = do
   v <- getValue
   liftIO $ putStrLn $ (show v :: Text)
   case v of
     (Just s) -> do
       pb <- getPostBuild
-      return $ (Just s) <$ pb
+      return $ (Just s <$ pb, never)
     Nothing -> do
       rec
         lEv <- showLogin incorrectEv
         (incorrectEv, sEv) <- checkLogin lEv
-      performEvent $ ffor sEv $ \(Just s) -> do
+      ev2 <- performEvent $ ffor sEv $ \(Just s) -> do
         saveValue s
-        return $ Just s
+        return $ (Just s)
+      return (ev2, never)
 
 showLogin :: MonadWidget t m
   => Event t ()

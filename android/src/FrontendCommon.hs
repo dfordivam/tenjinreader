@@ -712,20 +712,20 @@ widgetHoldWithRemoveAfterEvent wEv = do
 -- | A widget to construct a tabbed view that shows only one of its child widgets at a time.
 --   Creates a header bar containing a <ul> with one <li> per child; clicking a <li> displays
 --   the corresponding child and hides all others.
-tabDisplayUI :: forall m k t . (MonadFix m
+tabDisplayUI :: forall m k t b . (MonadFix m
                                , DomBuilder t m
                                , MonadHold t m
                                , PostBuild t m
                                , Ord k)
-  => (forall a . m a -> m a)       -- ^ Wrapper around the nav list
+  => (forall a . m a -> m (a, b))       -- ^ Wrapper around the nav list
   -> Text               -- ^ Class applied to top <div> element
   -> Text               -- ^ Class applied to currently active <div> element
   -> Text               -- ^ Class applied to currently non-active <div> element
   -> Map k (Text, m ()) -- ^ Map from (arbitrary) key to (tab label, child widget)
-  -> m ()
+  -> m (b)
 tabDisplayUI wrapNav ulClass activeClass nonActiveClass tabItems = do
   let t0 = listToMaybe $ Map.keys tabItems
-  rec currentTab :: Demux t (Maybe k) <- wrapNav $ elAttr "ul" ("class" =: ulClass) $ do
+  rec (currentTab :: Demux t (Maybe k), b) <- wrapNav $ elAttr "ul" ("class" =: ulClass) $ do
         tabClicksList :: [Event t k] <- Map.elems <$> imapM (\k (s,_) -> headerBarLink s k $ demuxed currentTab (Just k)) tabItems
         let eTabClicks :: Event t k = leftmost tabClicksList
         fmap demux $ holdDyn t0 $ fmap Just eTabClicks
@@ -734,7 +734,7 @@ tabDisplayUI wrapNav ulClass activeClass nonActiveClass tabItems = do
       let isSelected = demuxed currentTab $ Just k
           attrs = ffor isSelected $ \s -> if s then Map.empty else Map.singleton "style" "display:none;"
       elDynAttr "div" attrs w
-    return ()
+    return (b)
   where
     headerBarLink :: Text -> k -> Dynamic t Bool -> m (Event t k)
     headerBarLink x k isSelected = do

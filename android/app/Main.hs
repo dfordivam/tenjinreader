@@ -15,8 +15,6 @@ import Protolude
 
 main :: IO ()
 main =
-  -- mainWidget $ topWidget
-  -- run 3911 $
-    -- mainWidgetWithCss bulmaCssBS
-    mainWidgetWithHead headWidget
-      topWidget
+    mainWidgetWithHead'
+      headWidget
+      (\_ -> topWidget)

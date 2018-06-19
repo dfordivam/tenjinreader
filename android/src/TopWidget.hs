@@ -40,11 +40,15 @@ import GHCJS.DOM.Document
 import GHCJS.DOM.Element
 import qualified Language.Javascript.JSaddle.Types as X
 
-headWidget :: MonadWidget t m => m ()
-headWidget = do
-  elAttr "link"
-    (("rel" =: "stylesheet")
-      <> ("href" =: "https://bulma.io/css/bulma-docs.min.css?v=201806022344"))
+headWidget :: MonadWidget t m => Dynamic t Bool -> m ()
+headWidget isDark = do
+  let
+    f True = "https://jenil.github.io/bulmaswatch/darkly/bulmaswatch.min.css"
+    f _ = "https://jenil.github.io/bulmaswatch/flatly/bulmaswatch.min.css"
+     -- "https://jenil.github.io/bulmaswatch/spacelab/bulmaswatch.min.css"
+    attrDyn = ffor isDark $ \b -> (("rel" =: "stylesheet")
+      <> ("href" =: (f b)))
+  elDynAttr "link" attrDyn
     $ return ()
   elAttr "link"
     (("rel" =: "stylesheet")
@@ -55,53 +59,46 @@ headWidget = do
     <> ("content" =: "width=device-width, initial-scale=1.0"))
     $ return ()
 
-topWidget :: MonadWidget t m => m ()
+topWidget :: MonadWidget t m => m (Dynamic t Bool)
 topWidget = mdo
-  dEv <- widgetHold loginWidget $ ffor (switch (current dEv))
+  dEv <- widgetHold loginWidget $ ffor (switch (current $ fst <$> dEv))
     (\case
         Nothing -> loginWidget
         (Just s) -> afterLoginWidget s)
-  return ()
+  let e = switch (current $ snd <$> dEv)
+  toggle False e
 
-
-afterLoginWidget :: MonadWidget t m => Text -> m (Event t (Maybe Text))
+afterLoginWidget :: MonadWidget t m
+  => Text
+  -> m (Event t (Maybe Text), Event t ())
 afterLoginWidget secret = do
   let url = "ws://192.168.0.31:3000/websocket/app/" <> secret
-  (_,wsConn) <- withWSConnection
+  ((ev,d),wsConn) <- withWSConnection
     url
     never -- close event
     True -- reconnect
     widget
 
-  ev <- btn "" "logout"
-  performEvent $ ffor ev $ \_ -> logout >> return Nothing
+  ev2 <- performEvent $ ffor ev $ \_ -> logout
+    >> return (Nothing)
+  return (ev2,d)
 
-widget :: AppMonad t m => AppMonadT t m ()
-widget = divClass "" $ do
+widget :: AppMonad t m
+  => AppMonadT t m (Event t (), Event t ())
+widget = divClass "" $
   -- navigation with visibility control
   tabDisplayUI wrapper "navbar-start" "navbar-item" "navbar-item" $
     Map.fromList [
-#if !defined (ONLY_READER) && !defined (ONLY_SRS)
-        (2, ("Sentence", sentenceWidget))
+        (0, ("Reader", textReaderTop))
+      , (1, ("SRS", srsWidget))
+      , (2, ("Sentence", sentenceWidget))
       , (3, ("Vocab", vocabSearchWidget))
       , (4, ("Kanji", kanjiBrowseWidget))
-      , (5, ("Import", importWidgetTop))
-      ,
-#endif
-#if !defined (ONLY_SRS)
-        (0, ("Reader", textReaderTop))
-#endif
-#if !defined (ONLY_READER) && !defined (ONLY_SRS)
-      ,
-#endif
-#if !defined (ONLY_READER)
-        (1, ("SRS", srsWidget))
-#endif
       ]
 
 wrapper m = elClass "nav" "navbar" $ do
   clickEv <- divClass "navbar-brand" $ do
-    elAttr "a" (("class" =: "navbar-item")) $ text "てんじん"
+    elAttr "a" (("class" =: "navbar-item has-text-grey-lighter")) $ text "てんじん"
     (e,_) <- elAttr' "a" (("class" =: "navbar-burger")
                 <> ("aria-label" =: "menu")
                 <> ("role" =: "button")
@@ -116,48 +113,9 @@ wrapper m = elClass "nav" "navbar" $ do
                           then "is-active" else "")
   elDynClass "div" cl $ do
     a <- m
-    divClass "navbar-end" $ do
+    b <- divClass "navbar-end" $ do
       divClass "navbar-item" $ do
-        elAttr "a" (("class" =: "navbar-item")
-          <> ("href" =: "https://tenjinreader.com/auth/logout"))
-          $ text "Logout"
-        btn "" "Theme"
-          >>= toggleTheme
-    return a
-
--- readable_bootstrap_css = $(embedFile "src/readable_bootstrap.min.css")
--- custom_css = $(embedFile "src/custom.css")
--- slate_bootstrap_css = $(embedFile "src/slate_bootstrap.min.css")
-
-readable_bootstrap_css :: ByteString
-readable_bootstrap_css = ""
-
-custom_css :: ByteString
-custom_css = ""
-
-slate_bootstrap_css :: ByteString
-slate_bootstrap_css = ""
-
-toggleTheme :: AppMonad t m
-  => Event t ()
-  -> AppMonadT t m ()
-toggleTheme ev = do
-  rec
-    d <- holdDyn False (not <$> (tag (current d) ev))
-
-  let
-    toggleW b = X.liftJSM $ do
-      let
-        css :: ByteString
-        css = custom_css <> if b
-            then slate_bootstrap_css
-            else readable_bootstrap_css
-      doc <- currentDocumentUnchecked
-      headElement <- getHeadUnchecked doc
-      setInnerHTML headElement $
-        "<style>" <> T.unpack (decodeUtf8 css)
-          <> "</style>" --TODO: Fix this
-
-  void $ widgetHold (return ())
-    (toggleW <$> updated d)
-
+        ev <- btn "" "Logout"
+        ev2 <- btn "" "Theme"
+        return (ev, ev2)
+    return (a, b)
