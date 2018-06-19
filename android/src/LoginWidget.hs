@@ -51,23 +51,39 @@ loginWidget = do
       return $ (Just s <$ pb, never)
     Nothing -> do
       rec
-        lEv <- showLogin incorrectEv
+        (lEv, toggleEv) <- showLogin incorrectEv
         (incorrectEv, sEv) <- checkLogin lEv
       ev2 <- performEvent $ ffor sEv $ \(Just s) -> do
         saveValue s
         return $ (Just s)
-      return (ev2, never)
+      return (ev2, toggleEv)
 
 showLogin :: MonadWidget t m
   => Event t ()
-  -> m (Event t Text)
-showLogin incorrectEv = elClass "section" "hero is-light is-fullheight" $ do
-  divClass "hero-head" $
-    elClass "header" "navbar" $
-      divClass "container" $
-        divClass "navbar-brand" $
-          elClass "a" "navbar-item" $
-            elAttr "img" ("src" =: "https://tenjinreader.com/static/logo.png") $ return ()
+  -> m (Event t Text, Event t ())
+showLogin incorrectEv = elClass "section" "hero is-fullheight" $ do
+  toggleEv <- divClass "hero-head" $
+    elClass "header" "navbar" $ do
+      clickEv <- divClass "container" $
+        divClass "navbar-brand" $ do
+          elAttr "a" (("class" =: "navbar-item has-text-grey-lighter")) $ text "てんじん"
+
+          (e,_) <- elAttr' "a" (("class" =: "navbar-burger")
+                      <> ("aria-label" =: "menu")
+                      <> ("role" =: "button")
+                      <> ("aria-expanded" =: "false")) $ do
+            elAttr "span" (("aria-hidden" =: "true")) $ return ()
+            elAttr "span" (("aria-hidden" =: "true")) $ return ()
+            elAttr "span" (("aria-hidden" =: "true")) $ return ()
+          return $ domEvent Click e
+
+      openDyn <- toggle False clickEv
+      let cl = ffor openDyn (\b -> "navbar-menu " <> if b
+                              then "is-active" else "")
+      elDynClass "div" cl $ do
+        divClass "navbar-end" $ do
+          divClass "navbar-item" $
+            btn "" "Theme"
 
   ev <- divClass "hero-body" $
     divClass "container has-text-centered" $ do
@@ -88,7 +104,7 @@ showLogin incorrectEv = elClass "section" "hero is-light is-fullheight" $ do
   divClass "hero-foot" $
     divClass "container has-text-centered" $ do
       text "Please login at tenjinreader.com to obtain your secret key"
-  return ev
+  return (ev, toggleEv)
 
 checkLogin lEv = do
   let url s = "http://192.168.0.31:3000/websocket/app/" <> s
