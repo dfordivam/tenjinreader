@@ -324,30 +324,14 @@ editNonEmptyList ne conT renderFun = do
 
   return $ (NE.fromList . (fmap fst) . Map.elems) <$> d
 
-showWSProcessing :: (MonadHold t m, DomBuilder t m)
-  => Event t a
-  -> Event t b
-  -> m ()
-showWSProcessing evStart evFinish = do
-  let
-    showSpinner = elClass "a" "button is-loading" $ return ()
-      -- divClass "bounce1" $ return ()
-      -- divClass "bounce2" $ return ()
-      -- divClass "bounce3" $ return ()
-
-  let waitForStart = do
-        void $ widgetHold (showSpinner)
-          (return () <$ evFinish)
-  void $ widgetHold (return ())
-    (waitForStart <$ evStart)
-
 openSentenceWidget :: AppMonad t m
   => (Text, [Text])
-  -> Event t (Either VocabId SrsEntryId)
+  -> (Either VocabId SrsEntryId)
   -> AppMonadT t m ()
-openSentenceWidget header open = do
-  resp <- getWebSocketResponse $ GetVocabSentences <$> open
-  showWSProcessing open resp
+openSentenceWidget header i = do
+  rec
+    open <- btnLoading "btn-primary" "Sentences" resp
+    resp <- getWebSocketResponse $ GetVocabSentences i <$ open
 
   widgetHoldWithRemoveAfterEvent (sentenceWidgetView header <$> resp)
   return ()
@@ -440,11 +424,15 @@ renderOneSentence vIds (notFav, sId) (SentenceData sg njps) = divClass "box" $ d
   return $ NE.toList evs
 
 showPlainForm :: (_) => t AnnotatedPara -> m ()
-showPlainForm = mapM_ $ \s -> do
-  textInput $ def & textInputConfig_initialValue .~ (plainText s)
+showPlainForm s = void $
+  textArea $ def
+    & textAreaConfig_initialValue .~ (plainText s)
+    & textAreaConfig_attributes .~ taAttr
   where
-    plainText :: AnnotatedPara -> Text
-    plainText = mconcat . (map (f))
+    taAttr = constDyn $ (("style" =: "width: 100%;")
+                        <> ("rows" =: "4")
+                        <> ("class" =: "textarea"))
+    plainText = mconcat . (map (f)) . fold . (intersperse [Left "\n"]) . toList
     f (Left t) = t
     f (Right ((Vocab vs),_,_)) = mconcat $ map g vs
     g (Kana k) = k
@@ -591,10 +579,9 @@ showEntry surfaceMB (e, sId) = divClass "box" $ do
 
     divClass "column is-narrow" $ do
       addEditSrsEntryWidget (Right $ e ^. entryUniqueId) surfaceMB sId
-      openEv <- btn "btn-xs btn-primary" "Sentences"
       openSentenceWidget (surface, e ^.. entrySenses . traverse .
                            senseGlosses . traverse . glossDefinition)
-        ((Left $ e ^. entryUniqueId) <$ openEv)
+        (Left $ e ^. entryUniqueId)
 
 
 entryKanjiAndReading :: (DomBuilder t m) => Text -> Entry -> m ()

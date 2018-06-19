@@ -65,7 +65,6 @@ showStats
   -> AppMonadT t m (Event t SrsWidgetView)
 showStats refreshEv = do
   s <- getWebSocketResponse (GetSrsStats () <$ refreshEv)
-  showWSProcessing refreshEv s
   retEvDyn <- widgetHold (return never) (showStatsWidget <$> s)
   return $ switch (current retEvDyn)
 
@@ -222,7 +221,6 @@ browseSrsItemsWidget = do
 
       -- List and selection checkBox
       selList <- divClass "panel-body" $ do
-        showWSProcessing reqEv itemEv
         widgetHold (itemList never [])
           (itemList checkBoxSelAllEv <$> itemEv)
       -- Action buttons
@@ -277,7 +275,6 @@ bulkEditWidgetActionButtons filtOptsDyn revTypeDyn selList = divClass "field is-
         , ChangeSrsReviewData <$> tag (current dateDyn) reviewDateChange]
   doUpdate <- getWebSocketResponse $
     (attachWith ($) (current $ BulkEditSrsItems <$> revTypeDyn <*> selList) bEditOp)
-  showWSProcessing bEditOp doUpdate
   return $ fmapMaybe identity doUpdate
 
 datePicker
@@ -559,8 +556,7 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
     -- Footer
     (addEditEv, susBuryEv) <- divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ do
       divClass "" $ do
-        openEv <- btn "btn-primary" "Sentences"
-        openSentenceWidget (NE.head k, map (unMeaning) $ NE.toList (fst m)) (Right i <$ openEv)
+        openSentenceWidget (NE.head k, map (unMeaning) $ NE.toList (fst m)) (Right i)
 
       aeEv <- divClass "" $ do
         newSrsEntryEv <- editSrsItemWidget i

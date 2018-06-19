@@ -59,8 +59,6 @@ kanjiBrowseWidget = divClass "row" $ do
         maybeKanjiDetailsEv <- getWebSocketResponse
           ((flip GetKanjiDetails) def <$> kanjiSelectionEv)
 
-        showWSProcessing kanjiSelectionEv maybeKanjiDetailsEv
-
         -- NW 1.1.2
         closeEv <- handleVisibility KanjiDetailPageVis vis $ do
           l <- linkClass "Close Details Page" ""
@@ -80,7 +78,6 @@ kanjiBrowseWidget = divClass "row" $ do
                          \overflow-y: auto;")
     kanjiSelectionEv <-
       elAttr "div" listAttr $ do
-        showWSProcessing filterEv kanjiListEv
         kanjiListWidget kanjiListEv
 
   return ()
@@ -233,8 +230,7 @@ kanjiListWidget listEv = do
         -- NW 1.1
         simpleList dynV liWrap
     ev <- do
-      showWSProcessing ev lmEv
-      btn "btn-block btn-primary" "Load More"
+      btnLoading "btn-block btn-primary" "Load More" lmEv
   return $ switch . current $ leftmost <$> d
 
 kanjiDetailsWidget
@@ -294,8 +290,7 @@ vocabListWindow req listEv = do
       dyn $ (mapM (showEntry Nothing)) <$> lsDyn
       -- NW 1.2
     ev <- do
-      showWSProcessing ev lmEv
-      btn "btn-block btn-primary" "Load More"
+      btnLoading "btn-block btn-primary" "Load More" lmEv
   return ()
 
 vocabSearchWidget
@@ -329,5 +324,4 @@ vocabSearchWidget = divClass "" $ divClass "panel panel-default" $ do
     return (res,searchEv)
 
   divClass "panel-body" $ do
-    showWSProcessing searchEv vocabResEv
     vocabListWindow LoadMoreVocabSearchResult vocabResEv

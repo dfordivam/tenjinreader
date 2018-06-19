@@ -220,7 +220,9 @@ sentenceWidget = divClass "coloumns" $ do
       [ (1, ("Analyze", quickAnalyzeTop))
       , (2, ("Random", randomSentenceTop))]
 
-wrapperSW m = divClass "tabs is-centered" $ m
+wrapperSW m = do
+  a <- divClass "tabs is-centered" $ m
+  return (a,())
 
 quickAnalyzeTop
   :: AppMonad t m
@@ -229,22 +231,28 @@ quickAnalyzeTop = do
   let
     taAttr = constDyn $ (("style" =: "width: 100%;")
                         <> ("rows" =: "4")
-                        <> ("class" =: "form-control")
+                        <> ("class" =: "textarea")
                         <> ("placeholder" =: "文章"))
-  ta <- divClass "col-md-6" $ do
+  ta <- divClass "" $ do
     ev <- btn "btn-xs btn-default" "Clear"
     textArea $ def
       & textAreaConfig_attributes .~ taAttr
       & textAreaConfig_setValue .~ ("" <$ ev)
   resp <- getWebSocketResponse $ QuickAnalyzeText <$> (_textArea_input ta)
 
-  v <- divClass "col-md-6" $ do
+  v <- divClass "" $ do
     (_, rsDyn) <- readerSettingsControls def False
     let renderF = renderOnePara (constDyn ([],[]))
           (_rubySize <$> rsDyn)
     divWrap rsDyn (constDyn False) $ do
       widgetHold (return [])
         ((\r -> mapM renderF $ map snd r) <$> resp)
+
+  do
+    p <- holdDyn [] $ (map snd) <$> resp
+    bEv <- icon "fa-clipboard"
+    widgetHold (return ())
+      ((\p -> divClass "" $ showPlainForm p) <$> tagDyn p bEv)
 
   elAttr "div" ("style" =: "height: 20vh;") $ return ()
   let vIdEv = (switch . current) $ leftmost <$> v
