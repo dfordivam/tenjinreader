@@ -149,7 +149,7 @@ divWrap rs fullscreenDyn w = do
         -- <> "height: " <> tshow h <> "px;"
         <> (if fs then "position: fixed;" else "")
         <> "display: block;" <> "padding: 2vw;"))
-           <> ("class" =: "notification"))
+           <> ("class" =: "box"))
       <$> (_fontSize <$> rs) <*> (_lineHeight <$> rs)
       <*> (_numOfLines <$> rs) <*> (fullscreenDyn)
 
@@ -208,7 +208,7 @@ verticalReader rs (docId, _, startParaMaybe, endParaNum, annText) = do
 #endif
 
   let
-    divAttr' = (\rs1 fs -> ("class" =: "notification") <> ("style" =:
+    divAttr' = (\rs1 fs -> ("class" =: "box") <> ("style" =:
       ("font-size: " <> tshow (_fontSize rs1) <>"%;"
         <> "line-height: " <> tshow (_lineHeight rs1) <> "%;"
         <> "height: " <> (if fs

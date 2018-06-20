@@ -20,7 +20,7 @@ data VisibleWidget = KanjiFilterVis | KanjiDetailPageVis
 kanjiBrowseWidget
   :: AppMonad t m
   => AppMonadT t m ()
-kanjiBrowseWidget = divClass "row" $ do
+kanjiBrowseWidget = divClass "" $ do
 
   ev <- getPostBuild
 
@@ -45,7 +45,7 @@ kanjiBrowseWidget = divClass "row" $ do
     filterDyn <- holdDyn def filterEv
 
     -- NW 1.1
-    filterEv <- divClass "col-sm-8" $ do
+    filterEv <- divClass "section" $ do
       rec
         let visEv = leftmost [KanjiFilterVis <$ closeEv
                              , KanjiDetailPageVis <$ kanjiDetailsEv]
@@ -53,16 +53,18 @@ kanjiBrowseWidget = divClass "row" $ do
 
         -- Show either the filter options or the kanji details page
         -- NW 1.1.1
-        filterEv <- handleVisibility KanjiFilterVis vis $
-          kanjiFilterWidget validRadicals
+        (filterEv, kanjiSelectionEv) <- handleVisibility KanjiFilterVis vis $ do
+          e1 <- kanjiFilterWidget validRadicals
+          e2 <- kanjiListWidget kanjiListEv
+          return (e1,e2)
 
         maybeKanjiDetailsEv <- getWebSocketResponse
           ((flip GetKanjiDetails) def <$> kanjiSelectionEv)
 
         -- NW 1.1.2
         closeEv <- handleVisibility KanjiDetailPageVis vis $ do
-          l <- linkClass "Close Details Page" ""
-          return (_link_clicked l)
+          l <- btn "" "Close Details Page"
+          return (l)
 
         let kanjiDetailsEv = fmapMaybe identity maybeKanjiDetailsEv
         -- NW 1.1.3
@@ -70,15 +72,6 @@ kanjiBrowseWidget = divClass "row" $ do
           kanjiDetailsWidget kanjiDetailsEv
 
       return filterEv
-
-    -- NW 1.2
-
-    let listAttr = ("class" =: "col-sm-4")
-          <> ("style" =: "height: 1000px;\
-                         \overflow-y: auto;")
-    kanjiSelectionEv <-
-      elAttr "div" listAttr $ do
-        kanjiListWidget kanjiListEv
 
   return ()
 -- Widget to show kanjifilter
@@ -93,7 +86,7 @@ kanjiFilterWidget validRadicalsEv = do
   let
     taAttr = constDyn $ (("style" =: "width: 100%;")
                         <> ("rows" =: "4")
-                        <> ("class" =: "form-control")
+                        <> ("class" =: "textarea")
                         <> ("placeholder" =: "Enter text to search all Kanjis in it"))
   sentenceTextArea <- divClass "" $ textArea $ def
     & textAreaConfig_attributes .~ taAttr
@@ -111,7 +104,7 @@ kanjiFilterWidget validRadicalsEv = do
   --   return (t,d,m)
   let
     tiAttr = constDyn $ (("style" =: "width: 100%;")
-                        <> ("class" =: "form-control")
+                        <> ("class" =: "input")
                         <> ("placeholder" =: "Search by meaning or reading"))
   t <- textInput $ def
     & textInputConfig_attributes .~ tiAttr
@@ -142,7 +135,7 @@ radicalMatrix
 radicalMatrix evValid = do
 
   --- XXX Fix why delay here?
-  evDelayed <- delay 1 evValid
+  evDelayed <- delay 0.1 evValid
   validRadicals <- holdDyn (Map.keysSet radicalTable) (Set.fromList <$> evDelayed)
 
   rec
@@ -152,9 +145,14 @@ radicalMatrix evValid = do
     let
       disableAll = constDyn False
       renderMatrix = do
-        divClass "row well-lg hidden-xs" $ do
-          r <- btn "btn-block btn-default btn-xs" "Reset"
-          ev1 <- mapM showRadical (Map.toList radicalTable)
+        divClass "" $ do
+          (r,d) <- divClass "field is-grouped" $ do
+            r <- btn "" "Reset"
+            d <- toggle False
+              =<< (divClass "" $ btn "" "Show/Hide Radicals")
+            return (r,d)
+          ev1 <- handleVisibility True d $
+            mapM showRadical (Map.toList radicalTable)
           return (ev1, r)
 
       showRadical :: (RadicalId, RadicalDetails) -> m (Event t RadicalId)
@@ -165,14 +163,14 @@ radicalMatrix evValid = do
               -- pure False
               Set.member i <$> selectedRadicals
             -- (Valid, Selected)
-            cl (_,True) = " btn-success "
-            cl (True, False) = " btn-info "
-            cl (False,False) = " btn-info disabled "
-            attr = (\c -> ("class" =: (c <> "btn btn-xs" )))
+            cl (_,True) = (" is-success ", True)
+            cl (True, False) = ("", True)
+            cl (False,False) = (" is-warning ", False)
+            attr = (\(c,b) -> ("class" =: (c <> "button is-small" )) <> (if b then (Map.empty) else ("disabled" =: "")))
                      <$> (cl <$> zipDyn valid sel)
 
-            spanAttr = ("class" =: "badge")
-              <> ("style" =: "color: black;")
+            spanAttr = ("class" =: "is-size-6")
+              -- <> ("style" =: "color: black;")
 
         (e,_) <- elDynAttr' "button" attr $
           elAttr "span" spanAttr $ text r
@@ -245,30 +243,33 @@ kanjiDetailsWidget ev = do
 kanjiDetailWindow :: AppMonad t m
   => (KanjiDetails, VocabSrsState, [Text])
   -> AppMonadT t m ()
-kanjiDetailWindow (k,vSt,rads) = divClass "well" $ do
+kanjiDetailWindow (k,vSt,rads) = divClass "box" $ do
   let
     maybeLabel _ Nothing = return ()
     maybeLabel l (Just v) = elClass "span" "label label-default" $
       text l >> text ": " >> text (tshow v)
 
-  divClass "row" $ do
-    divClass "col-sm-4" $ el "h1" $ elClass "span" "label label-default" $
-      text (unKanji $ k ^. kanjiCharacter)
-    divClass "col-sm-8" $ do
-      elClass "span" "label label-default" $ do
+  divClass "tile is-ancestor" $ do
+    divClass "tile level is-mobile" $ do
+      divClass "level-left" $ divClass "level-item" $
+        elClass "span" "tag is-size-3 is-primary" $
+          text (unKanji $ k ^. kanjiCharacter)
+
+      divClass "level-right" $ divClass "level-item" $ elClass "span" "" $ do
         text "Radicals: "
-        text $ T.intercalate " " $ rads
+        forM rads $ \t -> elClass "span" "tag is-medium is-info" $ text t
 
-      addEditSrsEntryWidget (Left $ _kanjiId k) Nothing vSt
+    divClass "tile" $ do
+      divClass "tile is-size-5" $
+        text $ T.intercalate ", " $
+          map capitalize (map unMeaning $ k ^. kanjiMeanings)
 
-      divClass "" $ do
+      divClass "tile" $ do
         maybeLabel "Rank" (unRank <$> k ^. kanjiMostUsedRank)
         maybeLabel "JLPT" (unJlptLevel <$> k ^. kanjiJlptLevel)
         maybeLabel "WaniKani Lvl" (unWkLevel <$> k ^. kanjiWkLevel)
 
-      divClass "" $
-        text $ T.intercalate ", " $
-          map capitalize (map unMeaning $ k ^. kanjiMeanings)
+      addEditSrsEntryWidget (Left $ _kanjiId k) Nothing vSt
 
 vocabListWindow
   :: (AppMonad t m

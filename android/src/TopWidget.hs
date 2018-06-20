@@ -18,7 +18,6 @@ import FrontendCommon
 import SrsWidget
 import KanjiBrowser
 import TextReader
-import ImportWidget
 import LoginWidget
 
 -- from package common

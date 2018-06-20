@@ -30,11 +30,8 @@ library
                        FrontendCommon
                        TextReader
                        ReadingPane
-                       ImportWidget
                        TopWidget
                        LoginWidget
-                       -- BulmaMinCss
-                       -- FontAwesomCss
 
   build-depends:       base >=4.9 && <4.11
                      , common
