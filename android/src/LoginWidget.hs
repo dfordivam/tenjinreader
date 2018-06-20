@@ -107,7 +107,7 @@ showLogin incorrectEv = elClass "section" "hero is-fullheight" $ do
   return (ev, toggleEv)
 
 checkLogin lEv = do
-  let url s = "http://192.168.0.31:3000/websocket/app/" <> s
+  let url s = "http://192.168.2.60:3000/websocket/app/" <> s
   r <- getAndDecode (url <$> lEv)
   let incorrectEv = fforMaybe r (\case
              (Just True) -> Nothing

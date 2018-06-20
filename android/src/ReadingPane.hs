@@ -424,7 +424,7 @@ verticalReader rs (docId, _, startParaMaybe, endParaNum, annText) = do
               (return never <$ stopTicks)
             tickW = do
               ev <- getPostBuild
-              de <- delay 1.5 $ leftmost [ev, () <$ evVisible]
+              de <- delay 0.5 $ leftmost [ev, () <$ evVisible]
               return $ de
         t <- widgetHold init
           (init <$ startTicksAgain)

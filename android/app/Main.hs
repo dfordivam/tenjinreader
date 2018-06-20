@@ -16,5 +16,5 @@ import Protolude
 main :: IO ()
 main =
     mainWidgetWithHead'
-      headWidget
-      (\_ -> topWidget)
+      (headWidget
+      , (\_ -> topWidget))

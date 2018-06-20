@@ -256,7 +256,6 @@ kanjiDetailWindow (k,vSt,rads) = divClass "box" $ do
           text (unKanji $ k ^. kanjiCharacter)
 
       divClass "level-right" $ divClass "level-item" $ elClass "span" "" $ do
-        text "Radicals: "
         forM rads $ \t -> elClass "span" "tag is-medium is-info" $ text t
 
     divClass "tile" $ do

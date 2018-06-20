@@ -71,7 +71,7 @@ afterLoginWidget :: MonadWidget t m
   => Text
   -> m (Event t (Maybe Text), Event t ())
 afterLoginWidget secret = do
-  let url = "ws://192.168.0.31:3000/websocket/app/" <> secret
+  let url = "ws://192.168.2.60:3000/websocket/app/" <> secret
   ((ev,d),wsConn) <- withWSConnection
     url
     never -- close event
