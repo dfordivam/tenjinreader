@@ -11,8 +11,11 @@
 
   android.frontend-android = {
     executableName = "frontend-android";
-    applicationId = "org.example.frontend";
-    displayName = "Example Android App";
+    applicationId = "com.blueimpact.tenjinreader";
+    displayName = "Tenjin Reader";
+    version = { code = "1"; name = "1.0"; };
+    assets = ./android/assets;
+    resources = ./android/res;
   };
 
   shells = {

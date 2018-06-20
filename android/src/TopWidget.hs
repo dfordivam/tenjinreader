@@ -42,16 +42,24 @@ import qualified Language.Javascript.JSaddle.Types as X
 headWidget :: MonadWidget t m => Dynamic t Bool -> m ()
 headWidget isDark = do
   let
-    f True = "https://jenil.github.io/bulmaswatch/darkly/bulmaswatch.min.css"
-    f _ = "https://jenil.github.io/bulmaswatch/flatly/bulmaswatch.min.css"
+    -- f True = "https://jenil.github.io/bulmaswatch/darkly/bulmaswatch.min.css"
+    -- f _ = "https://jenil.github.io/bulmaswatch/flatly/bulmaswatch.min.css"
      -- "https://jenil.github.io/bulmaswatch/spacelab/bulmaswatch.min.css"
+    f True = "/css/darkly.css"
+    f _ = "/css/flatly.css"
     attrDyn = ffor isDark $ \b -> (("rel" =: "stylesheet")
       <> ("href" =: (f b)))
   elDynAttr "link" attrDyn
     $ return ()
   elAttr "link"
     (("rel" =: "stylesheet")
-      <> ("href" =: "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"))
+      -- <> ("href" =: "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"))
+      <> ("href" =: "/css/font-awesome.min.css"))
+    $ return ()
+
+  elAttr "script"
+    (("language" =: "javascript")
+      <> ("src" =: "/js/wanakana.js"))
     $ return ()
 
   elAttr "meta" (("name" =: "viewport")
