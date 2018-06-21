@@ -21,10 +21,8 @@ import Data.List.NonEmpty (NonEmpty)
 import System.Random
 import qualified GHCJS.DOM.HTMLElement as DOM
 
-#if defined (ghcjs_HOST_OS)
 import Language.Javascript.JSaddle.Object
-import Language.Javascript.JSaddle.Types
-#endif
+import Language.Javascript.JSaddle.Types (liftJSM)
 
 data SrsWidgetView =
   ShowStatsWindow | ShowReviewWindow ReviewType | ShowBrowseSrsItemsWindow
@@ -452,23 +450,19 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
       elAttr "span" (colour "red") $
         dynText $ (tshow . _srsReviewStats_incorrectCount) <$> statsDyn
 
-  (fullASR, closeEv) <- divClass "panel-heading notification" $ do
-    cEv <- do
-      (e,_) <- elClass' "button" "delete is-medium" $ text "close"
-      return (domEvent Click e)
-#if defined (ENABLE_SPEECH_RECOG)
-    fullASR <- do
-      cb <- checkbox False $ def & checkboxConfig_setValue .~ (False <$ cEv)
-      text "Auto ASR"
+  (autoFocus, closeEv) <- divClass "panel-heading notification" $ do
+    autoFocus <- do
+      cb <- checkbox False $ def
+      text "Auto Focus"
       return (value cb)
-#else
-    let fullASR = constDyn False
-#endif
 
     divClass "has-text-centered" $ do
       elClass "span" "" $
         showStatsW
-    return $ (fullASR, cEv)
+    cEv <- do
+      (e,_) <- elClass' "button" "delete is-medium" $ text "close"
+      return (domEvent Click e)
+    return $ (autoFocus, cEv)
 
   let kanjiRowAttr = ("class" =: "container")
          <> ("style" =: "height: 15em; display: table;")
@@ -486,11 +480,10 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
 
   dr <- dyn $ ffor dyn2 $ \case
     (Nothing) -> return never
-    (Just v) -> inputFieldWidget doRecog closeEv fullASR v
+    (Just v) -> inputFieldWidget doRecog closeEv autoFocus v
 
   evReview <- switchPromptly never dr
   return (closeEv, evReview)
-    --leftmost [evB, dr, drSpeech]
 
 inputFieldWidget
   :: (AppMonad t m, SrsReviewType rt)
@@ -499,7 +492,7 @@ inputFieldWidget
   -> Dynamic t Bool
   -> (ReviewItem, ActualReviewType rt)
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
-inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
+inputFieldWidget doRecog closeEv autoFocus (ri@(ReviewItem i k m _), rt) = do
   let
     tiId = getInputFieldId rt
     style = "text-align: center; width: 100%;" <> color
@@ -540,12 +533,13 @@ inputFieldWidget doRecog closeEv fullASR (ri@(ReviewItem i k m _), rt) = do
   -- Need dalay, otherwise focus doesn't work
   evPB <- delay 0.1 =<< getPostBuild
 
-  let focusAndBind e = do
-        DOM.focus e
+  let focusAndBind e b = do
+        when b $ DOM.focus e
         let ans = getAnswer ri rt
         when (isRight ans) bindWanaKana
 
-  _ <- widgetHold (return ()) (focusAndBind (_textInput_element inpField) <$ evPB)
+  _ <- widgetHold (return ())
+    (focusAndBind (_textInput_element inpField) <$> tagDyn autoFocus evPB)
 
   let resultDisAttr = ("class" =: "")
           <> ("style" =: "height: 6em; overflow-y: auto")
@@ -631,210 +625,16 @@ checkAnswer (Left m) t = elem (T.toCaseFold $ T.strip t) (answers <> woExpl <> w
 checkAnswer (Right r) t = elem t answers
   where answers = map unReading r
 
-checkSpeechRecogResult
-  :: (AppMonad t m, SrsReviewType rt)
-  => (ReviewItem, ActualReviewType rt)
-  -> Event t Result
-  -> AppMonadT t m (Event t Bool)
-checkSpeechRecogResult (ri,rt) resEv = do
-  let
-    checkF res = do
-      ev <- getPostBuild
-      let
-        r1 = any ((\r -> elem r (NE.toList $ ri ^. reviewItemField))
-                  . snd) (concat res)
-        r2 = any ((checkAnswer n) . snd) (concat res)
-        n = getAnswer ri rt
-        readings = case n of
-          (Left _) -> []
-          (Right r) -> NE.toList r
-      if r1 || r2
-        then return (True <$ ev)
-        else do
-          respEv <- getWebSocketResponse $ CheckAnswer readings res <$ ev
-          return ((== AnswerCorrect) <$> respEv)
-
-  evDyn <- widgetHold (return never)
-    (checkF <$> resEv)
-  return $ switch . current $ evDyn
-
-
 data AnswerBoxState = ReviewStart | ShowAnswer | NextReview
   deriving (Eq)
-
--- Ord is used in getStChangeEv
-data SpeechRecogWidgetState
-  = AnswerSuccessful
-  | AnswerWrong
-  | WaitingForServerResponse
-  | WaitingForRecogResponse
-  | SpeechRecogStarted
-  | RecogStop
-  | RecogError
-  | NewReviewStart
-  deriving (Eq, Ord, Show)
-
-btnText :: SpeechRecogWidgetState
-  -> Text
-btnText NewReviewStart = "Recog Paused"
-btnText SpeechRecogStarted = "Ready"
-btnText WaitingForRecogResponse = "Listening"
-btnText WaitingForServerResponse = "Processing"
-btnText AnswerSuccessful = "Correct!"
-btnText AnswerWrong = "Not Correct, Please try again"
-btnText RecogError = "Error, Please try again"
-btnText RecogStop = "Please try again"
-
-
---
-speechRecogWidget :: forall t m rt . (AppMonad t m, SrsReviewType rt)
-  => (Event t () -> Event t () -> m (Event t Result, Event t (), Event t (), Event t ()))
-  -> Event t ()
-  -> Dynamic t Bool
-  -> (ReviewItem, ActualReviewType rt)
-  -> AppMonadT t m (Event t Bool, Event t (ReviewStateEvent rt))
-speechRecogWidget doRecog stopRecogEv fullASR (ri@(ReviewItem i _ _ _),rt) = do
-
-  initVal <- sample (current fullASR)
-  rec
-    fullAsrActive <- holdDyn initVal (leftmost [(False <$ stopRecogEv)
-                                   , updated fullASR
-                                   , True <$ reStartRecogEv])
-    reStartRecogEv <- switchPromptly never
-      =<< (dyn $ ffor ((,) <$> fullAsrActive <*> fullASR) $ \case
-        (False, True) ->  btn "btn-primary" "Resume Recog"
-        _ -> return never)
-
-  initEv <- switchPromptly never
-    =<< (dyn $ ffor fullASR $ \b -> if b
-      then delay 0.5 =<< getPostBuild
-      else btn "btn-sm btn-primary" "Start Recog")
-
-  rec
-    let
-      startRecogEv = leftmost [initEv, () <$ resultWrongEv
-                              , () <$ shimesuEv, () <$ retryEv
-                              , reStartRecogEv
-                              -- , () <$ filterOnEq (updated fullASR) True
-                              ]
-      (shimesuEv, shiruEv, tsugiEv, answerEv) =
-        checkForCommand $
-          traceEventWith (T.unpack . mconcat . (intersperse ", ") .
-                          (fmap snd) . concat) $
-          resultEv
-
-    (resultCorrectEv, resultWrongEv) <- do
-      bEv <- checkSpeechRecogResult (ri,rt) answerEv
-      return $ (True <$ filterOnEq bEv True, filterOnEq bEv False)
-
-
-    (resultEv, recogStartEv, recogEndEv, stopEv) <- lift $ doRecog stopRecogEv startRecogEv
-
-    retryEv <- switchPromptly never =<< (dyn $ ffor fullAsrActive $ \b -> if not b
-      then return never
-      else do
-        -- This delay is required to avoid repetitive restarts
-        recogEndEvs <- batchOccurrences 4 $
-          mergeList [ WaitingForServerResponse <$ resultEv
-                   , AnswerSuccessful <$ resultCorrectEv
-                   , AnswerWrong <$ resultWrongEv
-                   , RecogError <$ stopEv
-                   , RecogStop <$ recogEndEv
-                   ]
-        let recogChangeEv = getStChangeEv recogEndEvs
-        return $ leftmost [(filterOnEq recogChangeEv RecogStop)
-                          , filterOnEq recogChangeEv RecogError])
-
-    -- btnClick <- (dyn $ (\(c,t) -> btn c t) <$> (btnText <$> stDyn))
-    --         >>= switchPromptly never
-
-  allEvs <- batchOccurrences 2 $
-    mergeList [SpeechRecogStarted <$ startRecogEv
-             , WaitingForRecogResponse <$ recogStartEv
-             , WaitingForServerResponse <$ resultEv
-             , AnswerSuccessful <$ resultCorrectEv
-             , AnswerWrong <$ resultWrongEv
-             , RecogError <$ stopEv
-             , RecogStop <$ recogEndEv]
-
-  do
-    let stChangeEv = getStChangeEv allEvs
-    stDyn <- holdDyn NewReviewStart stChangeEv
-    el "h4" $ elClass "span" "label label-primary" $ dynText (btnText <$> stDyn)
-
-  let
-    -- shimesuEv -> Mark incorrect
-    -- shiruEv -> Mark correct
-
-    answerCorrectEv = leftmost [True <$ shiruEv, resultCorrectEv]
-
-
-  autoNextEv <- switchPromptly never =<< (dyn $ ffor fullAsrActive $ \b -> if b
-    then delay 3 (() <$ answerCorrectEv)
-    else return never)
-
-  answeredCorrect <- holdDyn False answerCorrectEv
-
-  let
-    btnClickDoReview = never -- TODO
-    showResEv  = leftmost [answerCorrectEv, False <$ shimesuEv]
-  doReviewEv <- tagWithTime $ (\r -> (i,rt,r)) <$> (tag (current answeredCorrect)
-      $ leftmost [btnClickDoReview, autoNextEv, tsugiEv])
-
-  return (showResEv, doReviewEv)
-
-checkForCommand
-  :: (Reflex t)
-  => Event t Result
-  -> (Event t ()
-     , Event t ()
-     , Event t ()
-     , Event t Result)
-checkForCommand r = (shimesuEv, shiruEv, tsugiEv, answerEv)
-  where
-    shimesuEv = leftmost [fmapMaybe identity (f shimesuOpts)
-                       , fmapMaybe identity (f shiranaiOpts)]
-    shiruEv = fmapMaybe identity (f shiruOpts)
-    tsugiEv = fmapMaybe identity (f tsugiOpts)
-    answerEv = difference r (leftmost [shimesuEv, shiruEv, tsugiEv])
-
-    f opts = ffor r $ \res ->
-      if (any ((\x -> elem x opts) . snd) (concat res))
-        then Just ()
-        else Nothing
-
-    shiruOpts = ["わかる", "分かる", "わかります", "分かります"
-                 , "知る", "しる", "しります", "知ります"
-      , "知っています", "知っている", "知ってる"
-      , "しっています", "しっている", "しってる"]
-    shiranaiOpts =
-      ["わからない", "分からない", "わかりません", "分かりません"
-      , "知らない", "しらない", "しりません", "知りません"]
-    shimesuOpts = ["しめす", "しめします", "示す", "示します"]
-    tsugiOpts = ["つぎ", "次", "Next", "NEXT", "ネクスト"]
-
-getStChangeEv
-  :: (Reflex t)
-  => Event t (Seq (NonEmpty SpeechRecogWidgetState))
-  -> Event t SpeechRecogWidgetState
-getStChangeEv = fmap (\s -> minimum $ fold $ map NE.toList s)
-
 initWanakaBindFn :: (MonadWidget t m) => m ()
 initWanakaBindFn =
-#if defined (ghcjs_HOST_OS)
   void $ liftJSM $ eval ("globalFunc_wanakanaBind = function () {"
                 <> "var input1 = document.getElementById('JP-TextInput-IME-Input1');"
                 <> "var input2 = document.getElementById('JP-TextInput-IME-Input2');"
                 <> "wanakana.bind(input1); wanakana.bind(input2);}" :: Text)
-#else
-  return ()
-#endif
 
 bindWanaKana :: (MonadWidget t m) => m ()
 bindWanaKana =
-#if defined (ghcjs_HOST_OS)
         void $ liftJSM $
           jsg0 ("globalFunc_wanakanaBind" :: Text)
-#else
-  return ()
-#endif

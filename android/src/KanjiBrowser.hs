@@ -203,7 +203,7 @@ kanjiListWidget listEv = do
             el "td" $ text $ (unKanji k)
             el "td" $ text $ maybe ""
               (\r1 -> show r1) (unRank <$> r)
-            el "td" $ text $ T.intercalate "," $ map unMeaning m
+            el "td" $ text $ T.intercalate ", " $ map unMeaning m
           return (i <$ domEvent Click e)
 
     liWrap i = do
@@ -298,7 +298,7 @@ vocabSearchWidget
   => AppMonadT t m ()
 vocabSearchWidget = divClass "" $ divClass "" $ do
 
-  vocabResEv <- divClass "" $ divClass "field has-addons" $ do
+  vocabResEv <- divClass "" $ divClass "field" $ do
     let
       tiAttr = constDyn $ (("style" =: "")
                           <> ("class" =: "input")

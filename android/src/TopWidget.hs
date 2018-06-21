@@ -49,14 +49,15 @@ headWidget isDark = do
     f _ = "/css/flatly.css"
     attrDyn = ffor isDark $ \b -> (("rel" =: "stylesheet")
       <> ("href" =: (f b)))
-  elDynAttr "link" attrDyn
-    $ return ()
+
   elAttr "link"
     (("rel" =: "stylesheet")
       -- <> ("href" =: "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"))
       <> ("href" =: "/css/font-awesome.min.css"))
     $ return ()
 
+  elDynAttr "link" attrDyn
+    $ return ()
   elAttr "script"
     (("language" =: "javascript")
       <> ("src" =: "/js/wanakana.js"))
@@ -64,6 +65,9 @@ headWidget isDark = do
 
   elAttr "meta" (("name" =: "viewport")
     <> ("content" =: "width=device-width, initial-scale=1.0"))
+    $ return ()
+
+  elAttr "meta" (("charset" =: "UTF-8"))
     $ return ()
 
 topWidget :: MonadWidget t m => m (Dynamic t Bool)
@@ -103,7 +107,7 @@ widget = divClass "" $
       , (4, ("Kanji", kanjiBrowseWidget))
       ]
 
-wrapper m = elClass "nav" "navbar" $ do
+wrapper m = elClass "nav" "navbar is-dark" $ do
   clickEv <- divClass "navbar-brand" $ do
     elAttr "a" (("class" =: "navbar-item has-text-grey-lighter")) $ text "てんじん"
     (e,_) <- elAttr' "a" (("class" =: "navbar-burger")
