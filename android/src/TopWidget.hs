@@ -52,8 +52,8 @@ headWidget isDark = do
 
   elAttr "link"
     (("rel" =: "stylesheet")
-      -- <> ("href" =: "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"))
-      <> ("href" =: "/css/font-awesome.min.css"))
+      <> ("href" =: "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"))
+      -- <> ("href" =: "/css/font-awesome.min.css"))
     $ return ()
 
   elDynAttr "link" attrDyn
