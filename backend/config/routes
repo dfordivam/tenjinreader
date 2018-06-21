@@ -6,6 +6,8 @@
 
 / HomeR GET
 
+/newkey NewKeyR GET
+
 /profile ProfileR GET
 
 /websocket WebSocketHandlerR GET

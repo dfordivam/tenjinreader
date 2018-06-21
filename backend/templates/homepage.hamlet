@@ -39,8 +39,14 @@
           For all browsers 
           <a href="static/app/readeronly/index.html">Reader only</a>
       <div .row>
-        <div .col-md-6>
-          Your secret key <strong>#{maybe "" id $ userSecretKey user}</strong>
+        $maybe secretKey <- userSecretKey user
+          <div .col-md-6>
+            Your secret key for android app: <strong>#{maybe "" id $ userSecretKey user}</strong>
+          <div .col-md-6>
+            <a href=@{NewKeyR}>Create new Secret Key.
+        $nothing
+          <div .col-md-6>
+            <a href=@{NewKeyR}>Create Secret Key for android app.
 
   <div .row .well>
     <h3>Reader

@@ -52,7 +52,6 @@ library
                      , array
                      , hs-nlp-jp-utils
                      , ghcjs-dom
-                     , jsaddle-warp
 
 
 executable frontend
@@ -82,7 +81,6 @@ executable frontend
                      , array
                      , hs-nlp-jp-utils
                      , ghcjs-dom
-                     , jsaddle-warp
   -- Fix this
   if impl(ghcjs)
      build-depends: ghcjs-base
@@ -125,7 +123,6 @@ executable frontend-recog
                      , array
                      , hs-nlp-jp-utils
                      , ghcjs-dom
-                     , jsaddle-warp
   -- Fix this
   if impl(ghcjs)
      build-depends: ghcjs-base
@@ -167,7 +164,6 @@ executable frontend-reader-only
                      , array
                      , hs-nlp-jp-utils
                      , ghcjs-dom
-                     , jsaddle-warp
 
   if impl(ghcjs)
      build-depends: ghcjs-base
@@ -209,7 +205,6 @@ executable frontend-srs-only
                      , array
                      , hs-nlp-jp-utils
                      , ghcjs-dom
-                     , jsaddle-warp
 
   if impl(ghcjs)
      build-depends: ghcjs-base
@@ -254,7 +249,6 @@ executable frontend-srs-only-recog
                      , array
                      , hs-nlp-jp-utils
                      , ghcjs-dom
-                     , jsaddle-warp
 
   if impl(ghcjs)
      build-depends: ghcjs-base

@@ -13,3 +13,10 @@ getHomeR = do
   -- let muser = Just (undefined, undefined)
   defaultLayout $ do
     $(widgetFile "homepage")
+
+getNewKeyR :: Handler Html
+getNewKeyR = do
+  uId <- requireAuthId
+  s <- liftIO $ makeRandomKey
+  runDB $ update uId [UserSecretKey =. Just s]
+  redirect HomeR

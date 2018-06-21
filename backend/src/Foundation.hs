@@ -181,6 +181,7 @@ instance Yesod App where
 
     isAuthorized (AppWebSocketHandlerR _) _ = return Authorized
     isAuthorized ProfileR _ = isAuthenticated
+    isAuthorized NewKeyR _ = isAuthenticated
     isAuthorized WebSocketHandlerR _ =
       -- return Authorized
       isAuthenticated
@@ -249,8 +250,7 @@ instance YesodAuth App where
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
             Nothing -> do
-              v <- liftIO $ replicateM 30 randomIO
-              let s = TE.decodeUtf8 $ B64.encode $ BS.pack v
+              s <- liftIO $ makeRandomKey
               uid <- insert User
                 { userIdent = userId
                 , userService = (credsPlugin creds)
@@ -305,7 +305,11 @@ fixDb = runDB $ do
   forM_ users $ \(Entity k u) -> do
     case (userSecretKey u) of
       Nothing -> do
-              v <- liftIO $ replicateM 30 randomIO
-              let s = TE.decodeUtf8 $ B64.encode $ BS.pack v
+              s <- liftIO $ makeRandomKey
               update k [UserSecretKey =. Just s]
       _ -> return ()
+
+makeRandomKey = do
+  v <- replicateM 30 randomIO
+  let s = TE.decodeUtf8 $ B64.encode $ BS.pack v
+  return s
