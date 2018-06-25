@@ -86,8 +86,8 @@ doDeploy bePath deployDir = do
     beHash = getHashFromPath bePath
     targetDir = destHost <> ":~/" <> beHash
 
-  run_ "nix-copy-closure" ["--sign", "--include-outputs", destHost, toTextArg bePath]
   run_ "rsync" ["-az", toTextArg deployDir, targetDir]
+  run_ "nix-copy-closure" ["--include-outputs", destHost, toTextArg bePath]
 
 closureCompiler :: FilePath
 closureCompiler = "/nix/store/n7h36mmdgd9y5g59qasznjvsl3psg0g2-closure-compiler-20170218/bin/closure-compiler"

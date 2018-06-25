@@ -14,9 +14,9 @@ import qualified Data.Text as T
 import Data.JSString.Text
 
 #if defined (ENABLE_SPEECH_RECOG)
-import GHCJS.DOM.SpeechRecognition
-import GHCJS.DOM.SpeechRecognitionEvent
-import GHCJS.DOM.SpeechGrammar
+import GHCJS.DOM.JSFFI.SpeechRecognition
+import GHCJS.DOM.JSFFI.SpeechRecognitionEvent
+import GHCJS.DOM.JSFFI.SpeechGrammar
 import GHCJS.DOM.EventM
 import Language.Javascript.JSaddle.Object
 import Language.Javascript.JSaddle.Types
@@ -60,7 +60,7 @@ speechRecogSetup = do
     GHCJS.DOM.EventM.on recog nomatch (liftIO $ timeoutAction ())
     GHCJS.DOM.EventM.on recog audioend (liftIO $ timeoutAction ())
     GHCJS.DOM.EventM.on recog soundend (liftIO $ timeoutAction ())
-    GHCJS.DOM.EventM.on recog GHCJS.DOM.SpeechRecognition.error (liftIO $ errorAction ())
+    GHCJS.DOM.EventM.on recog GHCJS.DOM.JSFFI.SpeechRecognition.error (liftIO $ errorAction ())
     return recog
 
   return (\stop e -> do

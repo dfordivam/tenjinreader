@@ -80,13 +80,13 @@ executable frontend
                      , vector
                      , array
                      , hs-nlp-jp-utils
-                     , ghcjs-dom
   -- Fix this
   if impl(ghcjs)
      build-depends: ghcjs-base
                     , ghcjs-dom-jsffi
   else
      build-depends: jsaddle-dom
+                     , ghcjs-dom
 
   if flag(debug)
      CPP-options: "-DDEBUG"
@@ -122,13 +122,13 @@ executable frontend-recog
                      , vector
                      , array
                      , hs-nlp-jp-utils
-                     , ghcjs-dom
   -- Fix this
   if impl(ghcjs)
      build-depends: ghcjs-base
                     , ghcjs-dom-jsffi
   else
      build-depends: jsaddle-dom
+                     , ghcjs-dom
 
   if flag(debug)
      CPP-options: "-DDEBUG"
@@ -163,13 +163,13 @@ executable frontend-reader-only
                      , vector
                      , array
                      , hs-nlp-jp-utils
-                     , ghcjs-dom
 
   if impl(ghcjs)
      build-depends: ghcjs-base
                     , ghcjs-dom-jsffi
   else
      build-depends: jsaddle-dom
+                     , ghcjs-dom
 
   if flag(debug)
      CPP-options: "-DDEBUG"
@@ -204,13 +204,13 @@ executable frontend-srs-only
                      , vector
                      , array
                      , hs-nlp-jp-utils
-                     , ghcjs-dom
 
   if impl(ghcjs)
      build-depends: ghcjs-base
                     , ghcjs-dom-jsffi
   else
      build-depends: jsaddle-dom
+                     , ghcjs-dom
 
   if flag(debug)
      CPP-options: "-DDEBUG"
@@ -248,13 +248,13 @@ executable frontend-srs-only-recog
                      , vector
                      , array
                      , hs-nlp-jp-utils
-                     , ghcjs-dom
 
   if impl(ghcjs)
      build-depends: ghcjs-base
                     , ghcjs-dom-jsffi
   else
      build-depends: jsaddle-dom
+                     , ghcjs-dom
 
   if flag(debug)
      CPP-options: "-DDEBUG"
