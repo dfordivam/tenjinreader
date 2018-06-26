@@ -78,7 +78,7 @@ instance SrsReviewType RecogReview where
     | hasKanaInField ri = RecogReview (That NotAnswered)
     | otherwise = RecogReview (These NotAnswered NotAnswered)
   getField ri _ = (,) (ri ^. reviewItemField)
-    ("font-size: 3rem;")
+    ("font-size: 0.8rem;")
 
   getAnswer ri ReadingRecogReview = Right $ ri ^. reviewItemReading . _1
   getAnswer ri MeaningRecogReview = Left $ ri ^. reviewItemMeaning . _1

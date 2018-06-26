@@ -346,11 +346,11 @@ sentenceWidgetView (surface, meanings) (vIds, ss) = modalDiv $ do
     divClass "column is-1" $ return ()
     elClass "p" "modal-card-title" $ do
       text surface
-      text " : "
-      let m = mconcat $ intersperse ", " $ meanings
-      text $ if T.length m > 40
-        then (T.take 40 m) <> "..."
-        else m
+      -- text " : "
+      -- let m = mconcat $ intersperse ", " $ meanings
+      -- text $ if T.length m > 40
+      --   then (T.take 40 m) <> "..."
+      --   else m
     return (domEvent Click e)
 
   let bodyAttr = ("class" =: "modal-card-body")
