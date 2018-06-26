@@ -50,6 +50,9 @@ headWidget isDark = do
     attrDyn = ffor isDark $ \b -> (("rel" =: "stylesheet")
       <> ("href" =: (f b)))
 
+  elAttr "meta" (("charset" =: "utf-8"))
+    $ return ()
+
   elAttr "link"
     (("rel" =: "stylesheet")
       <> ("href" =: "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"))
@@ -67,8 +70,6 @@ headWidget isDark = do
     <> ("content" =: "width=device-width, initial-scale=1.0"))
     $ return ()
 
-  elAttr "meta" (("charset" =: "UTF-8"))
-    $ return ()
 
 topWidget :: MonadWidget t m => m (Dynamic t Bool)
 topWidget = mdo
