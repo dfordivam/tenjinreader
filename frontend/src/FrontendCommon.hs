@@ -431,8 +431,8 @@ vocabRuby markDyn fontSizePctDyn visDyn (Vocab ks) = do
   let
     attr = ffor markDyn $ \b -> case b of
       Nothing -> Map.empty
-      (Just True) -> ("class" =: "highlight-bright")
-      (Just False) -> ("class" =: "highlight-dark")
+      (Just True) -> ("class" =: "text-danger")
+      (Just False) -> ("class" =: "text-success")
 
     rubyAttr = (\s -> "style" =: ("font-size: " <> tshow s <> "%;")) <$> fontSizePctDyn
     g r True = r
@@ -441,7 +441,7 @@ vocabRuby markDyn fontSizePctDyn visDyn (Vocab ks) = do
     f (KanjiWithReading (Kanji k) r)
       = elDynAttr "ruby" rubyAttr $ do
           text k
-          elDynAttr "rt" attr $ dynText (g r <$> visDyn)
+          el "rt" $ dynText (g r <$> visDyn)
 
   (e,_) <- elDynAttr' "span" attr $ mapM f ks
   return (Just $ _element_raw e

@@ -10,7 +10,6 @@
 module SrsWidget where
 
 import FrontendCommon
-import SpeechRecog
 import ReviewState
 
 import qualified Data.Text as T
@@ -476,23 +475,20 @@ reviewWidgetView statsDyn dyn2 = divClass "panel panel-default" $ do
       showNE Nothing = text "No Reviews! (Please close and open again to refresh)"
     dyn $ showNE <$> (dyn2 & mapped . mapped %~ (uncurry getField))
 
-  doRecog <- lift $ speechRecogSetup
-
   dr <- dyn $ ffor dyn2 $ \case
     (Nothing) -> return never
-    (Just v) -> inputFieldWidget doRecog closeEv autoFocus v
+    (Just v) -> inputFieldWidget closeEv autoFocus v
 
   evReview <- switchPromptly never dr
   return (closeEv, evReview)
 
 inputFieldWidget
   :: (AppMonad t m, SrsReviewType rt)
-  => (Event t () -> Event t () -> m (Event t Result, Event t (), Event t (), Event t ()))
-  -> Event t ()
+  => Event t ()
   -> Dynamic t Bool
   -> (ReviewItem, ActualReviewType rt)
   -> AppMonadT t m (Event t (ReviewStateEvent rt))
-inputFieldWidget doRecog closeEv autoFocus (ri@(ReviewItem i k m _), rt) = do
+inputFieldWidget closeEv autoFocus (ri@(ReviewItem i k m _), rt) = do
   let
     tiId = getInputFieldId rt
     style = "text-align: center; width: 100%;" <> color

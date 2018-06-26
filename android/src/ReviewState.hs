@@ -61,7 +61,7 @@ instance SrsReviewType ProdReview where
   updateReviewState _ _ _ = error "updateReviewState: Invalid state"
   getAnswer ri _ = Right $ ri ^. reviewItemReading . _1
   getField ri _ = (,) (fmap unMeaning . fst $ ri ^. reviewItemMeaning)
-    ("font-size: 2rem;")
+    ("font-size: 1rem;")
   getInputFieldStyle _ = "background-color: antiquewhite;"
   getInputFieldPlaceHolder _ = "日本語で（かな）"
   getInputFieldId _ = "JP-TextInput-IME-Input1"
@@ -78,7 +78,7 @@ instance SrsReviewType RecogReview where
     | hasKanaInField ri = RecogReview (That NotAnswered)
     | otherwise = RecogReview (These NotAnswered NotAnswered)
   getField ri _ = (,) (ri ^. reviewItemField)
-    ("font-size: 0.8rem;")
+    ("font-size: 2rem;")
 
   getAnswer ri ReadingRecogReview = Right $ ri ^. reviewItemReading . _1
   getAnswer ri MeaningRecogReview = Left $ ri ^. reviewItemMeaning . _1

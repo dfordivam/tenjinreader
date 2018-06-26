@@ -25,7 +25,6 @@ library
   exposed-modules:
                        KanjiBrowser
                        SrsWidget
-                       SpeechRecog
                        ReviewState
                        FrontendCommon
                        TextReader
