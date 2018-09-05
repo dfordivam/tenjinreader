@@ -143,6 +143,7 @@ getBulkEditSrsItems (BulkEditSrsItems rt ss op) = do
         SuspendSrsItems ->
           reviewState . setL . _1 %~ \case
             NextReviewDate _ i -> Suspended i
+            NewReview -> Suspended (SrsInterval 1)
             a -> a
         MarkDueSrsItems ->
           reviewState . setL . _1 %~ \case

@@ -212,7 +212,7 @@ capitalize m = T.unwords $ T.words m & _head  %~ f
       | T.head t == ('-') = t
       | elem t ignoreList = t
       | otherwise = T.toTitle t
-    ignoreList = ["to"]
+    ignoreList = ["to", "a", "an"]
 
 showSense :: Sense -> Text
 showSense s = mconcat

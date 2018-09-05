@@ -166,8 +166,15 @@ loadVocabList keys = do
   return $ zip vocabs s
 
 getLoadMoreKanjiVocab :: LoadMoreKanjiVocab -> WsHandlerM VocabList
-getLoadMoreKanjiVocab _ =
-  getLoadMoreVocabSearchResult LoadMoreVocabSearchResult
+getLoadMoreKanjiVocab _ = do
+  (vIds, len) <- asks kanjiVocabResult >>= \ref ->
+    liftIO $ readIORef ref
+
+  vs <- loadVocabList (take searchResultCount
+                       $ drop len vIds)
+  asks kanjiVocabResult >>= \ref ->
+    liftIO $ writeIORef ref (vIds, len + (length vs))
+  return $ vs
 
 getVocabSearch :: VocabSearch -> WsHandlerM VocabList
 getVocabSearch (VocabSearch m filt) = do

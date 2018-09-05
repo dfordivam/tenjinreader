@@ -289,7 +289,7 @@ editNonEmptyList ne conT renderFun = do
       enterPress = ffilter (==13) (ti ^. textInput_keypress) -- 13 -> Enter
       tiAttr = constDyn $ ("style" =: "width: 100%;")
 
-    ti <- divClass "col-sm-2" $ textInput $ def
+    ti <- divClass "col-sm-6" $ textInput $ def
       & textInputConfig_attributes .~ tiAttr
       & textInputConfig_setValue .~ ("" <$ enterPress)
     d <- divClass "col-sm-6" $

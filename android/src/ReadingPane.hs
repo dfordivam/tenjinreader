@@ -85,7 +85,9 @@ readerSettingsControls
        PostBuild t m, DomBuilder t m)
   => ReaderSettingsTree CurrentDb
   -> Bool
-  -> m (Event t (), Dynamic t (ReaderSettingsTree CurrentDb))
+  -> m (Event t ()
+       , Dynamic t (ReaderSettingsTree CurrentDb)
+       , Dynamic t Bool)
 readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-centered is-grouped-multiline" $ do
   let
     ddConf :: _
@@ -107,7 +109,7 @@ readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-center
         text "間"
       return d
 
-  (r,h,v, closeEv) <- if full
+  (r,h,v, closeEv,eh) <- if full
     then do
       rubySizeDD <-  divClass "field" $ divClass "control has-icons-left" $ do
         divClass "select" $ do
@@ -129,15 +131,18 @@ readerSettingsControls rsDef full = divClass "field is-grouped is-grouped-center
           d <- dropdown (rsDef ^. verticalMode)
             (constDyn writingModeOptions) ddConf
           return d
+      enableHighlightCb <- divClass "button" $ do
+        text "Highlight "
+        checkbox True def
       c <- icon "fa-times"
       return (value rubySizeDD,
-              value heightDD, value writingModeDD, c)
+              value heightDD, value writingModeDD, c, value enableHighlightCb)
     else
-      return (constDyn 100, constDyn 400, constDyn False, never)
+      return (constDyn 100, constDyn 400, constDyn False, never, constDyn False)
 
   let rsDyn = ReaderSettings <$> (value fontSizeDD)
         <*> r <*> (value lineHeightDD) <*> v <*> h
-  return (closeEv, rsDyn)
+  return (closeEv, rsDyn, eh)
 
 divWrap :: (PostBuild t m, DomBuilder t m) =>
            Dynamic t (ReaderSettingsTree CurrentDb) -> Dynamic t Bool -> m a -> m a
@@ -160,12 +165,12 @@ readingPaneInt :: AppMonad t m
   -> ReaderSettings CurrentDb
   -> AppMonadT t m (Event t ())
 readingPaneInt docEv rsDef = do
-  (closeEv, rsDyn) <- readerSettingsControls rsDef True
+  (closeEv, rsDyn, eh) <- readerSettingsControls rsDef True
 
   getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
 
   _ <- widgetHold ((text "waiting for document data"))
-    (verticalReader rsDyn <$> docEv)
+    (verticalReader rsDyn eh <$> docEv)
   return (closeEv)
 
 ----------------------------------------------------------------------------------
@@ -197,9 +202,10 @@ type ParaOffsetArray = Array ParaOffset (ParaNum, ParaPos)
 
 verticalReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
+  -> Dynamic t Bool
   -> (ReaderDocumentData)
   -> AppMonadT t m ()
-verticalReader rs (docId, _, startParaMaybe, endParaNum, annText) = do
+verticalReader rs eh (docId, _, startParaMaybe, endParaNum, annText) = do
   (evVisible, action) <- newTriggerEvent
 
   visDyn <- holdDyn (0,Nothing) evVisible
@@ -364,10 +370,12 @@ verticalReader rs (docId, _, startParaMaybe, endParaNum, annText) = do
               evMap <- listViewWithKey dynMap
                 (renderDynParas rs highlightDyn textContent)
               let vIdEv = fmapMaybe headMay $ Map.elems <$> evMap
-                  f Nothing _ = ([],[])
-                  f (Just v) (v1,v2) = (v,v1 ++ v2)
-              highlightDyn <- foldDyn f ([],[]) (leftmost [Just . fst <$> vIdEv
-                                                  , Nothing <$ clearHighlight])
+                  f (False, _)  _ = ([],[])
+                  f (_, Nothing)  _ = ([],[])
+                  f (_, Just v) (v1,v2) = (v,v1 ++ v2)
+              highlightDyn <- foldDyn f ([],[]) $
+                attachDyn eh (leftmost [Just . fst <$> vIdEv
+                         , Nothing <$ clearHighlight])
             return $ vIdEv
 
           (i, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do

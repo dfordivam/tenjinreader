@@ -85,7 +85,7 @@ readerSettingsControls
        PostBuild t m, DomBuilder t m)
   => ReaderSettingsTree CurrentDb
   -> Bool
-  -> m (Dynamic t (ReaderSettingsTree CurrentDb))
+  -> m (Dynamic t (ReaderSettingsTree CurrentDb), Dynamic t Bool)
 readerSettingsControls rsDef full = divClass "col-sm-12 well well-sm form-inline" $ divClass "" $ do
   let
     ddConf :: _
@@ -101,20 +101,23 @@ readerSettingsControls rsDef full = divClass "col-sm-12 well well-sm form-inline
     el "label" $ text "間："
     dropdown (rsDef ^. lineHeight) (constDyn lineHeightOptions) ddConf
 
-  (h,v) <- if full
+  (h,v,eh) <- if full
     then do
       heightDD <- divClass "col-sm-3" $ do
         el "label" $ text "高さ："
         dropdown (rsDef ^. numOfLines) (constDyn numOfLinesOptions) ddConf
-      writingModeDD <- dropdown (rsDef ^. verticalMode)
+      writingModeDD <- divClass "col-sm-3" $ dropdown (rsDef ^. verticalMode)
         (constDyn writingModeOptions) ddConf
-      return (value heightDD, value writingModeDD)
+      enableHighlightCb <- divClass "col-sm-3" $ do
+        el "label" $ text "Highlight："
+        checkbox True def
+      return (value heightDD, value writingModeDD, value enableHighlightCb)
     else
-      return (constDyn 400, constDyn False)
+      return (constDyn 400, constDyn False, constDyn False)
 
   let rsDyn = ReaderSettings <$> (value fontSizeDD) <*> (value rubySizeDD)
                 <*> (value lineHeightDD) <*> v <*> h
-  return rsDyn
+  return (rsDyn, eh)
 
 divWrap :: (PostBuild t m, DomBuilder t m) =>
            Dynamic t (ReaderSettingsTree CurrentDb) -> Dynamic t Bool -> m a -> m a
@@ -137,18 +140,18 @@ readingPaneInt :: AppMonad t m
   -> ReaderSettings CurrentDb
   -> AppMonadT t m (Event t ())
 readingPaneInt docEv rsDef = do
-  (closeEv,fullScrEv, rsDyn) <- divClass "row" $ do
-    rsDyn <- divClass "col-sm-9" $ readerSettingsControls rsDef True
+  (closeEv,fullScrEv, (rsDyn, eh)) <- divClass "row" $ do
+    v <- divClass "col-sm-9" $ readerSettingsControls rsDef True
     (closeEv, fullScrEv) <- divClass "col-sm-3" $ do
       closeEv <- btn "btn-default btn-sm" "Close"
       fullScrEv <- btn "btn-default btn-sm" "Full Screen"
       return (closeEv, fullScrEv)
-    return (closeEv,fullScrEv, rsDyn)
+    return (closeEv,fullScrEv, v)
 
   getWebSocketResponse (SaveReaderSettings <$> (updated rsDyn))
 
   _ <- widgetHold ((text "waiting for document data"))
-    (verticalReader rsDyn fullScrEv <$> docEv)
+    (verticalReader rsDyn eh fullScrEv <$> docEv)
   return (closeEv)
 
 ----------------------------------------------------------------------------------
@@ -180,10 +183,11 @@ type ParaOffsetArray = Array ParaOffset (ParaNum, ParaPos)
 
 verticalReader :: forall t m . AppMonad t m
   => Dynamic t (ReaderSettings CurrentDb)
+  -> Dynamic t Bool
   -> Event t ()
   -> (ReaderDocumentData)
   -> AppMonadT t m ()
-verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
+verticalReader rs eh fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
   (evVisible, action) <- newTriggerEvent
 
   visDyn <- holdDyn (0,Nothing) evVisible
@@ -354,10 +358,12 @@ verticalReader rs fullScrEv (docId, _, startParaMaybe, endParaNum, annText) = do
               evMap <- listViewWithKey dynMap
                 (renderDynParas rs highlightDyn textContent)
               let vIdEv = fmapMaybe headMay $ Map.elems <$> evMap
-                  f Nothing _ = ([],[])
-                  f (Just v) (v1,v2) = (v,v1 ++ v2)
-              highlightDyn <- foldDyn f ([],[]) (leftmost [Just . fst <$> vIdEv
-                                                  , Nothing <$ clearHighlight])
+                  f (False, _)  _ = ([],[])
+                  f (_, Nothing)  _ = ([],[])
+                  f (_, Just v) (v1,v2) = (v,v1 ++ v2)
+              highlightDyn <- foldDyn f ([],[]) $
+                attachDyn eh (leftmost [Just . fst <$> vIdEv
+                         , Nothing <$ clearHighlight])
             return $ vIdEv
 
           (i, _) <- elAttr' "div" ("style" =: "height: 1em; width: 1rem;") $ do
