@@ -9,8 +9,7 @@ let
   };
 
 in pkgs.stdenv.mkDerivation rec {
-  version = "1.0";
-  name = "tenjin-reader-css-${version}";
+  name = "tenjin-reader-css";
 
   src = ./.;
 
