@@ -13,7 +13,7 @@ library
                , obelisk-backend
                , obelisk-route
                , servant
-               , servant-server
+               , servant-snap
   exposed-modules:
     Backend
   ghc-options: -Wall
