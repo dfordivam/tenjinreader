@@ -12,6 +12,8 @@ library
                , reflex-dom
                , obelisk-generated-static
                , text
+               , servant
+               , servant-reflex
   exposed-modules:
     Frontend
   ghc-options: -Wall

@@ -14,4 +14,15 @@ in obelisk.project ./. ({ pkgs, ... }:
     android.displayName = "Obelisk Minimal Example";
     ios.bundleIdentifier = "systems.obsidian.obelisk.examples.minimal";
     ios.bundleName = "Obelisk Minimal Example";
+    overrides = self: super: let
+      servant-reflex = pkgs.fetchFromGitHub {
+        owner = "imalsogreg";
+        repo = "servant-reflex";
+        rev = "ba8d4f8a269d785ed7e62f11eddb392d9f582e19";
+        sha256 = "0zppzl1ii01bzjrfj5x71vff5ivpcngrs0njvjawx6hf985x2zbk";
+      };
+    in
+      {
+        servant-reflex = self.callCabal2nix "servant-reflex" servant-reflex {};
+      };
   })
