@@ -9,6 +9,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Common.Route where
 
@@ -27,12 +28,12 @@ import Obelisk.Route.TH
 data BackendRoute :: * -> * where
   -- | Used to handle unparseable routes.
   BackendRoute_Missing :: BackendRoute ()
-  -- You can define any routes that will be handled specially by the backend here.
-  -- i.e. These do not serve the frontend, but do something different, such as serving static files.
+deriving instance Show (BackendRoute a)
 
 data FrontendRoute :: * -> * where
-  FrontendRoute_Main :: FrontendRoute ()
-  -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
+  FrontendRoute_Home :: FrontendRoute ()
+  FrontendRoute_Reader :: FrontendRoute ()
+deriving instance Show (FrontendRoute a)
 
 backendRouteEncoder
   :: Encoder (Either Text) Identity (R (Sum BackendRoute (ObeliskRoute FrontendRoute))) PageName
@@ -41,10 +42,8 @@ backendRouteEncoder = handleEncoder (const (InL BackendRoute_Missing :/ ())) $
     InL backendRoute -> case backendRoute of
       BackendRoute_Missing -> PathSegment "missing" $ unitEncoder mempty
     InR obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
-      -- The encoder given to PathEnd determines how to parse query parameters,
-      -- in this example, we have none, so we insist on it.
-      FrontendRoute_Main -> PathEnd $ unitEncoder mempty
-
+      FrontendRoute_Home -> PathEnd $ unitEncoder mempty
+      FrontendRoute_Reader -> PathSegment "reader" $ unitEncoder mempty
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
