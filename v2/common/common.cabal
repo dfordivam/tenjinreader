@@ -9,6 +9,7 @@ library
                , obelisk-route
                , mtl
                , text
+               , servant
   default-extensions:
     TypeFamilies
     PolyKinds

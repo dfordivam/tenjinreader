@@ -14,4 +14,22 @@ in obelisk.project ./. ({ pkgs, ... }:
     android.displayName = "Obelisk Minimal Example";
     ios.bundleIdentifier = "systems.obsidian.obelisk.examples.minimal";
     ios.bundleName = "Obelisk Minimal Example";
+    overrides = self: super: let
+      servant-reflex = pkgs.fetchFromGitHub {
+        owner = "imalsogreg";
+        repo = "servant-reflex";
+        rev = "ba8d4f8a269d785ed7e62f11eddb392d9f582e19";
+        sha256 = "0zppzl1ii01bzjrfj5x71vff5ivpcngrs0njvjawx6hf985x2zbk";
+      };
+      servant-snap = pkgs.fetchFromGitHub {
+        owner = "antislava";
+        repo = "servant-snap";
+        rev = "fc9658e8f52ebce9e4f304ea0c6705d697d4fa84";
+        sha256 = "0zlipmx1fb73mhpnndwmdmigxxrsdnsnb1157pgsrxpx89l9pjig";
+      };
+    in
+      {
+        servant-reflex = self.callCabal2nix "servant-reflex" servant-reflex {};
+        servant-snap = (pkgs.haskell.lib.dontCheck (self.callCabal2nix "servant-snap" servant-snap {}));
+      };
   })
