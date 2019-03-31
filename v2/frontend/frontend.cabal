@@ -16,6 +16,10 @@ library
                , servant-reflex
   exposed-modules:
     Frontend
+    Frontend.Head
+    Frontend.Home
+    Frontend.Nav
+    Frontend.Reader
   ghc-options: -Wall
 
 executable frontend
