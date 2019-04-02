@@ -33,14 +33,14 @@ import Frontend.Reader
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = headEl
-  , _frontend_body = do
-      rec el "header" $ nav click
+  , _frontend_body = divClass "container columns" $ do
+      rec elClass "header" "is-one-quarter-mobile section" $ nav click
           click <- mainContainer sections
       return ()
   }
 
 mainContainer :: DomBuilder t m => m () -> m (Event t ())
-mainContainer w = domEvent Click . fst <$> el' "main" w
+mainContainer w = domEvent Click . fst <$> elClass' "main" "column container" w
 
 sections
   :: ( DomBuilder t m
