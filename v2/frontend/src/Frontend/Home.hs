@@ -33,6 +33,34 @@ home
      )
   => m ()
 home = do
+  divClass "tile is-ancestor" $ do
+    divClass "tile is-vertical" $ do
+      divClass "tile" $ do
+        divClass "tile is-parent is-vertical" $ do
+          elClass "article" "tile is-child notification is-primary" $ do
+            elClass "p" "title" $ do
+              text "Vertical..."
+            elClass "p" "subtitle" $ do
+              text "Top tile"
+          elClass "article" "tile is-child notification is-warning" $ do
+            elClass "p" "title" $ do
+              text "...tiles"
+            elClass "p" "subtitle" $ do
+              text "Bottom tile"
+      divClass "tile is-parent" $ do
+        elClass "article" "tile is-child notification is-danger" $ do
+          elClass "p" "title" $ do
+            text "Wide tile"
+          elClass "p" "subtitle" $ do
+            text "Aligned with the right tile"
+          divClass "content" $ return ()
+        elClass "article" "tile is-child notification is-success" $ do
+          divClass "content" $ do
+            elClass "p" "title" $ do
+              text "Tall tile"
+            elClass "p" "subtitle" $ do
+              text "With even more content"
+            divClass "content" $ return ()
   e <- button "click"
   count e >>= display
   routeLink (FrontendRoute_Reader :/ ()) $ text "reader"
