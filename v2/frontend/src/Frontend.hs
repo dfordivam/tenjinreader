@@ -33,7 +33,7 @@ import Frontend.Reader
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = headEl
-  , _frontend_body = divClass "container columns" $ do
+  , _frontend_body = divClass "container" $ divClass "columns" $ do
       rec elClass "header" "is-one-quarter-mobile section" $ nav click
           click <- mainContainer sections
       return ()
