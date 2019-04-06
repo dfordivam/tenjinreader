@@ -38,42 +38,114 @@ nav
   => Event t ()
   -> m ()
 nav _ = do
-  elClass "nav" "panel" $ do
-    elClass "p" "panel-heading" $ do
-      text "repositories"
-      return ()
-    divClass "panel-block" $ do
-      elClass "p" "control has-icons-left" $ do
+  elClass "header" "" $ do
+    topBar never
+
+topBar
+  :: forall t m .( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => Event t ()
+  -> m ()
+topBar _ = do
+  let
+    attr1 = ("aria-label" =: "main navigation") <>
+            ("class" =: "navbar") <> ("role" =: "navigation")
+  elAttr "nav" attr1 $ do
+    divClass "navbar-brand" $ do
+      let
+        attr2 = ("class" =: "navbar-item") <>
+                ("href" =: "https://bulma.io")
+      elAttr "a" attr2 $ do
         let
-          ieConf :: (Reflex t) => InputElementConfig EventResult t (DomBuilderSpace m)
-          ieConf = def
-                    & (inputElementConfig_initialValue .~ "search")
-                    -- & (inputElementConfig_elementConfig .~ elConf)
-          -- elConf = def
-            -- & elementConfig_initialAttributes .~ attr2
-          attr2 = ("class" =: "input is-small")
-        ti1 <- inputElement ieConf
-        elClass "span" "icon is-small is-left" $ do
-          let
-            attr3 = ("aria-hidden" =: "true") <> ("class" =: "fas fa-search")
-          elAttr "i" attr3 $ return ()
-    elClass "p" "panel-tabs" $ do
-      elClass "a" "is-active" $ do
-        text "all"
+          attr3 = ("height" =: "28") <>
+                  ("src" =: "https://bulma.io/images/bulma-logo.png") <>
+                  ("width" =: "112")
+        elAttr "img" attr3 $ return ()
         return ()
-      el "a" $ do
-        text "public"
-        return ()
-      el "a" $ do
-        text "private"
-        return ()
-      el "a" $ do
-        text "sources"
-        return ()
-      el "a" $ do
-        text "forks"
+      let
+        attr4 = ("aria-expanded" =: "false") <> ("aria-label" =: "menu") <>
+                ("class" =: "navbar-burger burger") <>
+                ("data-target" =: "navbarBasicExample") <> ("role" =: "button")
+      elAttr "a" attr4 $ do
+        let
+          attr5 = ("aria-hidden" =: "true")
+        elAttr "span" attr5 $ return ()
+        let
+          attr6 = ("aria-hidden" =: "true")
+        elAttr "span" attr6 $ return ()
+        let
+          attr7 = ("aria-hidden" =: "true")
+        elAttr "span" attr7 $ return ()
         return ()
       return ()
+    let
+      attr8 = ("class" =: "navbar-menu") <>
+              ("id" =: "navbarBasicExample")
+    elAttr "div" attr8 $ do
+      divClass "navbar-start" $ do
+        elClass "a" "navbar-item" $ do
+          text "Home"
+          return ()
+        elClass "a" "navbar-item" $ do
+          text "Documentation"
+          return ()
+        divClass "navbar-item has-dropdown is-hoverable" $ do
+          elClass "a" "navbar-link" $ do
+            text "More"
+            return ()
+          divClass "navbar-dropdown" $ do
+            elClass "a" "navbar-item" $ do
+              text "About"
+              return ()
+            elClass "a" "navbar-item" $ do
+              text "Jobs"
+              return ()
+            elClass "a" "navbar-item" $ do
+              text "Contact"
+              return ()
+            elClass "hr" "navbar-divider" $ return ()
+            elClass "a" "navbar-item" $ do
+              text "Report an issue"
+              return ()
+            return ()
+          return ()
+        return ()
+      divClass "navbar-end" $ do
+        divClass "navbar-item" $ do
+          divClass "buttons" $ do
+            elClass "a" "button is-primary" $ do
+              el "strong" $ do
+                text "Sign up"
+                return ()
+              return ()
+            elClass "a" "button is-light" $ do
+              text "Log in"
+              return ()
+            return ()
+          return ()
+        return ()
+      return ()
+    return ()
+
+sidePanel
+  :: forall t m .( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => Event t ()
+  -> m ()
+sidePanel _ = do
+  elClass "nav" "panel" $ do
     elClass "a" "panel-block is-active" $ do
       elClass "span" "panel-icon" $ do
         let

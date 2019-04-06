@@ -39,27 +39,22 @@ home = do
         divClass "tile is-parent is-vertical" $ do
           elClass "article" "tile is-child notification is-primary" $ do
             elClass "p" "title" $ do
-              text "Vertical..."
+              text "Random sentence"
             elClass "p" "subtitle" $ do
-              text "Top tile"
-          elClass "article" "tile is-child notification is-warning" $ do
-            elClass "p" "title" $ do
-              text "...tiles"
-            elClass "p" "subtitle" $ do
-              text "Bottom tile"
+              text "******"
       divClass "tile is-parent" $ do
-        elClass "article" "tile is-child notification is-danger" $ do
+        elClass "article" "tile is-child notification is-danger is-8" $ do
           elClass "p" "title" $ do
-            text "Wide tile"
+            text "Books list"
           elClass "p" "subtitle" $ do
-            text "Aligned with the right tile"
+            text "Book 1"
           divClass "content" $ return ()
         elClass "article" "tile is-child notification is-success" $ do
           divClass "content" $ do
             elClass "p" "title" $ do
-              text "Tall tile"
+              text "Words list"
             elClass "p" "subtitle" $ do
-              text "With even more content"
+              text "long list"
             divClass "content" $ return ()
   e <- button "click"
   count e >>= display
