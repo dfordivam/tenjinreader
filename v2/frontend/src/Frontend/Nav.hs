@@ -22,9 +22,11 @@ import Control.Monad.Fix
 import Data.Functor.Identity
 import qualified Data.Map as Map
 import Control.Monad
+import Data.Traversable
 
 import Common.Api
 import Common.Route
+import Frontend.Common
 import Obelisk.Generated.Static
 
 nav
@@ -64,7 +66,7 @@ topBar inpEv = do
       let
         attr2 = ffor showPanel $ \s -> ("class" =: "navbar-item") <>
                 (if s
-                  then ("style" =: "width: 14em;")
+                  then ("style" =: "width: 8em;")
                   else Map.empty)
         attr3 = ffor showPanel $ \s -> ("height" =: "30") <>
                 ("src" =: "https://tenjinreader.com/static/logo.png") <>
@@ -115,74 +117,15 @@ sidePanel
   => Dynamic t Bool
   -> m ()
 sidePanel visDyn = do
+  let
+    panelItems =
+      [ ("Reader", "fa-book", FrontendRoute_Reader :/ ())
+      , ("SRS", "fa-book", FrontendRoute_Reader :/ ())
+      ]
   elClass "nav" "panel" $ do
-    elClass "a" "panel-block is-active" $ do
-      elClass "span" "panel-icon" $ do
-        let
-          attr4 = ("aria-hidden" =: "true") <> ("class" =: "fas fa-book")
-        elAttr "i" attr4 $ return ()
-        return ()
-      text "bulma"
-      return ()
-    elClass "a" "panel-block" $ do
-      elClass "span" "panel-icon" $ do
-        let
-          attr5 = ("aria-hidden" =: "true") <> ("class" =: "fas fa-book")
-        elAttr "i" attr5 $ return ()
-        return ()
-      text "marksheet"
-      return ()
-    elClass "a" "panel-block" $ do
-      elClass "span" "panel-icon" $ do
-        let
-          attr6 = ("aria-hidden" =: "true") <> ("class" =: "fas fa-book")
-        elAttr "i" attr6 $ return ()
-        return ()
-      text "minireset.css"
-      return ()
-    elClass "a" "panel-block" $ do
-      elClass "span" "panel-icon" $ do
-        let
-          attr7 = ("aria-hidden" =: "true") <> ("class" =: "fas fa-book")
-        elAttr "i" attr7 $ return ()
-        return ()
-      text "jgthms.github.io"
-      return ()
-    elClass "a" "panel-block" $ do
-      elClass "span" "panel-icon" $ do
-        let
-          attr8 = ("aria-hidden" =: "true") <>
-                  ("class" =: "fas fa-code-branch")
-        elAttr "i" attr8 $ return ()
-        return ()
-      text "daniellowtw/infboard"
-      return ()
-    elClass "a" "panel-block" $ do
-      elClass "span" "panel-icon" $ do
-        let
-          attr9 = ("aria-hidden" =: "true") <>
-                  ("class" =: "fas fa-code-branch")
-        elAttr "i" attr9 $ return ()
-        return ()
-      text "mojs"
-      return ()
-    elClass "label" "panel-block" $ do
-      let
-        cbConf10 = def
-                   & (checkboxConfig_attributes .~ (constDyn (attr11)))
-        attr11 = Map.empty
-      cb10 <- checkbox False cbConf10
-      text "remember me"
-      return ()
-    divClass "panel-block" $ do
-      let
-        attr12 = ("class" =: "button is-link is-outlined is-fullwidth")
-      (btnEl13,_) <- elAttr' "button" attr12 $ do
-        text "reset all filters"
-        return ()
-      {-
-        let
-          btnEv13 = domEvent Click btnEl13
-      -}
-      return ()
-    return ()
+    for panelItems $ \(t, i, l) -> do
+      (e, _) <- elClass' "a" "panel-block" $ do
+        elClass "span" "panel-icon" $ icon i
+        text t
+      setRoute (l <$ domEvent Click e)
+  return ()
