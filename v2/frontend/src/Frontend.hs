@@ -17,6 +17,7 @@ import qualified Data.Text as T
 import Data.Dependent.Sum (DSum(..))
 import Control.Monad.Fix
 import Data.Functor.Identity
+import Data.Bool
 
 import Common.Api
 import Common.Route
@@ -34,9 +35,9 @@ frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = headEl
   , _frontend_body = do
-      rec nav click
+      rec navDyn <- nav click
           click <- divClass "columns" $ do
-            divClass "column is-2 is-hidden-mobile" $ sidePanel never
+            elDynClass "div" ((<>) "column is-narrow " <$> (ffor navDyn $ bool "is-hidden" "")) $ sidePanel navDyn
             mainContainer sections
       return ()
   }

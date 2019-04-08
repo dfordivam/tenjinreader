@@ -21,117 +21,87 @@ import Data.Dependent.Sum (DSum(..))
 import Control.Monad.Fix
 import Data.Functor.Identity
 import qualified Data.Map as Map
+import Control.Monad
 
 import Common.Api
 import Common.Route
 import Obelisk.Generated.Static
 
 nav
-  :: forall t m .( DomBuilder t m
+  :: ( DomBuilder t m
      , Routed t (R FrontendRoute) m
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
+     , Prerender js m
      )
   => Event t ()
-  -> m ()
+  -> m (Dynamic t Bool)
 nav _ = do
   elClass "header" "" $ do
     topBar never
 
 topBar
-  :: forall t m .( DomBuilder t m
+  :: ( DomBuilder t m
      , Routed t (R FrontendRoute) m
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
+     , Prerender js m
      )
   => Event t ()
-  -> m ()
-topBar _ = do
+  -> m (Dynamic t Bool)
+topBar inpEv = do
   let
     attr1 = ("aria-label" =: "main navigation") <>
             ("class" =: "navbar") <> ("role" =: "navigation")
-  elAttr "nav" attr1 $ do
-    divClass "navbar-brand" $ do
+  elAttr "nav" attr1 $ mdo
+    showPanel <- divClass "navbar-brand" $ do
       let
-        attr2 = ("class" =: "navbar-item") <>
-                ("href" =: "https://bulma.io")
-      elAttr "a" attr2 $ do
-        let
-          attr3 = ("height" =: "28") <>
-                  ("src" =: "https://bulma.io/images/bulma-logo.png") <>
-                  ("width" =: "112")
-        elAttr "img" attr3 $ return ()
-        return ()
-      let
-        attr4 = ("aria-expanded" =: "false") <> ("aria-label" =: "menu") <>
-                ("class" =: "navbar-burger burger") <>
-                ("data-target" =: "navbarBasicExample") <> ("role" =: "button")
-      elAttr "a" attr4 $ do
-        let
-          attr5 = ("aria-hidden" =: "true")
-        elAttr "span" attr5 $ return ()
-        let
-          attr6 = ("aria-hidden" =: "true")
-        elAttr "span" attr6 $ return ()
-        let
-          attr7 = ("aria-hidden" =: "true")
-        elAttr "span" attr7 $ return ()
-        return ()
-      return ()
+        attr2 = ffor showPanel $ \s -> ("class" =: "navbar-item") <>
+                (if s
+                  then ("style" =: "width: 14em;")
+                  else Map.empty)
+        attr3 = ffor showPanel $ \s -> ("height" =: "30") <>
+                ("src" =: "https://tenjinreader.com/static/logo.png") <>
+                ("width" =: "60") <>
+          (if not s
+            then ("style" =: "display: none;")
+            else Map.empty)
+      elDynAttr "a" attr2 $ mdo
+        elDynAttr "img" attr3 $ return ()
+        toggle True =<< burgerButton
     let
       attr8 = ("class" =: "navbar-menu") <>
               ("id" =: "navbarBasicExample")
-    elAttr "div" attr8 $ do
-      divClass "navbar-start" $ do
-        elClass "a" "navbar-item" $ do
-          text "Home"
-          return ()
-        elClass "a" "navbar-item" $ do
-          text "Documentation"
-          return ()
-        divClass "navbar-item has-dropdown is-hoverable" $ do
-          elClass "a" "navbar-link" $ do
-            text "More"
-            return ()
-          divClass "navbar-dropdown" $ do
-            elClass "a" "navbar-item" $ do
-              text "About"
-              return ()
-            elClass "a" "navbar-item" $ do
-              text "Jobs"
-              return ()
-            elClass "a" "navbar-item" $ do
-              text "Contact"
-              return ()
-            elClass "hr" "navbar-divider" $ return ()
-            elClass "a" "navbar-item" $ do
-              text "Report an issue"
-              return ()
-            return ()
-          return ()
-        return ()
+    ie <- elAttr "div" attr8 $ do
+      divClass "navbar-start" $ return ()
       divClass "navbar-end" $ do
         divClass "navbar-item" $ do
-          divClass "buttons" $ do
-            elClass "a" "button is-primary" $ do
-              el "strong" $ do
-                text "Sign up"
-                return ()
-              return ()
-            elClass "a" "button is-light" $ do
-              text "Log in"
-              return ()
-            return ()
-          return ()
-        return ()
-      return ()
-    return ()
+          let
+          inputElement $ def
+            & initialAttributes .~ "class" =: "input"
+    dynText $ value ie
+    return showPanel
+
+burgerButton
+  :: ( DomBuilder t m
+     )
+  => m (Event t ())
+burgerButton = do
+  let
+    attr4 = ("aria-expanded" =: "false") <> ("aria-label" =: "menu") <>
+            ("class" =: "navbar-burger burger") <>
+            ("data-target" =: "navbarBasicExample") <> ("role" =: "button") <>
+            ("style" =: "display: block;")
+  (e, _) <- elAttr' "a" attr4 $ do
+    let attr5 = ("aria-hidden" =: "true")
+    replicateM_ 3 $ elAttr "span" attr5 $ return ()
+  return $ (() <$ domEvent Click e)
 
 sidePanel
   :: forall t m .( DomBuilder t m
@@ -142,9 +112,9 @@ sidePanel
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => Event t ()
+  => Dynamic t Bool
   -> m ()
-sidePanel _ = do
+sidePanel visDyn = do
   elClass "nav" "panel" $ do
     elClass "a" "panel-block is-active" $ do
       elClass "span" "panel-icon" $ do
