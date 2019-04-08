@@ -22,6 +22,6 @@ in pkgs.stdenv.mkDerivation rec {
 
   installPhase = ''
     mkdir -p $out
-    cp tenjin-reader.css $out/
+    cp *.css $out/
   '';
 }

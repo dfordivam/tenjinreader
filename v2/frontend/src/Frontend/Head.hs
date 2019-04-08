@@ -34,7 +34,9 @@ headEl
   => m ()
 headEl = do
   traverse (\s -> elAttr "link" ("rel" =: "stylesheet" <> "href" =: s) blank)
-    [ static @"css/tenjin-reader.css"
+    [ "https://use.fontawesome.com/releases/v5.8.1/css/all.css"
+       -- static @"css/fontawesome.min.css"
+    , static @"css/tenjin-reader.css"
     ]
   elAttr "meta" ("name" =: "viewport" <> "content" =: "width=device-width, initial-scale=1.0, maximum-scale=1.0") blank
   elAttr "meta" ("charset" =: "utf-8") blank
