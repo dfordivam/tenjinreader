@@ -27,8 +27,8 @@ import Frontend.Home
 import Frontend.Nav
 import Frontend.Head
 import Frontend.Reader
--- import Frontend.
--- import Frontend.
+import Frontend.SRS
+import Frontend.Analyze
 -- import Frontend.
 
 frontend :: Frontend (R FrontendRoute)
@@ -76,4 +76,6 @@ sectionsList
 sectionsList =
   [ (FrontendRoute_Home :/ (), home)
   , (FrontendRoute_Reader :/ (), reader)
+  , (FrontendRoute_SRS :/ (), srs)
+  , (FrontendRoute_Analyze :/ (), analyze)
   ]

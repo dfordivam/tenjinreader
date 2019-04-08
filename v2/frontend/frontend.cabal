@@ -20,6 +20,8 @@ library
     Frontend.Home
     Frontend.Nav
     Frontend.Reader
+    Frontend.SRS
+    Frontend.Analyze
   ghc-options: -Wall
 
 executable frontend

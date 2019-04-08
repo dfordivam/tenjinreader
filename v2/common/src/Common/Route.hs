@@ -33,6 +33,9 @@ deriving instance Show (BackendRoute a)
 data FrontendRoute :: * -> * where
   FrontendRoute_Home :: FrontendRoute ()
   FrontendRoute_Reader :: FrontendRoute ()
+  FrontendRoute_SRS :: FrontendRoute ()
+  FrontendRoute_Analyze :: FrontendRoute ()
+  FrontendRoute_Sentences :: FrontendRoute ()
 deriving instance Show (FrontendRoute a)
 
 backendRouteEncoder
@@ -44,6 +47,9 @@ backendRouteEncoder = handleEncoder (const (InL BackendRoute_Api :/ ())) $
     InR obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
       FrontendRoute_Home -> PathEnd $ unitEncoder mempty
       FrontendRoute_Reader -> PathSegment "reader" $ unitEncoder mempty
+      FrontendRoute_SRS -> PathSegment "srs" $ unitEncoder mempty
+      FrontendRoute_Analyze -> PathSegment "sentence" $ unitEncoder mempty
+      FrontendRoute_Sentences -> PathSegment "sentences" $ unitEncoder mempty
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute

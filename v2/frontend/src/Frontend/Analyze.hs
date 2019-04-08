@@ -6,7 +6,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-module Frontend.SRS where
+module Frontend.Analyze where
 
 import Obelisk.Frontend
 import Obelisk.Route
@@ -22,7 +22,7 @@ import Common.Api
 import Common.Route
 import Obelisk.Generated.Static
 
-srs
+analyze
   :: ( DomBuilder t m
      , Routed t (R FrontendRoute) m
      , PostBuild t m
@@ -32,7 +32,7 @@ srs
      , RouteToUrl (R FrontendRoute) m
      )
   => m ()
-srs = do
+analyze = do
   divClass "tile is-ancestor" $ do
     divClass "tile is-vertical" $ do
       divClass "tile" $ do

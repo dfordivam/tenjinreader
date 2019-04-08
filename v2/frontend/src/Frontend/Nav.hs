@@ -75,7 +75,8 @@ topBar inpEv = do
             then ("style" =: "display: none;")
             else Map.empty)
       elDynAttr "a" attr2 $ mdo
-        elDynAttr "img" attr3 $ return ()
+        (e,_) <- elDynAttr' "img" attr3 $ return ()
+        setRoute ((FrontendRoute_Home :/ ()) <$ domEvent Click e)
         toggle True =<< burgerButton
     let
       attr8 = ("class" =: "navbar-menu") <>
@@ -120,7 +121,8 @@ sidePanel visDyn = do
   let
     panelItems =
       [ ("Reader", "fa-book", FrontendRoute_Reader :/ ())
-      , ("SRS", "fa-book", FrontendRoute_Reader :/ ())
+      , ("SRS", "fa-question-circle", FrontendRoute_SRS :/ ())
+      , ("Sentence", "fa-align-justify", FrontendRoute_Analyze :/ ())
       ]
   elClass "nav" "panel" $ do
     for panelItems $ \(t, i, l) -> do
