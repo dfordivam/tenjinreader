@@ -29,7 +29,7 @@ in obelisk.project ./. ({ pkgs, ... }:
       };
     in
       {
-        servant-reflex = self.callCabal2nix "servant-reflex" servant-reflex {};
+        servant-reflex = pkgs.haskell.lib.doJailbreak (self.callCabal2nix "servant-reflex" servant-reflex {});
         servant-snap = (pkgs.haskell.lib.dontCheck (self.callCabal2nix "servant-snap" servant-snap {}));
       };
   })
