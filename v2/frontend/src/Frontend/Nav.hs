@@ -158,30 +158,32 @@ readerControls = do
     directionOptions = void $ for ["V", "H"] $ \t -> do
       elAttr "option" ("value" =: t <> "id" =: t) $ text $ t
   -- Hoverable
-    allControls = divClass "navbar-item" $ do
-      divClass "select" $ selectElement (def
-        & selectElementConfig_initialValue .~ "100") sizeOptions
-    -- divClass "navbar-item" $ do
-      divClass "select" $ selectElement (def
-        & selectElementConfig_initialValue .~ "100") gapOptions
-    -- divClass "navbar-item" $ do
-      divClass "select" $ selectElement (def
-        & selectElementConfig_initialValue .~ "500") widthOptions
-    -- divClass "navbar-item" $ do
-      divClass "select" $ selectElement (def
-        & selectElementConfig_initialValue .~ "V") directionOptions
-    -- divClass "navbar-item" $ do
-      elClass "label" "checkbox" $ do
-        inputElement $ def
-          & initialAttributes .~ "type" =: "checkbox"
-          -- & inputElementConfig_setChecked .~ setChecked
-        text "Highlight"
+    allControls :: (DomBuilder t m) => (forall a . m a -> m a) -> (forall b. m b -> m b) -> m ()
+    allControls wrap nest = wrap $ do
+      nest $
+        divClass "select" $ selectElement (def
+          & selectElementConfig_initialValue .~ "100") sizeOptions
+      nest $
+        divClass "select" $ selectElement (def
+          & selectElementConfig_initialValue .~ "100") gapOptions
+      nest $
+        divClass "select" $ selectElement (def
+          & selectElementConfig_initialValue .~ "500") widthOptions
+      nest $
+        divClass "select" $ selectElement (def
+          & selectElementConfig_initialValue .~ "V") directionOptions
+      nest $
+        elClass "label" "checkbox" $ do
+          inputElement $ def
+            & initialAttributes .~ "type" =: "checkbox"
+            -- & inputElementConfig_setChecked .~ setChecked
+          text "Highlight"
 
-  divClass "navbar-item is-hidden-mobile" $ allControls
+  divClass "navbar-item is-hidden-mobile" $ allControls (divClass "navbar-item") id
   divClass "navbar-item has-dropdown is-hoverable is-hidden-tablet" $ do
     elClass "a" "navbar-link" $ do
       text ""
     divClass "navbar-dropdown is-right" $ do
-      allControls
+      allControls id (divClass "navbar-item")
 
   return ()
