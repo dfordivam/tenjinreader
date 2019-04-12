@@ -37,7 +37,6 @@ nav
      , MonadHold t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
-     , Prerender js m
      )
   => Event t ()
   -> m (Dynamic t Bool)
@@ -53,7 +52,6 @@ topBar
      , MonadHold t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
-     , Prerender js m
      )
   => Event t ()
   -> m (Dynamic t Bool)
@@ -84,8 +82,8 @@ topBar inpEv = do
     ie <- elAttr "div" attr8 $ do
       divClass "navbar-start" $ return ()
       divClass "navbar-end" $ do
+        readerControls
         divClass "navbar-item" $ do
-          let
           inputElement $ def
             & initialAttributes .~ "class" =: "input"
     dynText $ value ie
@@ -130,4 +128,60 @@ sidePanel visDyn = do
         elClass "span" "panel-icon" $ icon i
         text t
       setRoute (l <$ domEvent Click e)
+  return ()
+
+readerControls
+  :: forall t m .( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => m ()
+readerControls = do
+  let
+    sizeOptions :: DomBuilder t m => m ()
+    sizeOptions = void $ for [80, 85 .. 250] $ \v -> do
+      let t = T.pack $ show v
+      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t <> "%"
+    gapOptions :: DomBuilder t m => m ()
+    gapOptions = void $ for [100, 110 .. 250] $ \v -> do
+      let t = T.pack $ show v
+      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t <> "%"
+    widthOptions :: DomBuilder t m => m ()
+    widthOptions = void $ for [200, 250 .. 2250] $ \v -> do
+      let t = T.pack $ show v
+      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t <> "px"
+    directionOptions :: DomBuilder t m => m ()
+    directionOptions = void $ for ["V", "H"] $ \t -> do
+      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t
+  -- Hoverable
+    allControls = divClass "navbar-item" $ do
+      divClass "select" $ selectElement (def
+        & selectElementConfig_initialValue .~ "100") sizeOptions
+    -- divClass "navbar-item" $ do
+      divClass "select" $ selectElement (def
+        & selectElementConfig_initialValue .~ "100") gapOptions
+    -- divClass "navbar-item" $ do
+      divClass "select" $ selectElement (def
+        & selectElementConfig_initialValue .~ "500") widthOptions
+    -- divClass "navbar-item" $ do
+      divClass "select" $ selectElement (def
+        & selectElementConfig_initialValue .~ "V") directionOptions
+    -- divClass "navbar-item" $ do
+      elClass "label" "checkbox" $ do
+        inputElement $ def
+          & initialAttributes .~ "type" =: "checkbox"
+          -- & inputElementConfig_setChecked .~ setChecked
+        text "Highlight"
+
+  divClass "navbar-item is-hidden-mobile" $ allControls
+  divClass "navbar-item has-dropdown is-hoverable is-hidden-tablet" $ do
+    elClass "a" "navbar-link" $ do
+      text ""
+    divClass "navbar-dropdown is-right" $ do
+      allControls
+
   return ()
