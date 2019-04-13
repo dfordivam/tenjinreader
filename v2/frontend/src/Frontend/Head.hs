@@ -40,6 +40,3 @@ headEl = do
     ]
   elAttr "meta" ("name" =: "viewport" <> "content" =: "width=device-width, initial-scale=1.0, maximum-scale=1.0") blank
   elAttr "meta" ("charset" =: "utf-8") blank
-  e <- button "click"
-  count e >>= display
-  routeLink (FrontendRoute_Reader :/ ()) $ text "reader"
