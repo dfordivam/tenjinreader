@@ -85,7 +85,8 @@ topBar inpEv = do
         readerControls
         divClass "navbar-item" $ do
           inputElement $ def
-            & initialAttributes .~ "class" =: "input"
+            & initialAttributes .~
+            ("class" =: "input" <> "style" =: "width:30vw")
     dynText $ value ie
     return showPanel
 

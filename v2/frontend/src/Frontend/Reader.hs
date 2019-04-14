@@ -34,7 +34,6 @@ reader
      )
   => m ()
 reader = do
-  text "READER"
   mainContents
   e <- button "click 2"
   count e >>= display
@@ -49,7 +48,7 @@ mainContents
      , RouteToUrl (R FrontendRoute) m
      )
   => m ()
-mainContents = divClass "" $ do
+mainContents = divClass "section" $ do
   for contents $ \paraText -> divClass "" $ text paraText
   return ()
 
