@@ -13,10 +13,11 @@ import Obelisk.Route
 import Obelisk.Route.Frontend
 import Reflex.Dom.Core
 
-import qualified Data.Text as T
-import Data.Dependent.Sum (DSum(..))
 import Control.Monad.Fix
+import Data.Dependent.Sum (DSum(..))
 import Data.Functor.Identity
+import qualified Data.Map as Map
+import qualified Data.Text as T
 import Data.Traversable
 
 import Common.Api
@@ -48,8 +49,18 @@ mainContents
      , RouteToUrl (R FrontendRoute) m
      )
   => m ()
-mainContents = divClass "section" $ do
-  for contents $ \paraText -> divClass "" $ text paraText
+mainContents = divClass "" $ do
+  let
+    style = "height" =: "15em"
+      <> "writing-mode" =: "vertical-rl"
+      <> "padding-top" =: "2em"
+    attr = constDyn $
+      "style" =:
+      (T.intercalate " " $ map (\(k, v) -> k <> ": " <> v <> ";") $ Map.toList style)
+  elDynAttr "div" attr $ for contents $ \paraText ->
+    el "p" $ text paraText
+  elDynAttr "div" attr $ for contents $ \paraText ->
+    el "p" $ text paraText
   return ()
 
 contents =
@@ -58,6 +69,7 @@ contents =
   , "立候補の受け付けは午前８時半から各地の選挙管理委員会で行われていて、ＮＨＫのまとめによりますと、午後２時現在、97の市区長選挙には合わせて193人が立候補しました。"
   , "内訳を見ますと、現職が78人、元市長が３人、新人が112人です。女性は27人となっています。"
   , "県庁所在地では、水戸、津、高松、長崎、大分の５つの市長選挙が行われ、このうち、長崎市長選挙は、４期目を目指す現職と新人３人の合わせて４人が立候補し、８年ぶりの選挙戦となりました。"
+  , "ー二三四五六七八九十ー二三四五六七八九十ー二三四五六七八九十ー二三四五六七八九十ー二三四五六七八九十ー二三四五六七八九十"
   , "一方、津と高松の２つの市長選挙は、これまでに現職のほかに立候補の届け出はなく、無投票となる公算が大きくなっています。"
   , "統一地方選挙の後半戦では、人口減少対策のほか、子育て支援や高齢者福祉など暮らしに身近なテーマをめぐって活発な論戦が交わされる見通しです。"
   , "市区長選挙や市と区の議会議員選挙は、衆議院の２つの補欠選挙や、16日に告示される町村長と町村議会議員の選挙とともに、今月21日に投票が行われます。"

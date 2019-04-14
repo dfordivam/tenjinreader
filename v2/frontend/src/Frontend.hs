@@ -43,7 +43,7 @@ frontend = Frontend
   }
 
 mainContainer :: DomBuilder t m => m () -> m (Event t ())
-mainContainer w = domEvent Click . fst <$> elClass' "main" "column container" w
+mainContainer w = domEvent Click . fst <$> elClass' "main" "column container section" w
 
 sections
   :: ( DomBuilder t m
