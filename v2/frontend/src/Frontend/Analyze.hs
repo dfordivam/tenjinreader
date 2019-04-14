@@ -33,29 +33,6 @@ analyze
      )
   => m ()
 analyze = do
-  divClass "tile is-ancestor" $ do
-    divClass "tile is-vertical" $ do
-      divClass "tile" $ do
-        divClass "tile is-parent is-vertical" $ do
-          elClass "article" "tile is-child notification is-primary" $ do
-            elClass "p" "title" $ do
-              text "Random sentence"
-            elClass "p" "subtitle" $ do
-              text "******"
-      divClass "tile is-parent" $ do
-        elClass "article" "tile is-child notification is-danger is-8" $ do
-          elClass "p" "title" $ do
-            text "Books list"
-          elClass "p" "subtitle" $ do
-            text "Book 1"
-          divClass "content" $ return ()
-        elClass "article" "tile is-child notification is-success" $ do
-          divClass "content" $ do
-            elClass "p" "title" $ do
-              text "Words list"
-            elClass "p" "subtitle" $ do
-              text "long list"
-            divClass "content" $ return ()
+  text "ANALYZE"
   e <- button "click"
   count e >>= display
-  routeLink (FrontendRoute_Reader :/ ()) $ text "reader"

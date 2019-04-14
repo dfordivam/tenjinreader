@@ -33,6 +33,6 @@ reader
      )
   => m ()
 reader = do
+  text "READER"
   e <- button "click 2"
   count e >>= display
-  routeLink (FrontendRoute_Home :/ ()) $ text "home"

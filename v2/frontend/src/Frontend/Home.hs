@@ -33,6 +33,7 @@ home
      )
   => m ()
 home = do
+  text "HOME"
   divClass "tile is-ancestor" $ do
     divClass "tile is-vertical" $ do
       divClass "tile" $ do
@@ -58,4 +59,3 @@ home = do
             divClass "content" $ return ()
   e <- button "click"
   count e >>= display
-  routeLink (FrontendRoute_Reader :/ ()) $ text "reader"
