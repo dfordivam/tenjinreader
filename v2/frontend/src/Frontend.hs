@@ -56,9 +56,15 @@ sections
      )
   => m ()
 sections = do
-  askRoute >>= \r ->
-    sequence_ $ ffor sectionsList $ \(wr, wm) -> do
-      let vis = ffor r $ ("style" =:) . \r' -> if r' == wr
+  askRoute >>= \r -> do
+    let
+      sec' = ffor r $ \r' -> case r' of
+        FrontendRoute_Home :/ () -> Section_Home
+        FrontendRoute_Reader :/ () -> Section_Reader
+        FrontendRoute_SRS :/ () -> Section_SRS
+        FrontendRoute_Analyze :/ () -> Section_Analyze
+    sequence_ $ ffor sectionsList $ \(s', wm) -> do
+      let vis = ffor sec' $ ("style" =:) . \s -> if s == s'
             then ""
             else "display: none;"
       elDynAttr "section" vis wm
@@ -72,10 +78,17 @@ sectionsList
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => [(DSum FrontendRoute Identity, m ())]
+  => [(Section, m ())]
 sectionsList =
-  [ (FrontendRoute_Home :/ (), home)
-  , (FrontendRoute_Reader :/ (), reader)
-  , (FrontendRoute_SRS :/ (), srs)
-  , (FrontendRoute_Analyze :/ (), analyze)
+  [ (Section_Home, home)
+  , (Section_Reader, reader)
+  , (Section_SRS, srs)
+  , (Section_Analyze, analyze)
   ]
+
+data Section
+  = Section_Home
+  | Section_Reader
+  | Section_SRS
+  | Section_Analyze
+  deriving (Eq, Show)
