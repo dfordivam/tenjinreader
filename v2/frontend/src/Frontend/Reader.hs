@@ -53,6 +53,7 @@ mainContents = divClass "" $ do
     style = "height" =: "15em"
       <> "writing-mode" =: "vertical-rl"
       <> "padding-top" =: "2em"
+      <> "width" =: "80vw"
     attr = constDyn $
       "style" =:
       (T.intercalate " " $ map (\(k, v) -> k <> ": " <> v <> ";") $ Map.toList style)
@@ -72,9 +73,13 @@ pageChangeButtons
      , RouteToUrl (R FrontendRoute) m
      )
   => m ()
-pageChangeButtons = divClass "columns is-mobile" $ do
-  divClass "column" $ elClass "a" "button is-small is-fullwidth" $ text "<"
-  divClass "column" $ elClass "a" "button is-small is-fullwidth" $ text ">"
+pageChangeButtons = do
+  let
+    attr = "class" =: "columns is-mobile"
+      <> "style" =: "padding-top: 1em;"
+  elAttr "div" attr $ do
+    divClass "column" $ elClass "a" "button is-small is-fullwidth" $ text "<"
+    divClass "column" $ elClass "a" "button is-small is-fullwidth" $ text ">"
 
 contents =
   [ "平成最後の選挙となる統一地方選挙は、14日、政令指定都市以外の市と東京の特別区で、市区長と議員の選挙が告示され、後半戦がスタートしました。"
