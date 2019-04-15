@@ -158,6 +158,10 @@ readerControls = do
     directionOptions :: DomBuilder t m => m ()
     directionOptions = void $ for ["V", "H"] $ \t -> do
       elAttr "option" ("value" =: t <> "id" =: t) $ text $ t
+    rowsOptions :: DomBuilder t m => m ()
+    rowsOptions = void $ for [1,2] $ \v -> do
+      let t = T.pack $ show v
+      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t
   -- Hoverable
     allControls :: (DomBuilder t m) => (forall a . m a -> m a) -> (forall b. m b -> m b) -> m ()
     allControls wrap nest = wrap $ do
@@ -173,6 +177,9 @@ readerControls = do
       nest $
         divClass "select" $ selectElement (def
           & selectElementConfig_initialValue .~ "V") directionOptions
+      nest $
+        divClass "select" $ selectElement (def
+          & selectElementConfig_initialValue .~ "1") rowsOptions
       nest $
         elClass "label" "checkbox" $ do
           inputElement $ def
