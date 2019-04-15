@@ -36,8 +36,7 @@ reader
   => m ()
 reader = do
   mainContents
-  e <- button "click 2"
-  count e >>= display
+  pageChangeButtons
 
 mainContents
   :: ( DomBuilder t m
@@ -62,6 +61,20 @@ mainContents = divClass "" $ do
   elDynAttr "div" attr $ for contents $ \paraText ->
     el "p" $ text paraText
   return ()
+
+pageChangeButtons
+  :: ( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => m ()
+pageChangeButtons = divClass "columns is-mobile" $ do
+  divClass "column" $ elClass "a" "button is-small is-fullwidth" $ text "<"
+  divClass "column" $ elClass "a" "button is-small is-fullwidth" $ text ">"
 
 contents =
   [ "平成最後の選挙となる統一地方選挙は、14日、政令指定都市以外の市と東京の特別区で、市区長と議員の選挙が告示され、後半戦がスタートしました。"
