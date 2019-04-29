@@ -17,6 +17,7 @@ import Control.Monad.Fix
 import Data.Dependent.Sum (DSum(..))
 import Data.Functor.Identity
 import qualified Data.Map as Map
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Traversable
 
@@ -52,16 +53,31 @@ mainContents = divClass "" $ do
   let
     style = "height" =: "15em"
       <> "writing-mode" =: "vertical-rl"
-      <> "padding-top" =: "2em"
+      -- <> "padding-top" =: "2em"
       <> "width" =: "80vw"
     attr = constDyn $
       "style" =:
       (T.intercalate " " $ map (\(k, v) -> k <> ": " <> v <> ";") $ Map.toList style)
-  elDynAttr "div" attr $ for contents $ \paraText ->
+    (p1, p2) = perRowContents 15 40 contents
+  elDynAttr "div" attr $ for p1 $ \paraText ->
     el "p" $ text paraText
-  elDynAttr "div" attr $ for contents $ \paraText ->
+  elDynAttr "div" attr $ for p2 $ \paraText ->
     el "p" $ text paraText
   return ()
+
+-- No of words per line W
+-- No of total lines per row L
+-- (Content to display on 1 row, rest of contents)
+perRowContents :: Int -> Int -> [Text] -> ([Text], [Text])
+perRowContents w l [] = ([], [])
+perRowContents w l (c:cs) =
+  if cl < l
+    then (c:r2, e2)
+    else ([c1], c2:cs)
+  where
+    cl = ceiling $ fromIntegral (T.length c) / (fromIntegral w)
+    (r2, e2) = perRowContents w (l - cl) cs
+    (c1, c2) = T.splitAt (w * l) c
 
 pageChangeButtons
   :: ( DomBuilder t m
