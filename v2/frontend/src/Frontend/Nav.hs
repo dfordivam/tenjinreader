@@ -16,16 +16,19 @@ import Obelisk.Route
 import Obelisk.Route.Frontend
 import Reflex.Dom.Core
 
-import qualified Data.Text as T
-import Data.Dependent.Sum (DSum(..))
-import Control.Monad.Fix
-import Data.Functor.Identity
-import qualified Data.Map as Map
 import Control.Monad
+import Control.Monad.Fix
+import Data.Dependent.Sum (DSum(..))
+import Data.Functor.Identity
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Traversable
 
 import Common.Api
 import Common.Route
+import Common.Types
 import Frontend.Common
 import Obelisk.Generated.Static
 
@@ -39,7 +42,7 @@ nav
      , RouteToUrl (R FrontendRoute) m
      )
   => Event t ()
-  -> m (Dynamic t Bool)
+  -> m (Dynamic t Bool, Dynamic t ReaderControls)
 nav _ = do
   elClass "header" "" $ do
     topBar never
@@ -54,7 +57,7 @@ topBar
      , RouteToUrl (R FrontendRoute) m
      )
   => Event t ()
-  -> m (Dynamic t Bool)
+  -> m (Dynamic t Bool, Dynamic t ReaderControls)
 topBar inpEv = do
   let
     attr1 = ("aria-label" =: "main navigation") <>
@@ -79,16 +82,16 @@ topBar inpEv = do
     let
       attr8 = ("class" =: "navbar-menu") <>
               ("id" =: "navbarBasicExample")
-    ie <- elAttr "div" attr8 $ do
+    (rc, ie) <- elAttr "div" attr8 $ do
       divClass "navbar-start" $ return ()
       divClass "navbar-end" $ do
-        readerControls
+        rc <- readerControls
         divClass "navbar-item" $ do
           inputElement $ def
             & initialAttributes .~
             ("class" =: "input" <> "style" =: "width:30vw")
-    dynText $ value ie
-    return showPanel
+        return (rc, ie)
+    return (showPanel, rc)
 
 burgerButton
   :: ( DomBuilder t m
@@ -140,52 +143,57 @@ readerControls
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => m ()
+  => m (Dynamic t ReaderControls)
 readerControls = do
   let
-    sizeOptions :: DomBuilder t m => m ()
-    sizeOptions = void $ for [80, 85 .. 250] $ \v -> do
-      let t = T.pack $ show v
-      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t <> "%"
-    gapOptions :: DomBuilder t m => m ()
-    gapOptions = void $ for [100, 110 .. 250] $ \v -> do
-      let t = T.pack $ show v
-      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t <> "%"
-    widthOptions :: DomBuilder t m => m ()
-    widthOptions = void $ for [200, 250 .. 2250] $ \v -> do
-      let t = T.pack $ show v
-      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t <> "px"
-    directionOptions :: DomBuilder t m => m ()
-    directionOptions = void $ for ["V", "H"] $ \t -> do
-      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t
-    rowsOptions :: DomBuilder t m => m ()
-    rowsOptions = void $ for [1,2] $ \v -> do
-      let t = T.pack $ show v
-      elAttr "option" ("value" =: t <> "id" =: t) $ text $ t
+    sizeOptions :: Dynamic t (Map Int Text)
+    sizeOptions = constDyn $ Map.fromList $
+      map (\v -> (v, T.pack $ show v)) [80, 85 .. 250]
+    gapOptions :: Dynamic t (Map Int Text)
+    gapOptions = constDyn $ Map.fromList $
+      map (\v -> (v, T.pack $ show v)) [100, 110 .. 250]
+    directionOptions :: Dynamic t (Map Text Text)
+    directionOptions = constDyn $ Map.fromList $
+      [("V", "V"), ("H", "H")]
+    charCountOptions :: Dynamic t (Map Int Text)
+    charCountOptions = constDyn $ Map.fromList $
+      map (\v -> (v, T.pack $ show v)) [5,6..30]
+    lineCountOptions :: Dynamic t (Map Int Text)
+    lineCountOptions = constDyn $ Map.fromList $
+      map (\v -> (v, T.pack $ show v)) [5,6..50]
+    rowsOptions :: Dynamic t (Map Int Text)
+    rowsOptions = constDyn $ Map.fromList $
+      map (\v -> (v, T.pack $ show v)) [1,2..5]
   -- Hoverable
-    allControls :: (DomBuilder t m) => (forall a . m a -> m a) -> (forall b. m b -> m b) -> m ()
+    allControls :: (DomBuilder t m) => (forall a . m a -> m a) -> (forall b. m b -> m b) -> m (Dynamic t ReaderControls)
     allControls wrap nest = wrap $ do
-      nest $
-        divClass "select" $ selectElement (def
-          & selectElementConfig_initialValue .~ "100") sizeOptions
-      nest $
-        divClass "select" $ selectElement (def
-          & selectElementConfig_initialValue .~ "100") gapOptions
-      nest $
-        divClass "select" $ selectElement (def
-          & selectElementConfig_initialValue .~ "500") widthOptions
-      nest $
-        divClass "select" $ selectElement (def
-          & selectElementConfig_initialValue .~ "V") directionOptions
-      nest $
-        divClass "select" $ selectElement (def
-          & selectElementConfig_initialValue .~ "1") rowsOptions
+      s <- nest $
+        divClass "select" $ dropdown 120 sizeOptions def
+      g <- nest $
+        divClass "select" $ dropdown 120 gapOptions def
+      c <- nest $
+        divClass "select" $ dropdown 15 charCountOptions def
+      l <- nest $
+        divClass "select" $ dropdown 30 lineCountOptions def
+      d <- nest $
+        divClass "select" $ dropdown "V" directionOptions def
+      r <- nest $
+        divClass "select" $ dropdown 2 rowsOptions def
       nest $
         elClass "label" "checkbox" $ do
           inputElement $ def
             & initialAttributes .~ "type" =: "checkbox"
             -- & inputElementConfig_setChecked .~ setChecked
           text "Highlight"
+      let
+        rc = ReaderControls
+          <$> (value s)
+          <*> (value g)
+          <*> ((==) "V" <$> (value d))
+          <*> (value l)
+          <*> (value c)
+          <*> (value r)
+      pure rc
 
   divClass "navbar-item is-hidden-mobile" $ allControls (divClass "navbar-item") id
   divClass "navbar-item has-dropdown is-hoverable is-hidden-tablet" $ do
@@ -193,5 +201,3 @@ readerControls = do
       text ""
     divClass "navbar-dropdown is-right" $ do
       allControls id (divClass "navbar-item")
-
-  return ()

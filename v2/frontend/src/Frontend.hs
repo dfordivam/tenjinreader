@@ -21,6 +21,7 @@ import Data.Bool
 
 import Common.Api
 import Common.Route
+import Common.Types
 import Obelisk.Generated.Static
 
 import Frontend.Home
@@ -35,10 +36,10 @@ frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = headEl
   , _frontend_body = do
-      rec navDyn <- nav click
+      rec (navDyn, rc) <- nav click
           click <- divClass "columns" $ do
             elDynClass "div" ((<>) "column is-narrow " <$> (ffor navDyn $ bool "is-hidden" "")) $ sidePanel navDyn
-            mainContainer sections
+            mainContainer (sections rc)
       return ()
   }
 
@@ -54,8 +55,9 @@ sections
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => m ()
-sections = do
+  => Dynamic t ReaderControls
+  -> m ()
+sections rc = do
   askRoute >>= \r -> do
     let
       sec' = ffor r $ \r' -> case r' of
@@ -63,7 +65,7 @@ sections = do
         FrontendRoute_Reader :/ () -> Section_Reader
         FrontendRoute_SRS :/ () -> Section_SRS
         FrontendRoute_Analyze :/ () -> Section_Analyze
-    sequence_ $ ffor sectionsList $ \(s', wm) -> do
+    sequence_ $ ffor (sectionsList rc) $ \(s', wm) -> do
       let vis = ffor sec' $ ("style" =:) . \s -> if s == s'
             then ""
             else "display: none;"
@@ -78,10 +80,11 @@ sectionsList
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => [(Section, m ())]
-sectionsList =
+  => Dynamic t ReaderControls
+  -> [(Section, m ())]
+sectionsList rc =
   [ (Section_Home, home)
-  , (Section_Reader, reader)
+  , (Section_Reader, reader rc)
   , (Section_SRS, srs)
   , (Section_Analyze, analyze)
   ]

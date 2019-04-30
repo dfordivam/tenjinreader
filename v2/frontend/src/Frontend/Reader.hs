@@ -16,6 +16,7 @@ import Reflex.Dom.Core
 import Control.Monad.Fix
 import Data.Dependent.Sum (DSum(..))
 import Data.Functor.Identity
+import Data.Maybe
 import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -23,6 +24,7 @@ import Data.Traversable
 
 import Common.Api
 import Common.Route
+import Common.Types
 import Obelisk.Generated.Static
 
 reader
@@ -34,9 +36,11 @@ reader
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => m ()
-reader = do
-  mainContents
+  => Dynamic t ReaderControls
+  -> m ()
+reader rc = do
+  display rc
+  mainContents rc
   pageChangeButtons
 
 mainContents
@@ -48,36 +52,59 @@ mainContents
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => m ()
-mainContents = divClass "" $ do
+  => Dynamic t ReaderControls
+  -> m ()
+mainContents rc = divClass "" $ do
   let
-    style = "height" =: "15em"
-      <> "writing-mode" =: "vertical-rl"
-      -- <> "padding-top" =: "2em"
-      <> "width" =: "80vw"
-    attr = constDyn $
+    padAmount = 2
+    style pad (ReaderControls s g v l w r) =
+      "font-size" =: (tshow s <> "%")
+      <> "line-height" =: (tshow g <> "%")
+      <> "height" =: (tshow height <> "em")
+      <> "writing-mode" =: (if v then "vertical-rl" else "lr")
+      <> "width" =: (tshow l <> "em")
+      <> if pad then "padding-top" =: (tshow padAmount <> "em") else Map.empty
+      where
+        height = if pad then padAmount + w else w
+
+    attr pad = ffor rc $ \rc ->
       "style" =:
-      (T.intercalate " " $ map (\(k, v) -> k <> ": " <> v <> ";") $ Map.toList style)
-    (p1, p2) = perRowContents 15 40 contents
-  elDynAttr "div" attr $ for p1 $ \paraText ->
-    el "p" $ text paraText
-  elDynAttr "div" attr $ for p2 $ \paraText ->
-    el "p" $ text paraText
+      (T.intercalate " " $ map (\(k, v) -> k <> ": " <> v <> ";")
+       $ Map.toList $ style pad rc)
+  rowCount <- holdUniqDyn $ _readerControls_rowCount <$> rc
+  lineCount <- holdUniqDyn $ _readerControls_lineCount <$> rc
+  wordPerLine <- holdUniqDyn $ _readerControls_wordPerLine <$> rc
+  let rlwDyn = (,,) <$> rowCount <*> lineCount <*> wordPerLine
+  dyn $ ffor rlwDyn $ \rlw -> do
+    let
+      rows = zip [1..] $ dividePerRow rlw contents
+    for rows $ \(ri, row) ->
+      elDynAttr "div" (attr (ri /= 1)) $ for row $ \paraText ->
+        el "p" $ text paraText
   return ()
 
--- No of words per line W
--- No of total lines per row L
--- (Content to display on 1 row, rest of contents)
-perRowContents :: Int -> Int -> [Text] -> ([Text], [Text])
-perRowContents w l [] = ([], [])
-perRowContents w l (c:cs) =
-  if cl < l
-    then (c:r2, e2)
-    else ([c1], c2:cs)
+dividePerRow :: (Int, Int, Int) -> [Text] -> [[Text]]
+dividePerRow (r, l, w) cs = fromMaybe [] $ go r cs
   where
-    cl = ceiling $ fromIntegral (T.length c) / (fromIntegral w)
-    (r2, e2) = perRowContents w (l - cl) cs
-    (c1, c2) = T.splitAt (w * l) c
+  go :: Int -> [Text] -> Maybe [[Text]]
+  go _ [] = Nothing
+  go 0 _ = Nothing
+  go r cs =
+    let (t,o) = perRowContents w l cs
+    in Just $ t : (fromMaybe [] $ go (r - 1) o)
+  -- No of words per line W
+  -- No of total lines per row L
+  -- (Content to display on 1 row, rest of contents)
+  perRowContents :: Int -> Int -> [Text] -> ([Text], [Text])
+  perRowContents w l [] = ([], [])
+  perRowContents w l (c:cs) =
+    if cl < l
+      then (c:r2, e2)
+      else ([c1], c2:cs)
+    where
+      cl = ceiling $ fromIntegral (T.length c) / (fromIntegral w)
+      (r2, e2) = perRowContents w (l - cl) cs
+      (c1, c2) = T.splitAt (w * l) c
 
 pageChangeButtons
   :: ( DomBuilder t m

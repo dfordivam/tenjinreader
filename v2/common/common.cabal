@@ -8,6 +8,7 @@ library
   build-depends: base
                , obelisk-route
                , mtl
+               , lens
                , text
                , servant
   default-extensions:
@@ -16,3 +17,4 @@ library
   exposed-modules:
     Common.Api
     Common.Route
+    Common.Types
