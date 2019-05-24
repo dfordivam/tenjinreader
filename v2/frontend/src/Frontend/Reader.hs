@@ -39,7 +39,6 @@ reader
   => Dynamic t ReaderControls
   -> m ()
 reader rc = do
-  display rc
   mainContents rc
   pageChangeButtons
 

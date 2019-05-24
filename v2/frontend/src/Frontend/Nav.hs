@@ -17,6 +17,7 @@ import Obelisk.Route.Frontend
 import Reflex.Dom.Core
 
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Fix
 import Data.Dependent.Sum (DSum(..))
 import Data.Functor.Identity
@@ -38,6 +39,9 @@ nav
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
+     , MonadIO (Performable m)
+     , TriggerEvent t m
+     , PerformEvent t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -53,6 +57,9 @@ topBar
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
+     , MonadIO (Performable m)
+     , TriggerEvent t m
+     , PerformEvent t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -140,12 +147,16 @@ readerControls
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
+     , MonadIO (Performable m)
+     , TriggerEvent t m
+     , PerformEvent t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
   => m (Dynamic t ReaderControls)
 readerControls = do
   let
+    initRc = ReaderControls 120 120 True 15 20 2
     sizeOptions :: Dynamic t (Map Int Text)
     sizeOptions = constDyn $ Map.fromList $
       map (\v -> (v, T.pack $ show v)) [80, 85 .. 250]
@@ -165,10 +176,11 @@ readerControls = do
     rowsOptions = constDyn $ Map.fromList $
       map (\v -> (v, T.pack $ show v)) [1,2..5]
   -- Hoverable
-    allControls :: (DomBuilder t m) => (forall a . m a -> m a) -> (forall b. m b -> m b) -> m (Dynamic t ReaderControls)
-    allControls wrap nest = wrap $ do
+    allControls :: (DomBuilder t m) => Event t ReaderControls -> (forall a . m a -> m a) -> (forall b. m b -> m b) -> m (Event t ReaderControls)
+    allControls irc wrap nest = wrap $ do
       s <- nest $
-        divClass "select" $ dropdown 120 sizeOptions def
+        divClass "select" $ dropdown 120 sizeOptions $ def
+          & dropdownConfig_setValue .~ (fmap _readerControls_fontSize irc)
       g <- nest $
         divClass "select" $ dropdown 120 gapOptions def
       c <- nest $
@@ -193,11 +205,14 @@ readerControls = do
           <*> (value l)
           <*> (value c)
           <*> (value r)
-      pure rc
+      updated <$> holdUniqDyn rc
 
-  divClass "navbar-item is-hidden-mobile" $ allControls (divClass "navbar-item") id
-  divClass "navbar-item has-dropdown is-hoverable is-hidden-tablet" $ do
-    elClass "a" "navbar-link" $ do
-      text ""
-    divClass "navbar-dropdown is-right" $ do
-      allControls id (divClass "navbar-item")
+  rec
+    rcd <- delay 0 rc2
+    rc1 <- divClass "navbar-item is-hidden-mobile" $ allControls rcd (divClass "navbar-item") id
+    rc2 <- divClass "navbar-item has-dropdown is-hoverable is-hidden-tablet" $ do
+      elClass "a" "navbar-link" $ do
+        text ""
+      divClass "navbar-dropdown is-right" $ do
+        allControls rc1 id (divClass "navbar-item")
+  holdDyn initRc (leftmost [rc1, rc2])
