@@ -30,3 +30,7 @@ icon i = do
     attr4 = ("aria-hidden" =: "true") <> ("class" =: ("fas " <> i))
   elAttr "i" attr4 $ return ()
 
+btn :: DomBuilder t m => Text -> Text -> m (Event t ())
+btn c t = do
+  (e, _) <- elClass' "a" ("button " <> c) $ text t
+  return $ domEvent Click e

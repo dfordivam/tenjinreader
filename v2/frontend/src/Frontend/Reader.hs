@@ -13,6 +13,7 @@ import Obelisk.Route
 import Obelisk.Route.Frontend
 import Reflex.Dom.Core
 
+import Control.Monad
 import Control.Monad.Fix
 import Data.Dependent.Sum (DSum(..))
 import Data.Functor.Identity
@@ -25,6 +26,7 @@ import Data.Traversable
 import Common.Api
 import Common.Route
 import Common.Types
+import Frontend.Common
 import Obelisk.Generated.Static
 
 reader
@@ -61,6 +63,7 @@ mainContents rc = divClass "" $ do
       <> "line-height" =: (tshow g <> "%")
       <> "height" =: (tshow height <> "em")
       <> "writing-mode" =: (if v then "vertical-rl" else "lr")
+      <> "margin-left" =: (if v then "auto" else "0")
       <> "width" =: (tshow l <> "em")
       <> if pad then "padding-top" =: (tshow padAmount <> "em") else Map.empty
       where
@@ -119,9 +122,9 @@ pageChangeButtons = do
   let
     attr = "class" =: "columns is-mobile"
       <> "style" =: "padding-top: 1em;"
-  elAttr "div" attr $ do
-    divClass "column" $ elClass "a" "button is-small is-fullwidth" $ text "<"
-    divClass "column" $ elClass "a" "button is-small is-fullwidth" $ text ">"
+  void $ elAttr "div" attr $ do
+    divClass "column" $ btn "is-small is-fullwidth" "<"
+    divClass "column" $ btn "is-small is-fullwidth" ">"
 
 contents =
   [ "平成最後の選挙となる統一地方選挙は、14日、政令指定都市以外の市と東京の特別区で、市区長と議員の選挙が告示され、後半戦がスタートしました。"
