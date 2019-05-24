@@ -93,7 +93,7 @@ topBar inpEv = do
         divClass "navbar-item" $ do
           inputElement $ def
             & initialAttributes .~
-            ("class" =: "input" <> "style" =: "width:30vw")
+            ("class" =: "input" <> "style" =: "width:30vw; max-width: 15em;")
         return (rc, ie)
     return (showPanel, rc)
 
