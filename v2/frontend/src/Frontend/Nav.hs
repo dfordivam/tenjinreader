@@ -35,14 +35,12 @@ import Frontend.Common
 import Obelisk.Generated.Static
 
 nav
-  :: ( DomBuilder t m
+  :: forall t m js .( DomBuilder t m
      , Routed t (R FrontendRoute) m
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
-     , MonadIO (Performable m)
-     , TriggerEvent t m
-     , PerformEvent t m
+     , Prerender js t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -53,14 +51,12 @@ nav _ = do
     topBar never
 
 topBar
-  :: ( DomBuilder t m
+  :: forall t m js .( DomBuilder t m
      , Routed t (R FrontendRoute) m
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
-     , MonadIO (Performable m)
-     , TriggerEvent t m
-     , PerformEvent t m
+     , Prerender js t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -143,14 +139,12 @@ sidePanel visDyn = do
   return ()
 
 readerControls
-  :: forall t m .( DomBuilder t m
+  :: forall t m js .( DomBuilder t m
      , Routed t (R FrontendRoute) m
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
-     , MonadIO (Performable m)
-     , TriggerEvent t m
-     , PerformEvent t m
+     , Prerender js t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -220,7 +214,8 @@ readerControls = do
       updated <$> holdUniqDyn rc
 
   rec
-    rcd <- debounce 0.1 rc2
+    rcd1 <- prerender (pure never) $ debounce 0.1 rc2
+    let rcd = switch $ current rcd1
     rc1 <- divClass "navbar-item is-hidden-mobile" $ allControls rcd (divClass "navbar-item") id
     rc2 <- divClass "navbar-item has-dropdown is-hoverable is-hidden-tablet" $ do
       elClass "a" "navbar-link" $ do

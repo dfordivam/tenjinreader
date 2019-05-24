@@ -27,6 +27,7 @@ import Snap
 import Common.Route
 import Common.Api
 import Obelisk.Backend
+import Obelisk.ExecutableConfig.Backend
 import Obelisk.Route
 
 backend :: Backend BackendRoute FrontendRoute
@@ -40,7 +41,7 @@ backend = Backend
   , _backend_routeEncoder = backendRouteEncoder
   }
 
-type ApiHandler = Snap
+type ApiHandler = BackendConfigsT Snap
 
 apiServer :: Server (ReaderAPI) '[] ApiHandler
 apiServer = a1 :<|> a2
