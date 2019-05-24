@@ -72,11 +72,12 @@ randomSentenceWidget = divClass "box" $ do
     e = "How far is it from here to the hotel?"
   elClass "p" "is-size-2-desktop is-size-3-touch" $ do
     text s
-  elClass "nav" "level" $ do
-    divClass "level-left" $ do
-      elClass "p" "is-size-4-desktop is-size-5-touch" $ text e
+  showEng <- elClass "nav" "level" $ do
+    divClass "level-left" $ blank
     divClass "level-right" $ do
-      btnIcon "" "fa-plus"
-      btnIcon "" "fa-check-double"
-      btnIcon "" "fa-align-justify"
+      btnIcon "" "fa-bookmark"
+      btnIcon "" "fa-expand"
+      btnIcon "" "fa-language"
+  widgetHold blank $ ffor showEng $ \_ ->
+    elClass "p" "is-size-4-desktop is-size-5-touch" $ text e
   blank
