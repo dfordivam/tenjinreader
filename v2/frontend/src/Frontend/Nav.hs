@@ -160,22 +160,28 @@ readerControls = do
     initRc = ReaderControls 120 120 True 15 20 2
     sizeOptions :: Dynamic t (Map Int Text)
     sizeOptions = constDyn $ Map.fromList $
-      map (\v -> (v, T.pack $ show v)) [80, 85 .. 250]
+      map (\v -> (v, T.pack $ show v))
+      [120, 125 .. 250]
     gapOptions :: Dynamic t (Map Int Text)
     gapOptions = constDyn $ Map.fromList $
-      map (\v -> (v, T.pack $ show v)) [100, 110 .. 250]
+      map (\v -> (v, T.pack $ show v))
+      [120, 125 .. 250]
     directionOptions :: Dynamic t (Map Text Text)
     directionOptions = constDyn $ Map.fromList $
-      [("V", "V"), ("H", "H")]
+      -- [("V", "V"), ("H", "H")]
+      [("V", "V")]
     charCountOptions :: Dynamic t (Map Int Text)
     charCountOptions = constDyn $ Map.fromList $
-      map (\v -> (v, T.pack $ show v)) [5,6..30]
+      map (\v -> (v, T.pack $ show v))
+      [15..30]
     lineCountOptions :: Dynamic t (Map Int Text)
     lineCountOptions = constDyn $ Map.fromList $
-      map (\v -> (v, T.pack $ show v)) [5,6..50]
+      map (\v -> (v, T.pack $ show v))
+      [25..50]
     rowsOptions :: Dynamic t (Map Int Text)
     rowsOptions = constDyn $ Map.fromList $
-      map (\v -> (v, T.pack $ show v)) [1,2..5]
+      map (\v -> (v, T.pack $ show v))
+      [2..5]
   -- Hoverable
     allControls :: (DomBuilder t m) => Event t ReaderControls -> (forall a . m a -> m a) -> (forall b. m b -> m b) -> m (Event t ReaderControls)
     allControls irc wrap nest = wrap $ do
