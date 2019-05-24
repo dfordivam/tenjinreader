@@ -72,8 +72,8 @@ mainContents rc = divClass "" $ do
        $ Map.toList $ style pad rc)
   rowCount <- holdUniqDyn $ _readerControls_rowCount <$> rc
   lineCount <- holdUniqDyn $ _readerControls_lineCount <$> rc
-  wordPerLine <- holdUniqDyn $ _readerControls_wordPerLine <$> rc
-  let rlwDyn = (,,) <$> rowCount <*> lineCount <*> wordPerLine
+  charPerLine <- holdUniqDyn $ _readerControls_charPerLine <$> rc
+  let rlwDyn = (,,) <$> rowCount <*> lineCount <*> charPerLine
   dyn $ ffor rlwDyn $ \rlw -> do
     let
       rows = zip [1..] $ dividePerRow rlw contents

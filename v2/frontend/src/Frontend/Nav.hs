@@ -19,6 +19,7 @@ import Reflex.Dom.Core
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Fix
+import Data.Bool
 import Data.Dependent.Sum (DSum(..))
 import Data.Functor.Identity
 import Data.Map (Map)
@@ -182,15 +183,20 @@ readerControls = do
         divClass "select" $ dropdown 120 sizeOptions $ def
           & dropdownConfig_setValue .~ (fmap _readerControls_fontSize irc)
       g <- nest $
-        divClass "select" $ dropdown 120 gapOptions def
+        divClass "select" $ dropdown 120 gapOptions $ def
+          & dropdownConfig_setValue .~ (fmap _readerControls_lineGap irc)
       c <- nest $
-        divClass "select" $ dropdown 15 charCountOptions def
+        divClass "select" $ dropdown 15 charCountOptions $ def
+          & dropdownConfig_setValue .~ (fmap _readerControls_charPerLine irc)
       l <- nest $
-        divClass "select" $ dropdown 30 lineCountOptions def
+        divClass "select" $ dropdown 30 lineCountOptions $ def
+          & dropdownConfig_setValue .~ (fmap _readerControls_lineCount irc)
       d <- nest $
-        divClass "select" $ dropdown "V" directionOptions def
+        divClass "select" $ dropdown "V" directionOptions $ def
+          & dropdownConfig_setValue .~ (fmap ((bool "H" "V") . _readerControls_isVertical) irc)
       r <- nest $
-        divClass "select" $ dropdown 2 rowsOptions def
+        divClass "select" $ dropdown 2 rowsOptions $ def
+          & dropdownConfig_setValue .~ (fmap _readerControls_rowCount irc)
       nest $
         elClass "label" "checkbox" $ do
           inputElement $ def
@@ -208,7 +214,7 @@ readerControls = do
       updated <$> holdUniqDyn rc
 
   rec
-    rcd <- delay 0 rc2
+    rcd <- debounce 0.1 rc2
     rc1 <- divClass "navbar-item is-hidden-mobile" $ allControls rcd (divClass "navbar-item") id
     rc2 <- divClass "navbar-item has-dropdown is-hoverable is-hidden-tablet" $ do
       elClass "a" "navbar-link" $ do

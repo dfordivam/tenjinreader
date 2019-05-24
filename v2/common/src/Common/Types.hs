@@ -13,10 +13,10 @@ tshow = T.pack . show
 
 data ReaderControls = ReaderControls
   { _readerControls_fontSize :: Int
-  , _readerControls_fontGap :: Int
+  , _readerControls_lineGap :: Int
   , _readerControls_isVertical :: Bool
   , _readerControls_lineCount :: Int
-  , _readerControls_wordPerLine :: Int
+  , _readerControls_charPerLine :: Int
   , _readerControls_rowCount :: Int
   }
   deriving (Show, Eq, Generic)
