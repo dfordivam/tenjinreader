@@ -61,9 +61,9 @@ reviewWidget = divClass "container" $ do
         ("class" =: "input" <> "style" =: "text-align: center")
   divClass "container" $ do
     divClass "columns is-centered" $ divClass "column has-text-centered" $ do
-      btn "" "Edit"
-      btn "" "Bury"
-      btn "" "Suspend"
+      btnA "" "Edit"
+      btnA "" "Bury"
+      btnA "" "Suspend"
     divClass "columns is-centered" $ divClass "column is-half-tablet" $ divClass "level is-mobile" $ do
       divClass "level-item" $ btnIcon "is-large is-success" "fa-check-square"
       divClass "level-item" $ btnIcon "is-large is-primary" "fa-align-justify"

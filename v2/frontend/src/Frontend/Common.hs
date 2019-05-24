@@ -35,6 +35,11 @@ btn c t = do
   (e, _) <- elClass' "button" ("button " <> c) $ text t
   return $ domEvent Click e
 
+btnA :: DomBuilder t m => Text -> Text -> m (Event t ())
+btnA c t = do
+  (e, _) <- elClass' "a" ("button " <> c) $ text t
+  return $ domEvent Click e
+
 btnIcon :: DomBuilder t m => Text -> Text -> m (Event t ())
 btnIcon c i = do
   (e, _) <- elClass' "button" ("button " <> c) $
