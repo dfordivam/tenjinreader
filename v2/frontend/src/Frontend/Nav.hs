@@ -45,7 +45,7 @@ nav
      , RouteToUrl (R FrontendRoute) m
      )
   => Event t ()
-  -> m (Dynamic t Bool, Dynamic t ReaderControls)
+  -> m (Dynamic t Bool, Event t NavControls)
 nav _ = do
   elClass "header" "" $ do
     topBar never
@@ -61,7 +61,7 @@ topBar
      , RouteToUrl (R FrontendRoute) m
      )
   => Event t ()
-  -> m (Dynamic t Bool, Dynamic t ReaderControls)
+  -> m (Dynamic t Bool, Event t NavControls)
 topBar inpEv = do
   let
     attr1 = ("aria-label" =: "main navigation") <>
@@ -86,16 +86,16 @@ topBar inpEv = do
     let
       attr8 = ("class" =: "navbar-menu") <>
               ("id" =: "navbarBasicExample")
-    (rc, ie) <- elAttr "div" attr8 $ do
+    (nc, ie) <- elAttr "div" attr8 $ do
       divClass "navbar-start" $ return ()
       divClass "navbar-end" $ do
-        rc <- readerControls
+        nc <- navbarContents
         divClass "navbar-item" $ do
           inputElement $ def
             & initialAttributes .~
             ("class" =: "input" <> "style" =: "width:30vw; max-width: 15em;")
-        return (rc, ie)
-    return (showPanel, rc)
+        return (nc, ie)
+    return (showPanel, nc)
 
 burgerButton
   :: ( DomBuilder t m
@@ -138,6 +138,25 @@ sidePanel visDyn = do
       setRoute (l <$ domEvent Click e)
   return ()
 
+navbarContents
+  :: forall t m js .( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , Prerender js t m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => m (Event t NavControls)
+navbarContents = askRoute >>= \r1 -> do
+  v <- dyn $ ffor r1 $ \case
+    FrontendRoute_Home :/ () -> pure never
+    FrontendRoute_Reader :/ () -> readerControls
+    FrontendRoute_SRS :/ () -> reviewStats
+    FrontendRoute_Analyze :/ () -> pure never
+  switchHold never v
+
 readerControls
   :: forall t m js .( DomBuilder t m
      , Routed t (R FrontendRoute) m
@@ -148,7 +167,7 @@ readerControls
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => m (Dynamic t ReaderControls)
+  => m (Event t NavControls)
 readerControls = do
   let
     initRc = ReaderControls 120 120 True 15 20 2
@@ -222,4 +241,25 @@ readerControls = do
         text ""
       divClass "navbar-dropdown is-right" $ do
         allControls rc1 id (divClass "navbar-item")
-  holdDyn initRc (leftmost [rc1, rc2])
+  pure $ NavControls_ReaderControls <$> (leftmost [rc1, rc2])
+
+reviewStats
+  :: forall t m js .( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , Prerender js t m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => m (Event t NavControls)
+reviewStats = do
+  divClass "navbar-item" $
+    divClass "tags has-addons" $ do
+      divClass "tag" $ text "23"
+      divClass "tag is-success" $ text "42"
+      divClass "tag is-warning" $ text "3"
+
+  let
+  pure never

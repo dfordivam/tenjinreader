@@ -38,9 +38,15 @@ reader
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => Dynamic t ReaderControls
+  => Event t NavControls
   -> m ()
-reader rc = do
+reader nc = do
+  let
+    nrc = fforMaybe nc $ \case
+                        NavControls_ReaderControls r -> Just r
+                        _ -> Nothing
+    initRc = ReaderControls 120 120 True 15 20 2
+  rc <- holdDyn initRc nrc
   mainContents rc
   pageChangeButtons
 

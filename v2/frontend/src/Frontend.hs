@@ -24,12 +24,13 @@ import Common.Route
 import Common.Types
 import Obelisk.Generated.Static
 
+import Frontend.Analyze
+import Frontend.Common
+import Frontend.Head
 import Frontend.Home
 import Frontend.Nav
-import Frontend.Head
 import Frontend.Reader
 import Frontend.SRS
-import Frontend.Analyze
 -- import Frontend.
 
 frontend :: Frontend (R FrontendRoute)
@@ -55,7 +56,7 @@ sections
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => Dynamic t ReaderControls
+  => Event t NavControls
   -> m ()
 sections rc = do
   askRoute >>= \r -> do
@@ -80,7 +81,7 @@ sectionsList
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
-  => Dynamic t ReaderControls
+  => Event t NavControls
   -> [(Section, m ())]
 sectionsList rc =
   [ (Section_Home, home)
@@ -88,10 +89,3 @@ sectionsList rc =
   , (Section_SRS, srs)
   , (Section_Analyze, analyze)
   ]
-
-data Section
-  = Section_Home
-  | Section_Reader
-  | Section_SRS
-  | Section_Analyze
-  deriving (Eq, Show)

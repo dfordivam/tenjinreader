@@ -21,8 +21,19 @@ import Data.Functor.Identity
 
 import Common.Api
 import Common.Route
+import Common.Types
 import Obelisk.Generated.Static
 
+data Section
+  = Section_Home
+  | Section_Reader
+  | Section_SRS
+  | Section_Analyze
+  deriving (Eq, Show)
+
+data NavControls
+  = NavControls_None
+  | NavControls_ReaderControls ReaderControls
 
 icon :: DomBuilder t m => Text -> m ()
 icon i = do
