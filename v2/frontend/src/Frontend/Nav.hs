@@ -137,9 +137,9 @@ sidePanel visDyn = do
         text t
       setRoute (l <$ domEvent Click e)
     elClass "a" "panel-block" $ do
-      e1 <- btnIcon "" ""
-      e2 <- btnIcon "has-background-grey-lighter" ""
-      e3 <- btnIcon "has-background-grey-dark" ""
+      e1 <- btnIcon "is-outlined is-black has-background-white" ""
+      e2 <- btnIcon "is-outlined is-black has-background-grey-lighter" ""
+      e3 <- btnIcon "is-outlined is-white has-background-grey-dark" ""
       pure $ leftmost
         [ Theme_White <$ e1
         , Theme_Light <$ e2
