@@ -19,6 +19,7 @@ import Reflex.Dom.Core
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Fix
+import Control.Monad.Reader (MonadReader, asks)
 import Data.Bool
 import Data.Dependent.Sum (DSum(..))
 import Data.Functor.Identity
@@ -41,6 +42,7 @@ nav
      , MonadFix m
      , MonadHold t m
      , Prerender js t m
+     , MonadReader (AppData t) m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -57,16 +59,21 @@ topBar
      , MonadFix m
      , MonadHold t m
      , Prerender js t m
+     , MonadReader (AppData t) m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
   => Event t ()
   -> m (Dynamic t Bool, Event t NavControls)
 topBar inpEv = do
+  theme <- asks _appData_theme
   let
-    attr1 = ("aria-label" =: "main navigation") <>
-            ("class" =: "navbar") <> ("role" =: "navigation")
-  elAttr "nav" attr1 $ mdo
+    attr1 = fmap ((<>) (("aria-label" =: "main navigation")
+      <> ("role" =: "navigation"))) $ ffor theme $ \t -> "class" =: ("navbar" <> case t of
+        Theme_White -> " has-background-white-bis"
+        Theme_Light -> " has-background-grey-light"
+        Theme_Dark -> " has-background-grey-darker")
+  elDynAttr "nav" attr1 $ mdo
     showPanel <- divClass "navbar-brand" $ do
       let
         attr2 = ffor showPanel $ \s -> ("class" =: "navbar-item") <>
@@ -82,7 +89,7 @@ topBar inpEv = do
       elDynAttr "a" attr2 $ mdo
         (e,_) <- elDynAttr' "img" attr3 $ return ()
         setRoute ((FrontendRoute_Home :/ ()) <$ domEvent Click e)
-        toggle True =<< burgerButton
+        toggle True =<< btnIcon "has-background-grey-lighter" "fa-bars"
     let
       attr8 = ("class" =: "navbar-menu") <>
               ("id" =: "navbarBasicExample")
@@ -96,21 +103,6 @@ topBar inpEv = do
             ("class" =: "input" <> "style" =: "width:30vw; max-width: 15em;")
         return (nc, ie)
     return (showPanel, nc)
-
-burgerButton
-  :: ( DomBuilder t m
-     )
-  => m (Event t ())
-burgerButton = do
-  let
-    attr4 = ("aria-expanded" =: "false") <> ("aria-label" =: "menu") <>
-            ("class" =: "navbar-burger burger") <>
-            ("data-target" =: "navbarBasicExample") <> ("role" =: "button") <>
-            ("style" =: "display: block;")
-  (e, _) <- elAttr' "a" attr4 $ do
-    let attr5 = ("aria-hidden" =: "true")
-    replicateM_ 3 $ elAttr "span" attr5 $ return ()
-  return $ (() <$ domEvent Click e)
 
 sidePanel
   :: forall t m .( DomBuilder t m
