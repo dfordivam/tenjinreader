@@ -38,7 +38,7 @@ frontend = Frontend
   { _frontend_head = headEl
   , _frontend_body = do
       rec (navDyn, rc) <- nav click
-          click <- divClass "columns" $ do
+          click <- divClass "hero is-fullheight columns" $ do
             elDynClass "div" ((<>) "column is-narrow " <$> (ffor navDyn $ bool "is-hidden" "")) $ sidePanel navDyn
             mainContainer (sections rc)
       return ()
