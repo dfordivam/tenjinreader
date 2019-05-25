@@ -42,15 +42,8 @@ home = do
         divClass "tile is-parent is-vertical" $ do
           elClass "article" "tile is-child" $ divClass "box" $ randomSentenceWidget
       divClass "tile is-parent" $ do
-        elClass "article" "tile is-child notification is-danger is-8" $ do
-          elClass "p" "title" $ do
-            text "Books list"
-          elClass "p" "subtitle" $ do
-            text "Book 1"
-          divClass "content" $ return ()
+        elClass "article" "tile is-child is-8" $ recentBookList
         elClass "article" "tile is-child" $ divClass "box" $ recentWordList
-  e <- button "click"
-  count e >>= display
 
 randomSentenceWidget
   :: ( DomBuilder t m
@@ -77,6 +70,34 @@ randomSentenceWidget = do
   widgetHold blank $ ffor showEng $ \_ ->
     elClass "p" "is-size-4-desktop is-size-5-touch" $ text e
   blank
+
+recentBookList
+  :: ( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => m ()
+recentBookList = do
+  let
+    books =
+      [ ("竹取物語", "竹取物語和田萬吉...")
+      , ("坊っちゃん", "このことがあつてからも")
+      , ("こころ", "ところで、竹たけの中から出た子は、育そだて方かたがよかつ")
+      , ("悪魔の弟子", "で人にふさはしい少女りや髮飾かみかざをさせましたが、衣")
+      ]
+  forM_ books $ \(k, r) -> divClass "card" $ do
+    (e,_) <- elClass' "div" "card-header" $ do
+      elClass "p" "card-header-title" $ elClass "span" "is-size-4-desktop is-size-5-touch" $ text k
+      elClass' "a" "card-header-icon" $ elClass "span" "icon" $
+        elClass "i" "fas fa-angle-down" blank
+    let openEv = domEvent Click e
+    widgetHold blank $ ffor openEv $ \_ -> do
+      divClass "card-content" $ do
+        divClass "content" $ text "彼《かれ》は現代生活《げんだいせいかつ》の複雑性《ふくざつせい》について長々《ながなが》と話《はな》した。"
 
 recentWordList
   :: ( DomBuilder t m
