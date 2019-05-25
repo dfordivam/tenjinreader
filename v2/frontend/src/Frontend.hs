@@ -16,6 +16,7 @@ import Reflex.Dom.Core
 import qualified Data.Text as T
 import Data.Dependent.Sum (DSum(..))
 import Control.Monad.Fix
+import Control.Monad.Reader (MonadReader, runReaderT, asks)
 import Data.Functor.Identity
 import Data.Bool
 
@@ -36,11 +37,18 @@ import Frontend.SRS
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = headEl
-  , _frontend_body = do
-      rec (navDyn, rc) <- nav click
-          click <- divClass "hero is-fullheight" $ divClass "columns" $ do
-            elDynClass "div" ((<>) "column is-narrow " <$> (ffor navDyn $ bool "is-hidden" "")) $ sidePanel navDyn
-            mainContainer (sections rc)
+  , _frontend_body = mdo
+      themeDyn <- holdDyn Theme_White themeEv
+      let appData = AppData themeDyn
+
+      themeEv <- (flip runReaderT) appData $ mdo
+        (navDyn, rc) <- nav click
+        (themeEv, click) <- divClass "hero is-fullheight" $ divClass "columns" $ do
+          themeEv <- elDynClass "div" ((<>) "column is-narrow " <$> (ffor navDyn $ bool "is-hidden" "")) $
+            sidePanel navDyn
+          mainContainer (sections rc)
+          pure (themeEv, click)
+        return themeEv
       return ()
   }
 
@@ -53,6 +61,7 @@ sections
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
+     , MonadReader (AppData t) m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )

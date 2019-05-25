@@ -122,7 +122,7 @@ sidePanel
      , RouteToUrl (R FrontendRoute) m
      )
   => Dynamic t Bool
-  -> m ()
+  -> m (Event t Theme)
 sidePanel visDyn = do
   let
     panelItems =
@@ -136,7 +136,15 @@ sidePanel visDyn = do
         elClass "span" "panel-icon" $ icon i
         text t
       setRoute (l <$ domEvent Click e)
-  return ()
+    elClass "a" "panel-block" $ do
+      e1 <- btnIcon "" ""
+      e2 <- btnIcon "has-background-grey-lighter" ""
+      e3 <- btnIcon "has-background-grey-dark" ""
+      pure $ leftmost
+        [ Theme_White <$ e1
+        , Theme_Light <$ e2
+        , Theme_Dark <$ e3
+        ]
 
 navbarContents
   :: forall t m js .( DomBuilder t m

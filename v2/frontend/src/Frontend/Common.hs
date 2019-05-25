@@ -31,9 +31,20 @@ data Section
   | Section_Analyze
   deriving (Eq, Show)
 
+data Theme
+  = Theme_White
+  | Theme_Light
+  | Theme_Dark
+  deriving (Eq, Show)
+
 data NavControls
   = NavControls_None
   | NavControls_ReaderControls ReaderControls
+  deriving (Eq, Show)
+
+data AppData t = AppData
+  { _appData_theme :: Dynamic t Theme
+  }
 
 icon :: DomBuilder t m => Text -> m ()
 icon i = do
