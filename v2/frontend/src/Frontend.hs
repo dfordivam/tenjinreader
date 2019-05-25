@@ -43,7 +43,7 @@ frontend = Frontend
 
       themeEv <- (flip runReaderT) appData $ mdo
         (navDyn, rc) <- nav click
-        (themeEv, click) <- divClass "hero is-fullheight" $ divClass "columns" $ do
+        (themeEv, click) <- divClassT "hero is-fullheight" $ divClass "columns" $ do
           themeEv <- elDynClass "div" ((<>) "column is-narrow " <$> (ffor navDyn $ bool "is-hidden" "")) $
             sidePanel navDyn
           mainContainer (sections rc)

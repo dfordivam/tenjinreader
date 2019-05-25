@@ -13,11 +13,12 @@ import Obelisk.Route
 import Obelisk.Route.Frontend
 import Reflex.Dom.Core
 
+import Control.Monad.Fix
+import Control.Monad.Reader (MonadReader, asks)
+import Data.Dependent.Sum (DSum(..))
+import Data.Functor.Identity
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Dependent.Sum (DSum(..))
-import Control.Monad.Fix
-import Data.Functor.Identity
 
 import Common.Api
 import Common.Route
@@ -67,3 +68,12 @@ btnIcon c i = do
   (e, _) <- elClass' "button" ("button " <> c) $
     elClass "span" "icon" $ elClass "i" ("fas " <> i) blank
   return $ domEvent Click e
+
+divClassT :: (DomBuilder t m, PostBuild t m, MonadReader (AppData t) m) => Text -> m a -> m a
+divClassT c m = do
+  theme <- asks _appData_theme
+  let cDyn = fmap ((<>) c) $ ffor theme $ \case
+        Theme_White -> ""
+        Theme_Light -> " has-background-grey-lighter"
+        Theme_Dark -> " has-background-grey-dark"
+  elDynClass "div" cDyn m
