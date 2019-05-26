@@ -70,10 +70,13 @@ btnIcon c i = do
   return $ domEvent Click e
 
 divClassT :: (DomBuilder t m, PostBuild t m, MonadReader (AppData t) m) => Text -> m a -> m a
-divClassT c m = do
+divClassT = elClassT "div"
+
+elClassT :: (DomBuilder t m, PostBuild t m, MonadReader (AppData t) m) => Text -> Text -> m a -> m a
+elClassT e c m = do
   theme <- asks _appData_theme
   let cDyn = fmap ((<>) c) $ ffor theme $ \case
         Theme_White -> ""
         Theme_Light -> " has-background-grey-lighter"
         Theme_Dark -> " has-background-grey-dark"
-  elDynClass "div" cDyn m
+  elDynClass e cDyn m
