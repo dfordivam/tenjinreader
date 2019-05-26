@@ -110,6 +110,7 @@ sidePanel
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
+     , MonadReader (AppData t) m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -124,8 +125,8 @@ sidePanel visDyn = do
       ]
   elClass "nav" "panel" $ do
     for panelItems $ \(t, i, l) -> do
-      (e, _) <- elClass' "a" "panel-block" $ do
-        elClass "span" "panel-icon" $ icon i
+      (e, _) <- elClassT' "a" "panel-block" $ do
+        elClassT "span" "panel-icon" $ icon i
         text t
       setRoute (l <$ domEvent Click e)
     elClass "a" "panel-block" $ do
