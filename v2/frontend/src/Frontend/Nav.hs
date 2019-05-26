@@ -118,16 +118,22 @@ sidePanel
   -> m (Event t Theme)
 sidePanel visDyn = do
   let
+    pReview = constDyn "23"
+    rReview = constDyn "43"
     panelItems =
-      [ ("Reader", "fa-book", FrontendRoute_Reader :/ ())
-      , ("SRS", "fa-question-circle", FrontendRoute_SRS :/ ())
-      , ("Sentence", "fa-align-justify", FrontendRoute_Analyze :/ ())
+      [ ("Reader", "fa-book", FrontendRoute_Reader :/ (), Nothing)
+      , ("Review: Production", "fa-question-circle", FrontendRoute_SRS :/ (), Just pReview)
+      , ("Review: Recognition", "fa-question-circle", FrontendRoute_SRS :/ (), Just rReview)
+      , ("Sentence", "fa-language", FrontendRoute_Analyze :/ (), Nothing)
+      , ("Browse SRS", "fa-list-alt", FrontendRoute_SRS :/ (), Nothing)
       ]
   elClass "nav" "panel" $ do
-    for panelItems $ \(t, i, l) -> do
+    for panelItems $ \(t, i, l, mtg) -> do
       (e, _) <- elClassT' "a" "panel-block" $ do
         elClassT "span" "panel-icon" $ icon i
-        text t
+        elClass "span" "" $ text t
+        forM_ mtg $ \tg ->
+          elAttr "span" (("class" =: "tag") <> ("style" =: "margin-left:1em")) $ dynText tg
       setRoute (l <$ domEvent Click e)
     elClass "a" "panel-block" $ do
       e1 <- btnIcon "is-outlined is-black has-background-white" ""
