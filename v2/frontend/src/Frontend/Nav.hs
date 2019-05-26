@@ -76,18 +76,19 @@ topBar inpEv = do
   elDynAttr "nav" attr1 $ mdo
     showPanel <- divClass "navbar-brand" $ do
       let
-        attr2 = ffor showPanel $ \s -> ("class" =: "navbar-item") <>
+        style s = "style" =: ("width: 16em;" <> s)
+        attr2 = ffor2 theme showPanel $ \t s ->
+          ("class" =: ((if t == Theme_Dark then "has-text-white-ter " else "") <> "navbar-item has-text-centered")) <>
                 (if s
-                  then ("style" =: "width: 8em;")
+                  then style ""
                   else Map.empty)
-        attr3 = ffor showPanel $ \s -> ("height" =: "30") <>
-                ("src" =: "https://tenjinreader.com/static/logo.png") <>
-                ("width" =: "60") <>
-          (if not s
-            then ("style" =: "display: none;")
-            else Map.empty)
+        attr3 = ffor showPanel $ \s -> ("class" =: "is-size-3") <>
+          -- ("height" =: "30") <>
+                -- ("src" =: "https://tenjinreader.com/static/logo.png") <>
+          style (if not s then "display: none;" else "")
       elDynAttr "a" attr2 $ mdo
-        (e,_) <- elDynAttr' "img" attr3 $ return ()
+        -- (e,_) <- elDynAttr' "img" attr3 $ return ()
+        (e,_) <- elDynAttr' "span" attr3 $ text "TR"
         setRoute ((FrontendRoute_Home :/ ()) <$ domEvent Click e)
         toggle True =<< btnIcon "has-background-grey-lighter" "fa-bars"
     let
