@@ -51,8 +51,8 @@ reviewWidget = divClass "container" $ do
     divClass "columns is-centered" $ divClass "column" $
       divClass "is-size-1-desktop is-size-2-touch has-text-centered" $
         text "検討"
-    divClass "columns is-centered" $ divClass "column" $ do
-      divClass "is-size-3-desktop is-size-4-touch has-text-centered-tablet" $
+    divClass "columns is-centered" $ divClass "column message is-success is-half-tablet" $ do
+      divClass "message-body is-size-3-desktop is-size-4-touch has-text-centered-tablet" $
         text "けんとう"
   divClass "container" $ do
     divClass "columns is-centered" $ divClass "column is-half-tablet" $ do
