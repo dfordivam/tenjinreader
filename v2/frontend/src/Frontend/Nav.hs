@@ -33,6 +33,7 @@ import Common.Api
 import Common.Route
 import Common.Types
 import Frontend.Common
+import Frontend.Vocab
 import Obelisk.Generated.Static
 
 nav
@@ -99,9 +100,7 @@ topBar inpEv = do
       divClass "navbar-end" $ do
         nc <- navbarContents
         divClass "navbar-item" $ do
-          inputElement $ def
-            & initialAttributes .~
-            ("class" =: "input" <> "style" =: "width:30vw; max-width: 15em;")
+          vocabSearchInput
         return (nc, ie)
     return (showPanel, nc)
 
