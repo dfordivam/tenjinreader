@@ -87,6 +87,7 @@ sectionsList
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
+     , MonadReader (AppData t) m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
