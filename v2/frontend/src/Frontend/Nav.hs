@@ -216,12 +216,12 @@ readerControls = do
       r <- nest $
         divClass "select" $ dropdown 2 rowsOptions $ def
           & dropdownConfig_setValue .~ (fmap _readerControls_rowCount irc)
-      nest $
-        elClass "label" "checkbox" $ do
-          inputElement $ def
-            & initialAttributes .~ "type" =: "checkbox"
-            -- & inputElementConfig_setChecked .~ setChecked
-          text "Highlight"
+      -- nest $
+      --   elClass "label" "checkbox" $ do
+      --     inputElement $ def
+      --       & initialAttributes .~ "type" =: "checkbox"
+      --       -- & inputElementConfig_setChecked .~ setChecked
+      --     text "Highlight"
       let
         rc = ReaderControls
           <$> (value s)
