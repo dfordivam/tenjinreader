@@ -6,6 +6,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Frontend.Reader where
 
 import Obelisk.Frontend
@@ -15,6 +17,7 @@ import Reflex.Dom.Core
 
 import Control.Monad
 import Control.Monad.Fix
+import Control.Monad.Reader (MonadReader, asks)
 import Data.Dependent.Sum (DSum(..))
 import Data.Functor.Identity
 import Data.Maybe
@@ -27,6 +30,7 @@ import Common.Api
 import Common.Route
 import Common.Types
 import Frontend.Common
+import Frontend.Modals
 import Obelisk.Generated.Static
 
 reader
@@ -35,6 +39,8 @@ reader
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
+     , MonadReader (AppData t) m
+     , Prerender js t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -48,6 +54,7 @@ reader nc = do
     initRc = ReaderControls 120 120 True 15 20 2
   rc <- holdDyn initRc nrc
   mainContents rc
+  wordMeanings
   pageChangeButtons
 
 mainContents

@@ -19,6 +19,7 @@ library
     Frontend.Analyze
     Frontend.Head
     Frontend.Home
+    Frontend.Modals
     Frontend.Nav
     Frontend.Reader
     Frontend.SRS

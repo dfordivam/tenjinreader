@@ -62,6 +62,7 @@ sections
      , MonadFix m
      , MonadHold t m
      , MonadReader (AppData t) m
+     , Prerender js t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -88,6 +89,7 @@ sectionsList
      , MonadFix m
      , MonadHold t m
      , MonadReader (AppData t) m
+     , Prerender js t m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
