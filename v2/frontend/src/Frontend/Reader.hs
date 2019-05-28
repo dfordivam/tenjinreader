@@ -54,7 +54,6 @@ reader nc = do
     initRc = ReaderControls 120 120 True 15 20 2
   rc <- holdDyn initRc nrc
   mainContents rc
-  divClass "column" $ elAttr "button" (("class" =: "button is-primary tooltip") <> ("data-tooltip" =: "some text")) $ text " my button"
   wordMeanings
   pageChangeButtons
 
