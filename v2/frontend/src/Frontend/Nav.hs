@@ -263,9 +263,10 @@ reviewStats
 reviewStats = do
   divClass "navbar-item" $
     divClass "tags has-addons" $ do
-      divClass "tag" $ text "23"
-      divClass "tag is-success" $ text "42"
-      divClass "tag is-warning" $ text "3"
+      let elTag c tl t = elAttr "tag" (("class" =: ("tag tooltip is-tooltip-bottom " <> c)) <> ("data-tooltip" =: tl)) $ text t
+      elTag "" "Remaining reviews" "23"
+      elTag "is-success" "Correct" "42"
+      elTag "is-warning" "Wrong" "3"
 
   let
   pure never
