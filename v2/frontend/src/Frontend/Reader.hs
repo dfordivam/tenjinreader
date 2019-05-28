@@ -54,6 +54,7 @@ reader nc = do
     initRc = ReaderControls 120 120 True 15 20 2
   rc <- holdDyn initRc nrc
   mainContents rc
+  divClass "column" $ elAttr "button" (("class" =: "button is-primary tooltip") <> ("data-tooltip" =: "some text")) $ text " my button"
   wordMeanings
   pageChangeButtons
 
@@ -136,8 +137,8 @@ pageChangeButtons = do
     attr = "class" =: "columns is-mobile"
       <> "style" =: "padding-top: 1em;"
   void $ elAttr "div" attr $ do
-    divClass "column" $ btn "is-small is-fullwidth" "<"
-    divClass "column" $ btn "is-small is-fullwidth" ">"
+    divClass "column" $ btn "is-small is-fullwidth" "<" Nothing
+    divClass "column" $ btn "is-small is-fullwidth" ">" Nothing
 
 contents =
   [ "平成最後の選挙となる統一地方選挙は、14日、政令指定都市以外の市と東京の特別区で、市区長と議員の選挙が告示され、後半戦がスタートしました。"

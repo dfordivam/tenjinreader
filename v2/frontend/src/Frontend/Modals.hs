@@ -117,9 +117,9 @@ showVocabDetails (v, m, p) = divClass "message" $ do
     divClass "level is-mobile" $ do
       divClass "level-left" $ divClass "level-item is-size-3" $ text v
       divClass "level-right" $ divClass "level-item" $ do
-        btnIcon "" "fa-plus"
-        btnIcon "" "fa-check"
-        btnIcon "" "fa-align-justify"
+        btnIcon "" "fa-plus" (Just "Add to SRS")
+        btnIcon "" "fa-check" (Just "Hide furigana / Mark known")
+        btnIcon "" "fa-align-justify" (Just "Show example sentences")
     divClass "" $ do
       elClass "span" "" $ text $ "(" <> p <> ") "
       elClass "span" "is-size-5" $ text m

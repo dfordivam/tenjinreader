@@ -90,7 +90,7 @@ topBar inpEv = do
         -- (e,_) <- elDynAttr' "img" attr3 $ return ()
         (e,_) <- elDynAttr' "span" attr3 $ text "TR"
         setRoute ((FrontendRoute_Home :/ ()) <$ domEvent Click e)
-        toggle True =<< btnIcon "has-background-grey-lighter" "fa-bars"
+        toggle True =<< btnIcon "has-background-grey-lighter" "fa-bars" Nothing
     let
       attr8 = ("class" =: "navbar-menu") <>
               ("id" =: "navbarBasicExample")
@@ -135,9 +135,9 @@ sidePanel visDyn = do
           elAttr "span" (("class" =: "tag") <> ("style" =: "margin-left:1em")) $ dynText tg
       setRoute (l <$ domEvent Click e)
     elClass "a" "panel-block" $ do
-      e1 <- btnIcon "is-outlined is-black has-background-white" ""
-      e2 <- btnIcon "is-outlined is-black has-background-grey-lighter" ""
-      e3 <- btnIcon "is-outlined is-white has-background-grey-dark" ""
+      e1 <- btnIcon "is-outlined is-black has-background-white" "" (Just "White theme")
+      e2 <- btnIcon "is-outlined is-black has-background-grey-lighter" "" (Just "Light theme")
+      e3 <- btnIcon "is-outlined is-white has-background-grey-dark" "" (Just "Dark theme")
       pure $ leftmost
         [ Theme_White <$ e1
         , Theme_Light <$ e2

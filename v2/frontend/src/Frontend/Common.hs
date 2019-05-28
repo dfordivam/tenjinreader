@@ -53,19 +53,22 @@ icon i = do
     attr4 = ("aria-hidden" =: "true") <> ("class" =: ("fas " <> i))
   elAttr "i" attr4 $ return ()
 
-btn :: DomBuilder t m => Text -> Text -> m (Event t ())
-btn c t = do
-  (e, _) <- elClass' "button" ("button " <> c) $ text t
+btnEl :: DomBuilder t m => Text -> Text -> Text -> Maybe Text -> m (Event t ())
+btnEl e' c t mt = do
+  let attr = ("class" =: ("button " <> c <> (maybe "" (const " tooltip") mt)))
+        <> (maybe mempty (\t -> "data-tooltip" =: t) mt)
+  (e, _) <- elAttr' e' attr $ text t
   return $ domEvent Click e
 
-btnA :: DomBuilder t m => Text -> Text -> m (Event t ())
-btnA c t = do
-  (e, _) <- elClass' "a" ("button " <> c) $ text t
-  return $ domEvent Click e
+btn, btnA :: DomBuilder t m => Text -> Text -> Maybe Text -> m (Event t ())
+btn = btnEl "button"
+btnA = btnEl "a"
 
-btnIcon :: DomBuilder t m => Text -> Text -> m (Event t ())
-btnIcon c i = do
-  (e, _) <- elClass' "button" ("button " <> c) $
+btnIcon :: DomBuilder t m => Text -> Text -> Maybe Text ->m (Event t ())
+btnIcon c i mt = do
+  let attr = ("class" =: ("button " <> c <> (maybe "" (const " tooltip") mt)))
+        <> (maybe mempty (\t -> "data-tooltip" =: t) mt)
+  (e, _) <- elAttr' "button" attr $
     elClass "span" "icon" $ elClass "i" ("fas " <> i) blank
   return $ domEvent Click e
 

@@ -61,12 +61,12 @@ reviewWidget = divClass "container" $ do
         ("class" =: "input" <> "style" =: "text-align: center")
   divClass "container" $ do
     divClass "columns is-centered" $ divClass "column has-text-centered" $ do
-      btnA "" "Edit"
-      btnA "" "Bury"
-      btnA "" "Suspend"
+      btnA "" "Edit" $ Just "Edit the SRS entry"
+      btnA "" "Bury" $ Just "Remove the item from today's review, to do tomorrow"
+      btnA "" "Suspend" $ Just "Remove the item from SRS reviews (can be changed from SRS browse menu)"
     divClass "columns is-centered" $ divClass "column is-half-tablet" $ divClass "level is-mobile" $ do
-      divClass "level-item" $ btnIcon "is-large is-success" "fa-check-square"
-      divClass "level-item" $ btnIcon "is-large is-primary" "fa-align-justify"
-      divClass "level-item" $ btnIcon "is-large is-danger" "fa-times-circle"
+      divClass "level-item" $ btnIcon "is-large is-success" "fa-check-square" $ Just "Mark as correct"
+      divClass "level-item" $ btnIcon "is-large is-primary" "fa-align-justify" $ Just "Show example sentences"
+      divClass "level-item" $ btnIcon "is-large is-danger" "fa-times-circle" $ Just "Show answer"
   return ()
 

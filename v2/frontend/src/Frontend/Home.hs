@@ -67,9 +67,9 @@ randomSentenceWidget = do
   showEng <- elClass "nav" "level" $ do
     divClass "level-left" $ blank
     divClass "level-right" $ do
-      btnIcon "" "fa-bookmark"
-      btnIcon "" "fa-expand"
-      btnIcon "" "fa-language"
+      btnIcon "" "fa-bookmark" (Just "Bookmark sentence")
+      btnIcon "" "fa-expand" (Just "Show sentence with inlined furigana")
+      btnIcon "" "fa-language" (Just "Show english")
   widgetHold blank $ ffor showEng $ \_ ->
     elClass "p" "is-size-4-desktop is-size-5-touch" $ text e
   blank
