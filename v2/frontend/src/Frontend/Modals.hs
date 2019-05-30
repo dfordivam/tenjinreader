@@ -45,7 +45,7 @@ wordMeanings
      , RouteToUrl (R FrontendRoute) m
      )
   => m ()
-wordMeanings = void $ prerender (return ()) $ divClass "" $ do
+wordMeanings = divClass "" $ do
   let
 
     attrBack = ("class" =: "modal")
@@ -83,20 +83,23 @@ wordMeanings = void $ prerender (return ()) $ divClass "" $ do
     wd :: (Monad m1, DOM.MonadJSM m1, DomBuilder t m1, DOM.IsElement e)
       => Maybe (Maybe e, [VocabDetails])
       -> m1 (Event t ())
-    wd (Just (e, es)) = (wrapper e)
+    wd (Just (e, es)) = wrapper e $
       (mapM_ showVocabDetails es)
     wd Nothing = return never
 
-  openEv <- getPostBuild
-  (e, _) <- el' "div" blank
-  let details = (Just $ _element_raw e, vocabs)
-      detailsEv = details <$ openEv
-  rec
-    let ev = leftmost [Just <$> detailsEv
-             , Nothing <$ ((switch . current) closeEv)]
-    closeEv <- widgetHold (return never)
-      (wd <$> ev)
+  void $ prerender (return ()) $ do
+    openEv <- getPostBuild
+    (e, _) <- el' "div" blank
+    let details = (Just $ _element_raw e, vocabs)
+        detailsEv = details <$ openEv
+    rec
+      let ev = leftmost [Just <$> detailsEv
+               , Nothing <$ ((switch . current) closeEv)]
+      closeEv <- widgetHold (return never)
+        (wd <$> ev)
+    pure ()
 
+  sentencesModal "surface" sentences
   return ()
 
 type VocabDetails = (Text, Text, Text)
@@ -111,10 +114,10 @@ showVocabDetails
   :: forall t m .( DomBuilder t m
      )
   => VocabDetails
-  -> m ()
+  -> m (Event t ())
 showVocabDetails (v, m, p) = divClass "message" $ do
-  void $ divClass "message-body" $ do
-    divClass "level is-mobile" $ do
+  divClass "message-body" $ do
+    e <- divClass "level is-mobile" $ do
       divClass "level-left" $ divClass "level-item is-size-3" $ text v
       divClass "level-right" $ divClass "level-item" $ do
         btnIcon "" "fa-plus" (Just "Add to SRS")
@@ -123,3 +126,71 @@ showVocabDetails (v, m, p) = divClass "message" $ do
     divClass "" $ do
       elClass "span" "" $ text $ "(" <> p <> ") "
       elClass "span" "is-size-5" $ text m
+    pure e
+
+type Sentence = ([Text], [Text])
+
+sentences :: [Sentence]
+sentences =
+  [ (["あなたから連絡がない限り、五時に会う予定でいます。"], ["Unless I hear from you, I'll plan to meet you at five."])
+  , (["彼女は今ディナーを食べているところです。", "彼女はディナーを食べているところです。"], ["She is having dinner now."])
+  ]
+sentencesModal
+  :: ( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => Text
+  -> [Sentence]
+  -> m (Event t ())
+sentencesModal surface ss = modalDiv $ do
+  (headElm, closeEvTop) <- elClass' "header" "modal-card-head" $ do
+    (e,_) <- elClass' "button" "delete" $ return ()
+    divClass "column is-1" $ return ()
+    elClass "p" "modal-card-title" $ do
+      text surface
+    return (domEvent Click e)
+
+  let bodyAttr = ("class" =: "modal-card-body")
+          <> ("style" =: "")
+
+  cl2 <- elAttr "div" bodyAttr $ do
+    rec
+      vIdMap <- forM ss $ \(js, es) -> divClass "" $ do
+        forM js $ \s -> el "p" $ text s
+        forM es $ \s -> el "p" $ text s
+
+      closeBot <- divClass "level" $ do
+        rec
+          loadMoreEv <- divClass "level-item" $ do
+            btn "" "Load More" Nothing
+        divClass "level-item" $ do
+          btn "btn-primary" "Top" Nothing
+          -- performEvent_ $ topEv $> DOM.scrollIntoView (_element_raw headElm) True
+        closeBot1 <- divClass "level-item" $ do
+          btn "btn-primary" "Close" Nothing
+        return closeBot1
+
+    pure closeBot
+
+  return (leftmost [closeEvTop, cl2])
+
+modalDiv :: DomBuilder t m => m b -> m b
+modalDiv m = do
+  elAttr "div" attr $ do
+    divClass "modal-background" $ return ()
+    divClass "modal-card" m
+  where attr = ("class" =: "modal")
+          <> ("style" =: "display: block;")
+  -- unset max-height to reverse bulma css
+        attr2 = ("style" =: "width: 90vw; height: 96vh;\
+                            \ max-width: 40em;\
+                            \ max-height: unset;\
+                            \ overflow-y: auto;\
+                            \ overflow-y: auto;\
+                            \ margin: 2vh auto;")
+                <> ("class" =: "modal-content")
