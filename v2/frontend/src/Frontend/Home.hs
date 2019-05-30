@@ -24,6 +24,7 @@ import Data.Dependent.Sum (DSum(..))
 import Common.Api
 import Common.Route
 import Frontend.Common
+import Frontend.Modals
 import Obelisk.Generated.Static
 
 home
@@ -42,7 +43,7 @@ home = do
     divClass "tile is-vertical" $ do
       divClass "tile" $ do
         divClass "tile is-parent is-vertical" $ do
-          elClass "article" "tile is-child" $ divClassT "box" $ randomSentenceWidget
+          elClass "article" "tile is-child" $ randomSentenceWidget
       divClass "tile is-parent" $ do
         elClass "article" "tile is-child is-8" $ recentBookList
         elClass "article" "tile is-child" $ divClassT "box" $ recentWordList
@@ -62,17 +63,7 @@ randomSentenceWidget = do
   let
     s = "ここからそのホテルまでどのくらいの距離ですか。"
     e = "How far is it from here to the hotel?"
-  elClass "p" "is-size-2-desktop is-size-3-touch" $ do
-    text s
-  showEng <- elClass "nav" "level" $ do
-    divClass "level-left" $ blank
-    divClass "level-right" $ do
-      btnIcon "" "fa-bookmark" (Just "Bookmark sentence")
-      btnIcon "" "fa-expand" (Just "Show sentence with inlined furigana")
-      btnIcon "" "fa-language" (Just "Show english")
-  widgetHold blank $ ffor showEng $ \_ ->
-    elClass "p" "is-size-4-desktop is-size-5-touch" $ text e
-  blank
+  renderOneSentence ([s], [e])
 
 recentBookList
   :: ( DomBuilder t m

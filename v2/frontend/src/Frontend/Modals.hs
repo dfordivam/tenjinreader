@@ -141,6 +141,7 @@ sentencesModal
      , PostBuild t m
      , MonadFix m
      , MonadHold t m
+     , MonadReader (AppData t) m
      , SetRoute t (R FrontendRoute) m
      , RouteToUrl (R FrontendRoute) m
      )
@@ -160,9 +161,7 @@ sentencesModal surface ss = modalDiv $ do
 
   cl2 <- elAttr "div" bodyAttr $ do
     rec
-      vIdMap <- forM ss $ \(js, es) -> divClass "" $ do
-        forM js $ \s -> el "p" $ text s
-        forM es $ \s -> el "p" $ text s
+      mapM renderOneSentence ss
 
       closeBot <- divClass "level" $ do
         rec
@@ -179,7 +178,7 @@ sentencesModal surface ss = modalDiv $ do
 
   return (leftmost [closeEvTop, cl2])
 
-modalDiv :: DomBuilder t m => m b -> m b
+modalDiv :: (DomBuilder t m, PostBuild t m, MonadReader (AppData t) m) => m b -> m b
 modalDiv m = do
   elAttr "div" attr $ do
     divClass "modal-background" $ return ()
@@ -194,3 +193,31 @@ modalDiv m = do
                             \ overflow-y: auto;\
                             \ margin: 2vh auto;")
                 <> ("class" =: "modal-content")
+
+
+renderOneSentence
+  :: ( DomBuilder t m
+     , Routed t (R FrontendRoute) m
+     , PostBuild t m
+     , MonadFix m
+     , MonadHold t m
+     , MonadReader (AppData t) m
+     , SetRoute t (R FrontendRoute) m
+     , RouteToUrl (R FrontendRoute) m
+     )
+  => Sentence
+  -> m ()
+renderOneSentence (js, es) = divClassT "box" $ do
+  let
+  divClassT "is-size-3-desktop is-size-4-touch" $ do
+    forM js $ \s -> el "p" $ text s
+  showEng <- elClass "nav" "level" $ do
+    divClass "level-left" $ blank
+    divClass "level-right" $ do
+      btnIcon "" "fa-bookmark" (Just "Bookmark sentence")
+      btnIcon "" "fa-expand" (Just "Show sentence with inlined furigana")
+      btnIcon "" "fa-language" (Just "Show english")
+  widgetHold blank $ ffor showEng $ \_ ->
+    divClassT "is-size-4-desktop is-size-5-touch" $
+      forM_ es $ \s -> el "p" $ text s
+  blank
