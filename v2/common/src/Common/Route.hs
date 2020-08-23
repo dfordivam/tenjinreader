@@ -26,7 +26,7 @@ import Obelisk.Route
 import Obelisk.Route.TH
 
 data BackendRoute :: * -> * where
-  -- | Used to handle unparseable routes.
+  BackendRoute_Missing :: BackendRoute ()
   BackendRoute_Api :: BackendRoute ()
 deriving instance Show (BackendRoute a)
 
@@ -38,18 +38,21 @@ data FrontendRoute :: * -> * where
   FrontendRoute_Sentences :: FrontendRoute ()
 deriving instance Show (FrontendRoute a)
 
-backendRouteEncoder
-  :: Encoder (Either Text) Identity (R (Sum BackendRoute (ObeliskRoute FrontendRoute))) PageName
-backendRouteEncoder = handleEncoder (const (InL BackendRoute_Api :/ ())) $
-  pathComponentEncoder $ \case
-    InL backendRoute -> case backendRoute of
-      BackendRoute_Api -> PathSegment "api" $ unitEncoder mempty
-    InR obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
+fullRouteEncoder
+  :: Encoder (Either Text) Identity (R (FullRoute BackendRoute FrontendRoute)) PageName
+fullRouteEncoder = mkFullRouteEncoder
+  (FullRoute_Backend BackendRoute_Missing :/ ())
+  (\case
+     BackendRoute_Missing -> PathSegment "missing" $ unitEncoder mempty
+     BackendRoute_Api     -> PathSegment "api" $ unitEncoder mempty
+  )
+  (\case
       FrontendRoute_Home -> PathEnd $ unitEncoder mempty
       FrontendRoute_Reader -> PathSegment "reader" $ unitEncoder mempty
       FrontendRoute_SRS -> PathSegment "srs" $ unitEncoder mempty
       FrontendRoute_Analyze -> PathSegment "sentence" $ unitEncoder mempty
       FrontendRoute_Sentences -> PathSegment "sentences" $ unitEncoder mempty
+  )
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute

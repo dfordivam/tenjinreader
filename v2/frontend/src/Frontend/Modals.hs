@@ -185,15 +185,6 @@ modalDiv m = do
     divClass "modal-card" m
   where attr = ("class" =: "modal")
           <> ("style" =: "display: block;")
-  -- unset max-height to reverse bulma css
-        attr2 = ("style" =: "width: 90vw; height: 96vh;\
-                            \ max-width: 40em;\
-                            \ max-height: unset;\
-                            \ overflow-y: auto;\
-                            \ overflow-y: auto;\
-                            \ margin: 2vh auto;")
-                <> ("class" =: "modal-content")
-
 
 renderOneSentence
   :: ( DomBuilder t m

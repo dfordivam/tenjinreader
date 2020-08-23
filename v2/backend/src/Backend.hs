@@ -27,7 +27,7 @@ import Snap
 import Common.Route
 import Common.Api
 import Obelisk.Backend
-import Obelisk.ExecutableConfig.Backend
+import Obelisk.ExecutableConfig.Lookup
 import Obelisk.Route
 
 backend :: Backend BackendRoute FrontendRoute
@@ -37,16 +37,16 @@ backend = Backend
       serve $ \case
         BackendRoute_Api :=> Identity () -> do
           liftIO $ putStrLn "testing"
-          (serveSnap readerAPI apiServer)
-  , _backend_routeEncoder = backendRouteEncoder
+          -- (serveSnap readerAPI apiServer)
+  , _backend_routeEncoder = fullRouteEncoder
   }
 
-type ApiHandler = BackendConfigsT Snap
+-- type ApiHandler = BackendConfigsT Snap
 
-apiServer :: Server (ReaderAPI) '[] ApiHandler
-apiServer = a1 :<|> a2
-  where
-    a1 :: Int -> ApiHandler Text
-    a1 = (\bId -> return $ "Book " <> (T.pack $ show bId))
-    a2 :: Int -> ApiHandler ()
-    a2 = const $ return ()
+-- apiServer :: Server (ReaderAPI) '[] ApiHandler
+-- apiServer = a1 :<|> a2
+--   where
+--     a1 :: Int -> ApiHandler Text
+--     a1 = (\bId -> return $ "Book " <> (T.pack $ show bId))
+--     a2 :: Int -> ApiHandler ()
+--     a2 = const $ return ()
