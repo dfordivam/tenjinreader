@@ -1,7 +1,0 @@
-<div .ui.container>
-
-    <h1>
-      Access granted!
-
-    <p>
-      You are user <strong><span class="username">#{userIdent user}</span></strong> using #{userService user} to login!
