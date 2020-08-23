@@ -35,7 +35,8 @@ backend = Backend
   { _backend_run = \serve -> do
       -- webSocketChatState <- newMVar WebSocketChat.newServerState
       serve $ \case
-        BackendRoute_Api :=> Identity () -> do
+       BackendRoute_Missing :/ () -> return ()
+       BackendRoute_Api :/ () -> do
           liftIO $ putStrLn "testing"
           -- (serveSnap readerAPI apiServer)
   , _backend_routeEncoder = fullRouteEncoder
