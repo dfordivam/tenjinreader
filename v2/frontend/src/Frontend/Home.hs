@@ -41,9 +41,12 @@ home
 home = do
   divClass "tile is-ancestor" $ do
     divClass "tile is-vertical" $ do
-      divClass "tile" $ do
-        divClass "tile is-parent is-vertical" $ do
-          elClass "article" "tile is-child" $ randomSentenceWidget
+      divClass "tile is-parent" $ do
+        elClass "article" "tile is-child is-11" $ randomSentenceWidget
+        divClass "tile is-child" $ do
+          divClass "tile is-parent is-vertical" $ do
+            divClass "tile is-child" $ btnIcon "is-fullwidth is-size-5-tablet" "fa-random" (Just "Random sentence")
+            divClass "tile is-child" $ btnIcon "is-fullwidth is-size-5-tablet" "fa-random" (Just "Random sentence")
       divClass "tile is-parent" $ do
         elClass "article" "tile is-child is-8" $ recentBookList
         elClass "article" "tile is-child" $ divClassT "box" $ recentWordList
@@ -93,6 +96,11 @@ recentBookList = do
     widgetHold blank $ ffor openEv $ \_ -> do
       divClass "card-content" $ do
         divClass "content" $ text "彼《かれ》は現代生活《げんだいせいかつ》の複雑性《ふくざつせい》について長々《ながなが》と話《はな》した。"
+      divClass "card-footer" $ do
+        divClass "card-footer-item" $ text "27%"
+        elClass "a" "card-footer-item" $ text "Open"
+        elClass "a" "card-footer-item" $ text "Edit"
+        elClass "a" "card-footer-item" $ text "Delete"
 
 recentWordList
   :: ( DomBuilder t m
@@ -123,4 +131,10 @@ recentWordList = do
     let openEv = domEvent Click e
     widgetHold blank $ ffor openEv $ \_ -> do
       divClass "card-content" $ do
-        divClass "content" $ text "彼《かれ》は現代生活《げんだいせいかつ》の複雑性《ふくざつせい》について長々《ながなが》と話《はな》した。"
+        divClass "content" $ do
+          divClass "" $ text "距離, きょり"
+          divClass "" $ text "(Noun) Distance, Range"
+      divClass "card-footer" $ do
+            elClass "a" "card-footer-item" $ text "Edit SRS"
+            elClass "a" "card-footer-item" $ text "Sentences"
+            return()
