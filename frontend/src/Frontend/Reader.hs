@@ -54,7 +54,7 @@ reader nc = do
     initRc = ReaderControls 120 120 True 15 20 2
   rc <- holdDyn initRc nrc
   mainContents rc
-  wordMeanings
+  -- wordMeanings
   pageChangeButtons
 
 mainContents
