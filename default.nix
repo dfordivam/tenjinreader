@@ -2,6 +2,7 @@
     system = builtins.currentSystem;
     iosSdkVersion = "10.2";
     config.android_sdk.accept_license = true;
+    reflex-platform-func = import ./dep/reflex-platform;
   }
 }:
 with obelisk;
