@@ -51,7 +51,7 @@ reader nc = do
     nrc = fforMaybe nc $ \case
                         NavControls_ReaderControls r -> Just r
                         _ -> Nothing
-    initRc = ReaderControls 120 120 True 15 20 2
+    initRc = ReaderControls 150 150 True 20 10 4
   rc <- holdDyn initRc nrc
   mainContents rc
   -- wordMeanings

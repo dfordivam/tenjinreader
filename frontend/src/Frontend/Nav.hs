@@ -180,47 +180,46 @@ readerControls = do
     sizeOptions :: Dynamic t (Map Int Text)
     sizeOptions = constDyn $ Map.fromList $
       map (\v -> (v, T.pack $ show v))
-      [120, 125 .. 250]
+      [80, 85 .. 250]
     gapOptions :: Dynamic t (Map Int Text)
     gapOptions = constDyn $ Map.fromList $
       map (\v -> (v, T.pack $ show v))
-      [120, 125 .. 250]
+      [100, 125 .. 250]
     directionOptions :: Dynamic t (Map Text Text)
     directionOptions = constDyn $ Map.fromList $
-      -- [("V", "V"), ("H", "H")]
-      [("V", "V")]
+      [("V", "V"), ("H", "H")]
     charCountOptions :: Dynamic t (Map Int Text)
     charCountOptions = constDyn $ Map.fromList $
       map (\v -> (v, T.pack $ show v))
-      [15..30]
+      [5..30]
     lineCountOptions :: Dynamic t (Map Int Text)
     lineCountOptions = constDyn $ Map.fromList $
       map (\v -> (v, T.pack $ show v))
-      [25..50]
+      [5..50]
     rowsOptions :: Dynamic t (Map Int Text)
     rowsOptions = constDyn $ Map.fromList $
       map (\v -> (v, T.pack $ show v))
-      [2..5]
+      [1..5]
   -- Hoverable
     allControls :: (DomBuilder t m) => Event t ReaderControls -> (forall a . m a -> m a) -> (forall b. m b -> m b) -> m (Event t ReaderControls)
     allControls irc wrap nest = wrap $ do
       s <- nest $
-        divClass "select" $ dropdown 120 sizeOptions $ def
+        divClass "select" $ dropdown 150 sizeOptions $ def
           & dropdownConfig_setValue .~ (fmap _readerControls_fontSize irc)
       g <- nest $
-        divClass "select" $ dropdown 120 gapOptions $ def
+        divClass "select" $ dropdown 150 gapOptions $ def
           & dropdownConfig_setValue .~ (fmap _readerControls_lineGap irc)
       c <- nest $
-        divClass "select" $ dropdown 15 charCountOptions $ def
+        divClass "select" $ dropdown 10 charCountOptions $ def
           & dropdownConfig_setValue .~ (fmap _readerControls_charPerLine irc)
       l <- nest $
-        divClass "select" $ dropdown 30 lineCountOptions $ def
+        divClass "select" $ dropdown 20 lineCountOptions $ def
           & dropdownConfig_setValue .~ (fmap _readerControls_lineCount irc)
       d <- nest $
         divClass "select" $ dropdown "V" directionOptions $ def
           & dropdownConfig_setValue .~ (fmap ((bool "H" "V") . _readerControls_isVertical) irc)
       r <- nest $
-        divClass "select" $ dropdown 2 rowsOptions $ def
+        divClass "select" $ dropdown 4 rowsOptions $ def
           & dropdownConfig_setValue .~ (fmap _readerControls_rowCount irc)
       -- nest $
       --   elClass "label" "checkbox" $ do
