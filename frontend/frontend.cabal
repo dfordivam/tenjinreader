@@ -13,7 +13,7 @@ library
                , obelisk-generated-static
                , text
                , servant
-               -- , servant-reflex
+               , servant-reflex
   exposed-modules:
     Frontend
     Frontend.Analyze
