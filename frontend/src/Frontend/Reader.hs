@@ -52,10 +52,18 @@ reader nc = do
                         NavControls_ReaderControls r -> Just r
                         _ -> Nothing
     initRc = ReaderControls 150 150 True 20 10 4
+    attr = "class" =: "column is-small" 
+      <> "style" =: "height: 680px; width: 26px;"
   rc <- holdDyn initRc nrc
-  mainContents rc
-  -- wordMeanings
-  pageChangeButtons
+  divClass "columns is-mobile" $ do
+    divClass "column" $ do
+      btnIcon "" "fa-window-close" (Just "Close")
+      elAttr "button" attr $ text "<"
+    divClass "column" $ mainContents rc
+    -- wordMeanings
+    divClass "column" $ do
+      btnIcon "" "fa-window-close" (Just "Close")
+      elAttr "button" attr $ text ">"
 
 mainContents
   :: ( DomBuilder t m
@@ -121,23 +129,23 @@ dividePerRow (r, l, w) cs = fromMaybe [] $ go r cs
       (r2, e2) = perRowContents w (l - cl) cs
       (c1, c2) = T.splitAt (w * l) c
 
-pageChangeButtons
-  :: ( DomBuilder t m
-     , Routed t (R FrontendRoute) m
-     , PostBuild t m
-     , MonadFix m
-     , MonadHold t m
-     , SetRoute t (R FrontendRoute) m
-     , RouteToUrl (R FrontendRoute) m
-     )
-  => m ()
-pageChangeButtons = do
-  let
-    attr = "class" =: "columns is-mobile"
-      <> "style" =: "padding-top: 1em;"
-  void $ elAttr "div" attr $ do
-    divClass "column" $ btn "is-small is-fullwidth" "<" Nothing
-    divClass "column" $ btn "is-small is-fullwidth" ">" Nothing
+-- pageChangeButtons
+--   :: ( DomBuilder t m
+--      , Routed t (R FrontendRoute) m
+--      , PostBuild t m
+--      , MonadFix m
+--      , MonadHold t m
+--      , SetRoute t (R FrontendRoute) m
+--      , RouteToUrl (R FrontendRoute) m
+--      )
+--   => m ()
+-- pageChangeButtons = do
+--   let
+--     attr = "class" =: "columns is-mobile"
+--       <> "style" =: "padding-top: 1em;"
+--   void $ elAttr "div" attr $ do
+--     divClass "column" $ btn "is-small is-fullwidth" "<" Nothing
+--     divClass "column" $ btn "is-small is-fullwidth" ">" Nothing
 
 contents =
   [ "平成最後の選挙となる統一地方選挙は、14日、政令指定都市以外の市と東京の特別区で、市区長と議員の選挙が告示され、後半戦がスタートしました。"
