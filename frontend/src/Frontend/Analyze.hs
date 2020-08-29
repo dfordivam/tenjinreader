@@ -22,6 +22,7 @@ import Data.Functor.Identity
 
 import Common.Api
 import Common.Route
+import Common.Types
 import Obelisk.Generated.Static
 
 import Frontend.Common
@@ -37,14 +38,23 @@ analyze = do
   divClass "" $ do
     el "h2" $ text "Test modals"
     openModal <- btn "" "Open modal" Nothing
+    let lvl = 1
     tellModal $ ffor openModal $ \_ -> \closeEv -> do
-      modalTest
+      modalTest lvl
       pure closeEv
 
-modalTest :: (_) => m ()
-modalTest = do
-  divClass "modal-card box" $ text "inside modal 1"
+modalTest :: (_) => Int -> m ()
+modalTest lvl = do
+  divClass "modal-card box" $ text $ "inside modal 1 " <> (tshow lvl)
   openModal2 <- btn "" "Open another Modal" Nothing
   tellModal $ ffor openModal2 $ \_ -> \closeEv2 -> do
-    divClass "modal-card box" $ text "inside modal 2"
+    modalTest2 (lvl + 1)
+    pure closeEv2
+
+modalTest2 :: (_) => Int -> m ()
+modalTest2 lvl = do
+  divClass "modal-card box" $ text $ "inside modal 2 " <> (tshow lvl)
+  openModal2 <- btn "" "Open another Modal" Nothing
+  tellModal $ ffor openModal2 $ \_ -> \closeEv2 -> do
+    modalTest (lvl + 1)
     pure closeEv2

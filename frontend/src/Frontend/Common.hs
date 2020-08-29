@@ -30,13 +30,6 @@ import Obelisk.Generated.Static
 import Frontend.Modal.Class
 
 type AppWidget js t m
-  = ( AppWidgetCommon js t m
-    , AppWidgetCommon js t (ModalM m)
-    -- Allows 2 levels of modal nesting
-    , AppWidgetCommon js t (ModalM (ModalM m))
-    )
-
-type AppWidgetCommon js t m
   = ( DomBuilder t m
     , MonadHold t m
     , MonadFix m

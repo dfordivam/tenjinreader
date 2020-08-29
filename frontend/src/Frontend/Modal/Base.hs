@@ -37,10 +37,9 @@ import Obelisk.Route.Frontend
 import Reflex.Dom.Core
 import Reflex.Host.Class (MonadReflexCreateTrigger)
 
-import Frontend.Modal.Class (HasModal (ModalM, tellModal))
+import Frontend.Modal.Class (HasModal (tellModal))
 
 instance (Reflex t, Monad m) => HasModal t (ModalT t m) where
-  type ModalM (ModalT t m) = ModalT t m
   tellModal = ModalT . tellEvent . fmap First
 
 newtype ModalT t m a
