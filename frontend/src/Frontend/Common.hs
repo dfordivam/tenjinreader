@@ -6,6 +6,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
+
 module Frontend.Common where
 
 import Obelisk.Frontend
@@ -24,6 +26,30 @@ import Common.Api
 import Common.Route
 import Common.Types
 import Obelisk.Generated.Static
+
+import Frontend.Modal.Class
+
+type AppWidget js t m
+  = ( AppWidgetCommon js t m
+    , AppWidgetCommon js t (ModalM m)
+    -- Allows 2 levels of modal nesting
+    , AppWidgetCommon js t (ModalM (ModalM m))
+    )
+
+type AppWidgetCommon js t m
+  = ( DomBuilder t m
+    , MonadHold t m
+    , MonadFix m
+    , PostBuild t m
+    , PerformEvent t m
+    , TriggerEvent t m
+    , MonadReader (AppData t) m
+    , Prerender js t m
+    , HasModal t m
+    , Routed t (R (FrontendRoute)) m
+    , RouteToUrl (R (FrontendRoute)) m
+    , SetRoute t (R (FrontendRoute)) m
+    )
 
 data Section
   = Section_Home

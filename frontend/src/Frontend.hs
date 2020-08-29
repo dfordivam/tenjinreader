@@ -29,6 +29,7 @@ import Frontend.Analyze
 import Frontend.Common
 import Frontend.Head
 import Frontend.Home
+import Frontend.Modal.Base
 import Frontend.Nav
 import Frontend.Reader
 import Frontend.SRS
@@ -41,7 +42,7 @@ frontend = Frontend
       themeDyn <- holdDyn Theme_White themeEv
       let appData = AppData themeDyn
 
-      themeEv <- (flip runReaderT) appData $ mdo
+      themeEv <- runModalT $ (flip runReaderT) appData $ mdo
         (navDyn, rc) <- nav click
         (themeEv, click) <- divClassT "hero is-fullheight" $ divClass "columns" $ do
           themeEv <- elDynClass "div" ((<>) "column is-narrow " <$> (ffor navDyn $ bool "is-hidden" "")) $
@@ -56,16 +57,7 @@ mainContainer :: DomBuilder t m => m () -> m (Event t ())
 mainContainer w = domEvent Click . fst <$> elClass' "main" "column container section" w
 
 sections
-  :: ( DomBuilder t m
-     , Routed t (R FrontendRoute) m
-     , PostBuild t m
-     , MonadFix m
-     , MonadHold t m
-     , MonadReader (AppData t) m
-     , Prerender js t m
-     , SetRoute t (R FrontendRoute) m
-     , RouteToUrl (R FrontendRoute) m
-     )
+  :: AppWidget js t m
   => Event t NavControls
   -> m ()
 sections rc = do
@@ -83,16 +75,7 @@ sections rc = do
       elDynAttr "section" vis wm
 
 sectionsList
-  :: ( DomBuilder t m
-     , Routed t (R FrontendRoute) m
-     , PostBuild t m
-     , MonadFix m
-     , MonadHold t m
-     , MonadReader (AppData t) m
-     , Prerender js t m
-     , SetRoute t (R FrontendRoute) m
-     , RouteToUrl (R FrontendRoute) m
-     )
+  :: AppWidget js t m
   => Event t NavControls
   -> [(Section, m ())]
 sectionsList rc =
