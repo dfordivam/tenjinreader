@@ -20,6 +20,8 @@ library
     Frontend.Head
     Frontend.Home
     Frontend.Modals
+    Frontend.Modal.Base
+    Frontend.Modal.Class
     Frontend.Nav
     Frontend.Reader
     Frontend.SRS
