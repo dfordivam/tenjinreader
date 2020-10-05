@@ -92,8 +92,10 @@ recentBookList = do
       elClass "p" "card-header-title" $ elClassT "span" "is-size-4-desktop is-size-5-touch" $ text k
       elClass' "a" "card-header-icon" $ elClass "span" "icon" $
         elClass "i" "fas fa-angle-down" blank
+           
     let openEv = domEvent Click e
-    widgetHold blank $ ffor openEv $ \_ -> do
+    openDyn <- toggle False openEv 
+    dyn $ ffor openDyn $ \b -> when b $ do
       divClass "card-content" $ do
         divClass "content" $ text "彼《かれ》は現代生活《げんだいせいかつ》の複雑性《ふくざつせい》について長々《ながなが》と話《はな》した。"
       divClass "card-footer" $ do
@@ -128,8 +130,10 @@ recentWordList = do
       elClass "p" "card-header-title" $ elClassT "span" "is-size-4-desktop is-size-5-touch" $ text k
       elClass' "a" "card-header-icon" $ elClass "span" "icon" $
         elClass "i" "fas fa-angle-down" blank
+   
     let openEv = domEvent Click e
-    widgetHold blank $ ffor openEv $ \_ -> do
+    openDyn <- toggle False openEv 
+    dyn $ ffor openDyn $ \b -> when b $ do
       divClass "card-content" $ do
         divClass "content" $ do
           divClass "" $ text "距離, きょり"
