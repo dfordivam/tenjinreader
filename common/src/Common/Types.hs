@@ -20,3 +20,22 @@ data ReaderControls = ReaderControls
   , _readerControls_rowCount :: Int
   }
   deriving (Show, Eq, Generic)
+
+newtype Vocab = Vocab { unVocab :: [KanjiOrKana] }
+  deriving (Eq, Ord, Generic, Show)
+
+data KanjiOrKana
+  = KanjiWithReading Kanji Text
+  | Kana Text
+  deriving (Eq, Ord, Generic, Show)
+
+newtype Kanji = Kanji { unKanji :: Text }
+  deriving (Eq, Ord, Generic, Show)
+
+type VocabId = EntryId
+-- newtype VocabId = VocabId { unVocabId :: Int }
+--   deriving (Eq, Ord, Generic, Show, ToJSON, FromJSON, Binary, Value)
+
+type EntryId = Int
+
+type AnnotatedPara = [(Either Text (Vocab, [VocabId], Bool))]
