@@ -49,26 +49,29 @@ vocabSearchInput = mdo
         let
           attr5 = ("class" =: "dropdown-item") <> ("href" =: "#")
         elAttr "a" attr5 $ do
-          text "Dropdown item"
-          return ()
-        elClass "a" "dropdown-item" $ do
-          text "Other dropdown item"
-          return ()
+          divClass "" $ text "距離, きょり"
+          divClass "" $ text "(Noun) Distance, Range"
+          return()
+
+        elClass "hr" "dropdown-divider" $ return ()
+        elAttr "a" attr5 $ do
+          divClass "" $ text "距離, きょり"
+          divClass "" $ text "(Noun) Distance, Range"
+          return()
+
+        elClass "hr" "dropdown-divider" $ return ()
         let
           attr6 = ("class" =: "dropdown-item is-active") <> ("href" =: "#")
         elAttr "a" attr6 $ do
-          text "Active dropdown item"
-          return ()
-        let
-          attr7 = ("class" =: "dropdown-item") <> ("href" =: "#")
-        elAttr "a" attr7 $ do
-          text "Other dropdown item"
-          return ()
+          divClass "" $ text "距離, きょり"
+          divClass "" $ text "(Noun) Distance, Range"
+          return()
+   
         elClass "hr" "dropdown-divider" $ return ()
-        let
-          attr8 = ("class" =: "dropdown-item") <> ("href" =: "#")
-        elAttr "a" attr8 $ do
-          text "With a divider"
+        elAttr "a" attr5 $ do
+          divClass "" $ text "距離, きょり"
+          divClass "" $ text "(Noun) Distance, Range"
+          return()
 
     return $ (not . T.null) <$> (value ie)
   return ()
